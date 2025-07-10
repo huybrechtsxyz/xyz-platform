@@ -1,0 +1,112 @@
+{
+  "deploy": {
+    "name": "Platform Workspace on Kamatera",
+    "version": "1.0.0",
+    "description": "Workspace deployment configuration for the shared Kamatera Platform."
+  },
+  "roles": {
+    "manager": {
+      "cpu_type": "A",
+      "cpu_cores": 1,
+      "ram_mb": 1024,
+      "unit_cost": 5.00
+    },
+    "infra": {
+      "cpu_type": "A",
+      "cpu_cores": 1,
+      "ram_mb": 4096,
+      "unit_cost": 11.00
+    },
+    "worker": {
+      "cpu_type": "A",
+      "cpu_cores": 1,
+      "ram_mb": 2048,
+      "unit_cost": 6.00
+    }
+  },
+  "paths": [
+    { "type": "config", "path": "/${service}/config" },
+    { "type": "data",   "path": "/${service}/data" },
+    { "type": "logs",   "path": "/${service}/logs" },
+    { "type": "serve",  "path": "/${service}/serve" }
+  ],
+  "servers": [
+    {
+      "id": "manager-1",
+      "role": "manager",
+      "labels": [],
+      "disks": [
+        { "size": 20, "label": "manager-1-os" }
+      ],
+      "mountpoint": "/mnt/data${disk}/app",
+      "mounts": [
+        { "type": "config", "disk": 1 },
+        { "type": "data", "disk": 1 },
+        { "type": "logs", "disk": 1 },
+        { "type": "serve", "disk": 1 }
+      ]
+    },
+    {
+      "id": "infra-1",
+      "role": "infra",
+      "labels": [ "postgres=true" ],
+      "disks": [
+        { "size": 20, "label": "infra-1-os" },
+        { "size": 40, "label": "infra-1-data" }
+      ],
+      "mountpoint": "/mnt/data${disk}/app",
+      "mounts": [
+        { "type": "config", "disk": 2 },
+        { "type": "data", "disk": 2 },
+        { "type": "logs", "disk": 2 },
+        { "type": "serve", "disk": 2 }
+      ]
+    },
+    {
+      "id": "infra-2",
+      "role": "infra",
+      "labels": [],
+      "disks": [
+        { "size": 20, "label": "infra-2-os" },
+        { "size": 40, "label": "infra-2-data" }
+      ],
+      "mountpoint": "/mnt/data${disk}/app",
+      "mounts": [
+        { "type": "config", "disk": 2 },
+        { "type": "data", "disk": 2 },
+        { "type": "logs", "disk": 2 },
+        { "type": "serve", "disk": 2 }
+      ]
+    },
+    {
+      "id": "worker-1",
+      "role": "worker",
+      "labels": [],
+      "disks": [
+        { "size": 20, "label": "worker-1-os" }
+      ],
+      "mountpoint": "/mnt/data${disk}/app",
+      "mounts": [
+        { "type": "config", "disk": 1 },
+        { "type": "data", "disk": 1 },
+        { "type": "logs", "disk": 1 },
+        { "type": "serve", "disk": 1 }
+      ]
+    },
+    {
+      "id": "worker-2",
+      "role": "worker",
+      "labels": [],
+      "disks": [
+        { "size": 20, "label": "worker-2-os" }
+      ],
+      "mountpoint": "/mnt/data${disk}/app",
+      "mounts": [
+        { "type": "config", "disk": 1 },
+        { "type": "data", "disk": 1 },
+        { "type": "logs", "disk": 1 },
+        { "type": "serve", "disk": 1 }
+      ]
+    }
+  ]
+}
