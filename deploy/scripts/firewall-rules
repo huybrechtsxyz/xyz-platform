@@ -1,3 +1,7 @@
+# Firewall rules for a Docker Swarm cluster
+# This script is designed to be used with a firewall management tool like `ufw`
+# It sets up rules to allow necessary traffic for a Docker Swarm
+
 # Deny all traffic by default
 --force reset
 default deny incoming

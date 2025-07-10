@@ -133,10 +133,9 @@ jobs:
           path: ${{ env.APP_PATH_TEMP }}/tf_output.json
           key: terraform-output-${{ inputs.workspace }}
 
-          # Download the Terraform output artifact and parse it to find Swarm servers
+  # Download the Terraform output artifact and parse it to find Swarm servers
   # This job will run if the cache is not hit or if the initialize input is set to true
   # Parses the output to find Swarm servers and sets them as a matrix for the next jobs
-  
   restore:
     name: Download Terraform Output
     runs-on: ubuntu-latest
@@ -229,3 +228,4 @@ jobs:
           chmod +x deploy/scripts/initialize-swarm-server.sh
           ./deploy/scripts/initialize-swarm-server.sh "${{ matrix.ip }}" "${{ matrix.private_ip }}" "${{ matrix.manager_ip }}"
           echo "[*] Initializing swarm cluster on ${{ matrix.ip }} ...DONE"
+

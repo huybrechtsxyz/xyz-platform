@@ -8,6 +8,7 @@ export MANAGER_IP="$MANAGER_IP"
 
 cd /
 
+# Function to log messages with a timestamp
 install_private_key() {
   log INFO "[*] Installing uploaded private key..."
   mkdir -p ~/.ssh
@@ -17,6 +18,10 @@ install_private_key() {
   log INFO "[+] Installing uploaded private key...DONE"
 }
 
+# Function to configure the firewall using UFW
+# This function reads rules from an external file and applies them
+# It assumes the rules file is located at $PATH_TEMP/firewall-rules
+# and that the file contains valid UFW commands.
 configure_firewall() {
   log INFO "[*] Configuring firewall..."
   : "${PATH_TEMP:?Missing PATH_TEMP}"
@@ -51,6 +56,16 @@ configure_firewall() {
   log INFO "[+] Configuring firewall...DONE"
 }
 
+# Function to prepare and mount disk volumes
+# This function reads the workspace metadata to find disk information
+# and mounts the disks according to the specified mount points.
+# It also checks the disk sizes against expected values and formats them if necessary.
+# The function assumes the workspace metadata is stored in a JSON file at $PATH_TEMP/$WORKSPACE.ws.json
+# and that the disks are named in a specific pattern (e.g., /dev/sdb, /dev/sdc, etc.).
+# The OS disk is identified by the root partition mounted at '/'.
+# The function also ensures that the disks are formatted as ext4 and labeled according to the metadata.
+# It creates mount points based on a template from the workspace metadata and ensures
+# that the mount points are added to /etc/fstab for persistence across reboots.
 mount_disks() {
   log INFO "[*] Preparing and mounting disk volumes..."
 
@@ -217,6 +232,7 @@ mount_disks() {
   log INFO "[+] All disks prepared and mounted."
 }
 
+# Function to check if the actual disk size matches the expected size within a tolerance
 disk_size_matches() {
   local actual_gb="$1"        # e.g. 39
   local expected_gb="$2"      # e.g. 40
@@ -238,6 +254,7 @@ disk_size_matches() {
   fi
 }
 
+# Function to install Docker if not already installed
 install_docker_if_needed() {
   if ! command -v docker &> /dev/null; then
     log INFO "[*] Installing Docker..."
@@ -250,6 +267,15 @@ install_docker_if_needed() {
   fi
 }
 
+# Function to configure Docker Swarm
+# This function initializes a new Swarm cluster if the current node is a manager,
+# or joins an existing Swarm cluster if the current node is a worker.
+# It retrieves the join tokens from the manager node and stores them in /tmp/manager_token.txt and /tmp/worker_token.txt.
+# The function checks if the node is already part of a Swarm and skips initialization if it is.
+# If the node is a manager, it initializes the Swarm and creates join tokens.
+# If the node is a worker, it waits for the manager node to provide the join tokens before joining the Swarm.
+# The function uses SSH to connect to the manager node to retrieve the tokens.
+# It also ensures that the Swarm is configured with the correct advertise address based on the private IP of the node.
 # Function that configures swarm servers and stores its tokens in /tmp and NOT /tmp/app
 # Reason: /tmp/app gets cleaned !
 configure_swarm() {
@@ -310,6 +336,10 @@ configure_swarm() {
   log INFO "[+] Configuring Docker Swarm on $hostname...DONE"
 }
 
+# Function to ensure Docker service is enabled and running
+# This function checks if the Docker service is enabled and running,
+# and starts it if necessary. It also enables the service to start on boot.
+# It uses systemctl to manage the Docker service.
 enable_docker_service() {
   log INFO "[*] Ensuring Docker is enabled and running..."
 
@@ -332,6 +362,7 @@ enable_docker_service() {
   log INFO "[*] Ensuring Docker is enabled and running...DONE"
 }
 
+# Main function to initialize the remote server
 main() {
     echo "[*] Initializing remote server..."
     install_private_key || exit 1

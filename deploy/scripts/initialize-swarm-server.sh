@@ -12,10 +12,15 @@ APP_REMOTE_IP="$1"
 APP_PRIVATE_IP="$2"
 APP_MANAGER_IP="$3"
 
+# Create a temporary directory for the initialization scripts
 create_env_file() {
   generate_env_file "APP_" "./deploy/scripts/initialize.env"
 }
 
+# Function to copy configuration files to the remote server
+# This function creates a temporary directory on the remote server,
+# sets the appropriate permissions, and then copies the initialization scripts
+# and cluster configuration files to that directory.
 copy_config_files() {
 log INFO "[*] Copying initialization script to remote server..."
 ssh -o StrictHostKeyChecking=no root@$APP_REMOTE_IP << EOF
@@ -33,6 +38,10 @@ scp -o StrictHostKeyChecking=no \
   }
 }
 
+# Function to execute the initialization script on the remote server
+# This function connects to the remote server via SSH,
+# sources the environment variables, and runs the initialization script.
+# It also ensures that the script is executable and handles any errors during execution.
 execute_initialization() {
 log INFO "[*] Executing REMOTE server initialization..."
 if ! ssh -o StrictHostKeyChecking=no root@"$APP_REMOTE_IP" << EOF
@@ -52,6 +61,7 @@ then
 fi
 }
 
+# Main function to initialize the swarm cluster
 main() {
   log INFO "[*] Initializing swarm cluster ..."
 

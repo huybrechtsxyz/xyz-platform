@@ -1,3 +1,4 @@
+# Flatten the server roles configuration into a list of server objects.
 locals {
   servers = flatten([
     for role, cfg in var.server_roles :

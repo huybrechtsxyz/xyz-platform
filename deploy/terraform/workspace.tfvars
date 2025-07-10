@@ -1,5 +1,5 @@
-# Environment configuration
 # Example file that will be overwritten by the pipeline in terraform apply
+# Environment configuration file for Terraform
 # Server roles configuration
 server_roles = {
   manager = {
