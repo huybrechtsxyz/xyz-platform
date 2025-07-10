@@ -61,7 +61,7 @@
     {
       "id": "infra-1",
       "role": "infra",
-      "labels": [ "postgres=true" ],
+      "labels": [],
       "disks": [
         { "size": 20, "label": "infra-1-os" },
         { "size": 40, "label": "infra-1-data" }

@@ -55,7 +55,7 @@ jobs:
   # This job will run if the cache is not hit or if the initialize input is set to true
   # Stores the output in a JSON file and uploads it as an artifact and caches it for future runs
   terraform:
-    name: Terraform Plan and Apply
+    name: Terraform Apply
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     if: inputs.infrastructure == true
@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v4
       
       # Load secret uuid for Bitwarden
-      - name: Load Secret UUID from workspace
+      - name: Load Workspace Secrets
         working-directory: ./deploy
         run: |
           echo "[*] Load secret identifiers ..."
@@ -191,7 +191,7 @@ jobs:
   # This job will run if the cache is not hit or if the initialize input is set to true
   # Initializes the Swarm cluster
   initialization:
-    name: Initialize Swarm Cluster
+    name: Initialize Cluster
     needs: [restore]
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
@@ -204,7 +204,7 @@ jobs:
         uses: actions/checkout@v4
 
       # Load secret uuid for Bitwarden
-      - name: Load Secret UUID from workspace
+      - name: Load Workspace Secrets
         working-directory: ./deploy
         run: |
           echo "[*] Load secret identifiers ..."
@@ -244,3 +244,67 @@ jobs:
           chmod +x deploy/scripts/initialize-swarm-server.sh
           ./deploy/scripts/initialize-swarm-server.sh "${{ matrix.ip }}" "${{ matrix.private_ip }}" "${{ matrix.manager_ip }}"
           echo "[*] Initializing swarm cluster on ${{ matrix.ip }} ...DONE"
+
+  configuration:
+    name: Configure Cluster
+    needs: [restore, initialization]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    if: ${{ always() && !contains(needs.*.result, 'failure') }}
+    strategy:
+      matrix: ${{ fromJson(needs.restore.outputs.matrix) }}
+    steps:
+      # Check out the repo
+      - name: Check Out
+        uses: actions/checkout@v4
+
+      # Load secret uuid for Bitwarden
+      - name: Load Workspace Secrets
+        working-directory: ./deploy
+        run: |
+          echo "[*] Load secret identifiers ..."
+          source ./scripts/utilities.sh
+          load_secret_identifiers "./workspaces/${{ inputs.workspace }}.ws.json" "${{ inputs.environment }}"
+          echo "[*] Load secret identifiers ...DONE"
+
+      # Set up GitHub Secrets
+      - name: Get General Secrets
+        uses: bitwarden/sm-action@v2
+        id: get-secrets
+        with:
+          access_token: ${{ secrets.BITWARDEN_TOKEN }}
+          secrets: |
+            $UUID_KAMATERA_API_KEY > KAMATERA_API_KEY
+            $UUID_KAMATERA_API_SECRET > KAMATERA_API_SECRET
+            $UUID_KAMATERA_PUBLIC_KEY > KAMATERA_PUBLIC_KEY
+            $UUID_KAMATERA_PRIVATE_KEY > KAMATERA_PRIVATE_KEY
+            $UUID_KAMATERA_ROOT_PASSWORD > KAMATERA_ROOT_PASSWORD
+            $UUID_PLATFORM_USERNAME > PLATFORM_USERNAME
+            $UUID_PLATFORM_PASSWORD > PLATFORM_PASSWORD
+            $UUID_VERSIO_USERNAME > VERSIO_USERNAME
+            $UUID_VERSIO_PASSWORD > VERSIO_PASSWORD
+
+      # Set up SSH connection
+      - name: Set up SSH connection
+        env:
+          KAMATERA_PRIVATE_KEY: ${{ steps.get-secrets.outputs.KAMATERA_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$KAMATERA_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      # Step: Configure Server
+      - name: Configure Server
+        env:
+          VAR_MATRIX: ${{ needs.restore.outputs.matrix }}
+          VAR_ENVIRONMENT: ${{ inputs.environment }}
+          VAR_WORKSPACE: ${{ inputs.workspace }}
+          SECRET_PLATFORM_USERNAME: ${{ steps.get-secrets.outputs.PLATFORM_USERNAME }}
+          SECRET_PLATFORM_PASSWORD: ${{ steps.get-secrets.outputs.PLATFORM_PASSWORD }}
+          SECRET_VERSIO_USERNAME : ${{ steps.get-secrets.outputs.VERSIO_USERNAME }}
+          SECRET_VERSIO_PASSWORD : ${{ steps.get-secrets.outputs.VERSIO_PASSWORD }}
+        run: |
+          echo "[*] Configuring swarm server ${{ matrix.ip }} ..."
+          chmod +x deploy/scripts/configure-swarm-server.sh
+          ./deploy/scripts/configure-swarm-server.sh "${{ matrix.ip }}" "$VAR_MATRIX"
+          echo "[*] Configuring swarm server ${{ matrix.ip }} ...DONE"
