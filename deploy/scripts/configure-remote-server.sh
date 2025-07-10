@@ -105,6 +105,94 @@ createnodelabels() {
   return 0
 }
 
+
+create_volume() {
+  : "${WORKSPACE:?Missing WORKSPACE env var}"
+  : "${PATH_TEMP:?Missing PATH_TEMP env var}"
+  : "${REPLICA_COUNT:=3}"
+
+  WORKSPACE_FILE="$PATH_TEMP/src/$WORKSPACE.ws.json"
+
+  if [[ ! -f "$WORKSPACE_FILE" ]]; then
+    echo "ERROR: Workspace file not found: $WORKSPACE_FILE" >&2
+    exit 1
+  fi
+
+  echo "[*] Using workspace file: $WORKSPACE_FILE"
+
+  # Load servers
+  mapfile -t SERVERS < <(jq -r '.servers[].id' "$WORKSPACE_FILE")
+  echo "[*] Servers detected: ${SERVERS[*]}"
+
+  # For each pathsv2 type that is NOT local, we create a volume
+  jq -c '.pathsv2[]' "$WORKSPACE_FILE" | while read -r path_entry; do
+    TYPE=$(jq -r '.type' <<<"$path_entry")
+    REL_PATH_TEMPLATE=$(jq -r '.path' <<<"$path_entry")
+    VOLUME_TYPE=$(jq -r '.volume' <<<"$path_entry")
+
+    if [[ "$VOLUME_TYPE" == "local" ]]; then
+      echo "[*] Skipping local volume for type=$TYPE"
+      continue
+    fi
+
+    # Compute volume name
+    VOLUME_NAME="${WORKSPACE}_${TYPE}"
+
+    echo "[*] Creating Gluster volume: $VOLUME_NAME (type=$VOLUME_TYPE)"
+
+    # Build brick list
+    BRICKS=()
+    for SERVER_ID in "${SERVERS[@]}"; do
+      # Extract disk number for this type
+      DISK=$(jq -r --arg id "$SERVER_ID" --arg t "$TYPE" \
+        '.servers[] | select(.id==$id) | .mounts[] | select(.type==$t) | .disk' \
+        "$WORKSPACE_FILE")
+
+      if [[ -z "$DISK" || "$DISK" == "null" ]]; then
+        echo "[!] No disk mapping for server=$SERVER_ID type=$TYPE; skipping this server"
+        continue
+      fi
+
+      # Compose mount point
+      MOUNT_TEMPLATE=$(jq -r --arg id "$SERVER_ID" '.servers[] | select(.id==$id) | .mountpoint' "$WORKSPACE_FILE")
+      MOUNT_PATH="${MOUNT_TEMPLATE//\$\{disk\}/$DISK}"
+
+      # Compose brick path
+      SERVICE_DIR="${REL_PATH_TEMPLATE//\$\{service\}/glusterfs}"
+      BRICK_PATH="$MOUNT_PATH$SERVICE_DIR"
+
+      # Ensure directory exists
+      echo "[*] Creating brick directory: $SERVER_ID:$BRICK_PATH"
+      ssh "$SERVER_ID" "sudo mkdir -p '$BRICK_PATH' && sudo chown -R root:root '$BRICK_PATH'"
+
+      BRICKS+=("${SERVER_ID}:$BRICK_PATH")
+    done
+
+    if [[ "${#BRICKS[@]}" -lt 1 ]]; then
+      echo "[!] No bricks available for $VOLUME_NAME; skipping volume creation."
+      continue
+    fi
+
+    # Compose volume create command
+    CREATE_CMD="gluster volume create $VOLUME_NAME"
+
+    if [[ "$VOLUME_TYPE" == "replicated" ]]; then
+      CREATE_CMD+=" replica $REPLICA_COUNT"
+    fi
+
+    CREATE_CMD+=" ${BRICKS[*]}"
+
+    echo "[*] Running: $CREATE_CMD"
+    $CREATE_CMD
+
+    echo "[*] Starting volume: $VOLUME_NAME"
+    gluster volume start "$VOLUME_NAME"
+  done
+
+  echo "[+] GlusterFS configuration complete."
+
+}
+
 create_workspace() {
   # Validate required environment variables
   : "${WORKSPACE:?Missing WORKSPACE}"
