@@ -28,7 +28,7 @@ configure_firewall() {
   fi
 
   # Load UFW rules from an external file
-  RULES_FILE="$PATH_TEMP/firewall-rules.sh"
+  RULES_FILE="$PATH_TEMP/firewall-rules"
   if [[ -f "$RULES_FILE" ]]; then
     while IFS= read -r rule; do
       # Skip empty lines and comments
