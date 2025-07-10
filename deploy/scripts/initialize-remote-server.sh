@@ -362,6 +362,22 @@ enable_docker_service() {
   log INFO "[*] Ensuring Docker is enabled and running...DONE"
 }
 
+# Function to install GlusterFS if not already installed
+# This function checks if the GlusterFS client is installed,
+# and if not, installs it using the package manager.
+# It also ensures that the GlusterFS service is enabled and started.
+install_gluster() {
+  log INFO "[*] Installing GlusterFS..."
+  if ! command -v glusterfs --version &> /dev/null; then
+    apt-get update
+    apt-get install -y glusterfs-server
+    systemctl enable --now glusterd
+    log INFO "[+] Installing GlusterFS...DONE"
+  else
+    log INFO "[*] GlusterFS is already installed."
+  fi
+}
+
 # Main function to initialize the remote server
 main() {
     echo "[*] Initializing remote server..."
@@ -371,6 +387,7 @@ main() {
     install_docker_if_needed || exit 1
     configure_swarm || exit 1
     enable_docker_service || exit 1
+    install_gluster || exit 1
     echo "[*] Remote server cleanup..."
     rm -rf /tmp/app/*
     echo "[+] Remote server initialization completed."

@@ -1,6 +1,6 @@
 # [Workspace Setup Guide]
 # To create new servers
-#  - Create a new workspace.{workspace-name}.json file
+#  - Create a new {workspace-name}.ws.json file
 #  - To recreate the servers delete existing:
 #    - Servers and networks in Kamatera
 #      on https://console.kamatera.com
@@ -42,9 +42,6 @@ on:
       infrastructure:
         required: true
         type: boolean
-      services:
-        required: true
-        type: string
     secrets:
       BITWARDEN_TOKEN:
         required: true
@@ -52,9 +49,6 @@ on:
 env:
   # Environment variables for the pipeline
   APP_PATH_TEMP: /tmp/app
-
-  # Kamatera secret keys
-  UUID_KAMATERA_PRIVATE_KEY: f16fffe2-77b7-4d20-bf6c-b2c9015c71d3
 
 jobs:
   # Terraform Plan and Apply
@@ -250,4 +244,3 @@ jobs:
           chmod +x deploy/scripts/initialize-swarm-server.sh
           ./deploy/scripts/initialize-swarm-server.sh "${{ matrix.ip }}" "${{ matrix.private_ip }}" "${{ matrix.manager_ip }}"
           echo "[*] Initializing swarm cluster on ${{ matrix.ip }} ...DONE"
-
