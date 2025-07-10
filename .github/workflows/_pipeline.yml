@@ -50,7 +50,11 @@ on:
         required: true
 
 env:
+  # Environment variables for the pipeline
   APP_PATH_TEMP: /tmp/app
+
+  # Kamatera secret keys
+  UUID_KAMATERA_PRIVATE_KEY: f16fffe2-77b7-4d20-bf6c-b2c9015c71d3
 
 jobs:
   # Terraform Plan and Apply
@@ -66,6 +70,15 @@ jobs:
       - name: Check Out
         uses: actions/checkout@v4
       
+      # Load secret uuid for Bitwarden
+      - name: Load Secret UUID from workspace
+        working-directory: ./deploy
+        run: |
+          echo "[*] Load secret identifiers ..."
+          source ./scripts/utilities.sh
+          load_secret_identifiers "./workspaces/${{ inputs.workspace }}.ws.json" "${{ inputs.environment }}"
+          echo "[*] Load secret identifiers ...DONE"
+
       # Set up GitHub Secrets
       - name: Get General Secrets
         uses: bitwarden/sm-action@v2
@@ -73,12 +86,12 @@ jobs:
         with:
           access_token: ${{ secrets.BITWARDEN_TOKEN }}
           secrets: |
-            d47e736b-2db8-47d5-b46b-b2c8016ece73 > TERRAFORM_API_TOKEN
-            357068b9-9f5f-4f79-940c-b2c8016cb88f > KAMATERA_API_KEY
-            6c9295a8-9fa4-4d38-8929-b2c8016d9b43 > KAMATERA_API_SECRET
-            6cc5b975-56a9-4d7a-80c7-b2c90151cce0 > KAMATERA_PUBLIC_KEY
-            f16fffe2-77b7-4d20-bf6c-b2c9015c71d3 > KAMATERA_PRIVATE_KEY
-            5083ae32-429d-428b-b7df-b2c901441bbb > KAMATERA_ROOT_PASSWORD
+            $UUID_TERRAFORM_API_TOKEN > TERRAFORM_API_TOKEN
+            $UUID_KAMATERA_API_KEY > KAMATERA_API_KEY
+            $UUID_KAMATERA_API_SECRET > KAMATERA_API_SECRET
+            $UUID_KAMATERA_PUBLIC_KEY > KAMATERA_PUBLIC_KEY
+            $UUID_KAMATERA_PRIVATE_KEY > KAMATERA_PRIVATE_KEY
+            $UUID_KAMATERA_ROOT_PASSWORD > KAMATERA_ROOT_PASSWORD
       
       # Set up the Terraform CLI
       - name: Set up Terraform
@@ -196,6 +209,15 @@ jobs:
       - name: Check Out
         uses: actions/checkout@v4
 
+      # Load secret uuid for Bitwarden
+      - name: Load Secret UUID from workspace
+        working-directory: ./deploy
+        run: |
+          echo "[*] Load secret identifiers ..."
+          source ./scripts/utilities.sh
+          load_secret_identifiers "./workspaces/${{ inputs.workspace }}.ws.json" "${{ inputs.environment }}"
+          echo "[*] Load secret identifiers ...DONE"
+
       # Set up GitHub Secrets
       - name: Get General Secrets
         uses: bitwarden/sm-action@v2
@@ -203,7 +225,7 @@ jobs:
         with:
           access_token: ${{ secrets.BITWARDEN_TOKEN }}
           secrets: |
-            f16fffe2-77b7-4d20-bf6c-b2c9015c71d3 > KAMATERA_PRIVATE_KEY
+            $UUID_KAMATERA_PRIVATE_KEY > KAMATERA_PRIVATE_KEY
 
       # Set up SSH connection
       - name: Set up SSH connection
