@@ -8,6 +8,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
 create_secret_file() {
   generate_env_file "VAR_" "./src/variables.env"
   generate_env_file "SECRET_" "./src/secrets.env"
+  echo "$MATRIX" > "./src/terraform.json"
 }
 
 init_copy_files() {
