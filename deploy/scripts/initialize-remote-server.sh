@@ -1,5 +1,17 @@
 #!/bin/bash
 set -euo pipefail
+HOSTNAME=$(hostname)
+
+# Validate that the APP_PATH_TEMP variable is set and is a valid directory.
+: "${APP_PATH_TEMP:="/tmp/app"}"
+: "${WORKSPACE:?Missing WORKSPACE}"
+: "${MANAGER_IP:?Missing MANAGER_IP}"
+: "${PRIVATE_IP:?Missing PRIVATE_IP}"
+
+if [[ ! -d "$APP_PATH_TEMP" ]]; then
+  echo "Temporary path $APP_PATH_TEMP does not exist. Please create it or set a different path."
+  exit 1
+fi
 
 # source /tmp/app/utilities.sh (set in pipeline)
 # source /tmp/app/initialize.env (set in pipeline)
@@ -24,8 +36,7 @@ install_private_key() {
 # and that the file contains valid UFW commands.
 configure_firewall() {
   log INFO "[*] Configuring firewall..."
-  : "${PATH_TEMP:?Missing PATH_TEMP}"
-
+  
   if ! command -v ufw &> /dev/null; then
   log INFO "[*] ... Installing UFW ..."
   apt-get install -y ufw
@@ -69,24 +80,8 @@ configure_firewall() {
 mount_disks() {
   log INFO "[*] Preparing and mounting disk volumes..."
 
-  : "${WORKSPACE:?Missing WORKSPACE}"
-  : "${PATH_TEMP:?Missing PATH_TEMP}"
-  local hostname=$(hostname)
-  local workspace_file="$PATH_TEMP/$WORKSPACE.ws.json"
-  log INFO "[*] Getting workspace information from $workspace_file"
-  if [[ ! -f "$workspace_file" ]]; then
-    log ERROR "[!] Cluster metadata file not found: $workspace_file on $hostname"
-    return 1
-  fi
-
-  log INFO "[*] Getting server information for $hostname"
-  local server_id=$(jq -r '.servers[].id' "$workspace_file" | while read -r id; do
-    [[ "$hostname" == *"$id"* ]] && echo "$id" && break
-  done)
-  if [[ -z "$server_id" ]]; then
-    log ERROR "[!] No matching server ID found for hostname: $hostname"
-    return 1
-  fi
+  local workspace_file=$(get_workspace_file "$PATH_TEMP" "$WORKSPACE") || exit 1
+  local server_id=$(get_server_id "$WORKSPACE_FILE" "$HOSTNAME") || exit 1
 
   # Identify the OS disk by partition mounted at root '/'
   log INFO "[*] Identify the OS disk by root mountpoint"
@@ -111,7 +106,7 @@ mount_disks() {
   done
 
   local disk_count=$(jq -r --arg id "$server_id" '.servers[] | select(.id == $id) | .disks | length' "$workspace_file")
-  log INFO "[*] ... Found $disk_count disks for $hostname (including OS disk)"
+  log INFO "[*] ... Found $disk_count disks for $HOSTNAME (including OS disk)"
   if (( ${#disk_names[@]} < disk_count )); then
     log ERROR "[!] Only found ${#disk_names[@]} disks but expected $disk_count"
     return 1
@@ -121,7 +116,7 @@ mount_disks() {
 
   log INFO "[*] Looping over all disks"
   for i in $(seq 0 $((disk_count - 1))); do
-    log INFO "[*] Mounting disk $i for $hostname"
+    log INFO "[*] Mounting disk $i for $HOSTNAME"
 
     local disk="/dev/${disk_names[$i]}"
     local label=$(jq -r --arg id "$server_id" --argjson i "$i" \
@@ -156,7 +151,7 @@ mount_disks() {
       current_label=$(blkid -s LABEL -o value "$part" 2>/dev/null || echo "")
     fi
 
-    log INFO "[*] ... Mounting data disk $i for $hostname"
+    log INFO "[*] ... Mounting data disk $i for $HOSTNAME"
     log INFO "[*] ... Preparing disk $disk (label=$label)"
 
     # Get expected disk size from workspace metadata (in GB)
@@ -279,12 +274,10 @@ install_docker_if_needed() {
 # Function that configures swarm servers and stores its tokens in /tmp and NOT /tmp/app
 # Reason: /tmp/app gets cleaned !
 configure_swarm() {
-  local hostname
-  hostname=$(hostname)
-  log INFO "[*] Configuring Docker Swarm on $hostname..."
+  log INFO "[*] Configuring Docker Swarm on $HOSTNAME..."
 
   if [ "$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null)" = "active" ]; then
-    if [[ "$hostname" == *"manager-1"* ]]; then
+    if [[ "$HOSTNAME" == *"manager-1"* ]]; then
       log INFO "[*] Manager node already part of a Swarm. Creating join-tokens."
       docker swarm join-token manager -q > /tmp/manager_token.txt
       docker swarm join-token worker -q > /tmp/worker_token.txt
@@ -294,7 +287,7 @@ configure_swarm() {
     return
   fi
 
-  if [[ "$hostname" == *"manager-1"* ]]; then
+  if [[ "$HOSTNAME" == *"manager-1"* ]]; then
     log INFO "[*] ... Initializing new Swarm cluster..."
     docker swarm init --advertise-addr "$PRIVATE_IP"
     mkdir -p /tmp/app
@@ -322,7 +315,7 @@ configure_swarm() {
     MANAGER_JOIN_TOKEN=$(ssh $SSH_OPTS root@$MANAGER_IP 'cat /tmp/manager_token.txt')
     WORKER_JOIN_TOKEN=$(ssh $SSH_OPTS root@$MANAGER_IP 'cat /tmp/worker_token.txt')
 
-    if [[ "$hostname" == *"manager-"* ]]; then
+    if [[ "$HOSTNAME" == *"manager-"* ]]; then
       log INFO "[*] ... Joining as Swarm Manager..."
       docker swarm join --token "$MANAGER_JOIN_TOKEN" $MANAGER_IP:2377 --advertise-addr "$PRIVATE_IP"
     else
@@ -333,7 +326,7 @@ configure_swarm() {
     log INFO "[+] Successfully joined Swarm cluster"
   fi
 
-  log INFO "[+] Configuring Docker Swarm on $hostname...DONE"
+  log INFO "[+] Configuring Docker Swarm on $HOSTNAME...DONE"
 }
 
 # Function to ensure Docker service is enabled and running
@@ -381,13 +374,42 @@ install_gluster() {
 # Main function to initialize the remote server
 main() {
     echo "[*] Initializing remote server..."
-    install_private_key || exit 1
-    configure_firewall || exit 1
-    mount_disks || exit 1
-    install_docker_if_needed || exit 1
-    configure_swarm || exit 1
-    enable_docker_service || exit 1
-    install_gluster || exit 1
+
+    install_private_key || {
+      log ERROR "[X] Failed to install private key."
+      exit 1
+    }
+
+    configure_firewall || {
+      log ERROR "[X] Failed to configure firewall."
+      exit 1
+    }
+
+    mount_disks || {
+      log ERROR "[X] Failed to mount disks."
+      exit 1
+    }
+
+    install_docker_if_needed || {
+      log ERROR "[X] Failed to install Docker."
+      exit 1
+    }
+
+    configure_swarm || {
+      log ERROR "[X] Failed to configure Docker Swarm."
+      exit 1
+    }
+
+    enable_docker_service || {
+      log ERROR "[X] Failed to enable Docker service."
+      exit 1
+    }
+
+    install_gluster || {
+      log ERROR "[X] Failed to install GlusterFS."
+      exit 1
+    }
+    
     echo "[*] Remote server cleanup..."
     rm -rf /tmp/app/*
     echo "[+] Remote server initialization completed."

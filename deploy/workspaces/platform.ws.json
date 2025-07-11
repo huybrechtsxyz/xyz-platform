@@ -36,17 +36,11 @@
       "unit_cost": 6.00
     }
   },
-  "paths-old": [
-    { "type": "config", "path": "/${service}/config" },
-    { "type": "data",   "path": "/${service}/data" },
-    { "type": "logs",   "path": "/${service}/logs" },
-    { "type": "serve",  "path": "/${service}/serve" }
-  ],
   "paths": [
-    { "type": "config", "path": "/etc/${service}"     , "volume": "replicated" },
-    { "type": "data",   "path": "/var/data/${service}", "volume": "local" },
-    { "type": "logs",   "path": "/var/logs/${service}", "volume": "local" },
-    { "type": "serve",  "path": "/srv/${service}"     , "volume": "distributed" }
+    { "type": "config", "path": "/etc"     , "volume": "replicated" },
+    { "type": "data",   "path": "/var/data", "volume": "local" },
+    { "type": "logs",   "path": "/var/logs", "volume": "local" },
+    { "type": "serve",  "path": "/srv"     , "volume": "distributed" }
   ],
   "servers": [
     {

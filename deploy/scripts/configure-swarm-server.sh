@@ -6,14 +6,25 @@ if [ "$#" -ne 2 ]; then
   echo "Usage: $0 <REMOTE_IP> <MATRIX>"
   exit 1
 fi
+
 REMOTE_IP="$1"
 MATRIX="$2"
+
+if [[ ! "$REMOTE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Invalid IP address format: $REMOTE_IP"
+  exit 1
+fi
+if [[ -z "$MATRIX" ]]; then
+  echo "MATRIX cannot be empty"
+  exit 1
+fi
 
 # Source the utilities script for logging and environment variable handling
 source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
 
 # Create secret and variable files based on expected prefixes
-# Creates variable.env and secrets.env files
+# Creates variable.env 
+# Creates secrets.env
 # Creates terraform.json file with the provided MATRIX
 create_secret_file() {
   generate_env_file "VAR_" "./src/variables.env"
@@ -36,6 +47,10 @@ exit 1
 fi
 }
 
+# Copies configuration files to the remote server
+# This function copies the necessary scripts and configuration files to the remote server
+# It ensures that the remote server has the required files to run the configuration script
+# The files are copied to the temporary application path created earlier
 copy_config_files() {
   log INFO "[*] Copying environment files to remote server..."
   shopt -s nullglob

@@ -104,11 +104,11 @@ load_secret_identifiers() {
 }
 
 # Function to create a Docker network if it doesn't exist
-# Usage: createnetwork <network_name>
-# Example: createnetwork my_overlay_network
+# Usage: create_docker_network <network_name>
+# Example: create_docker_network my_overlay_network
 # This function checks if a Docker overlay network exists and creates it if not.
 # It requires Docker to be running in Swarm mode.
-createnetwork() {
+create_docker_network() {
   local network="$1"
   log INFO "[*] Ensuring Docker network '$network' exists..."
 
@@ -126,13 +126,13 @@ createnetwork() {
 }
 
 # Function to create a Docker secret
-# Usage: createdockersecret <label> <name> <value>
-# Example: createdockersecret my_secret my_secret_name "my_secret_value"
+# Usage: create_docker_secret <label> <name> <value>
+# Example: create_docker_secret my_secret my_secret_name "my_secret_value"
 # This function creates a Docker secret if it doesn't already exist.
 # If the secret already exists and is in use, it will skip deletion and creation.
 # If the secret exists but is not in use, it will remove the old secret and create a new one.
 # It also checks if the secret is in use before attempting to remove it.
-createdockersecret() {
+create_docker_secret() {
   local label="$1"
   local name="$2"
   local value="$3"
@@ -152,7 +152,7 @@ createdockersecret() {
   if docker secret inspect "$name" &>/dev/null; then
     log INFO "[*] ... Secret '$name' already exists."
 
-    if issecretinuse "$name"; then
+    if is_secret_in_use "$name"; then
       log INFO "[*] ... Secret '$name' is in use. Skipping deletion and creation."
       return 0
     fi
@@ -171,10 +171,10 @@ createdockersecret() {
 }
 
 # Function to check if a Docker secret is in use
-# Usage: issecretinuse <secret_name>
-# Example: issecretinuse my_secret
+# Usage: is_secret_in_use <secret_name>
+# Example: is_secret_in_use my_secret
 # This function checks if a Docker secret is currently in use by any service or container.
-issecretinuse() {
+is_secret_in_use() {
   local secret_name="$1"
 
   # Check services using the secret
@@ -198,13 +198,13 @@ issecretinuse() {
 }
 
 # Function to load Docker secrets from a file
-# Usage: loaddockersecrets <secrets_file>
-# Example: loaddockersecrets /path/to/secrets.env
+# Usage: load_docker_secrets <secrets_file>
+# Example: load_docker_secrets /path/to/secrets.env
 # This function reads a file containing key-value pairs (one per line) and creates Docker secrets
 # It skips blank lines and comments, trims whitespace, and removes surrounding quotes from values.
 # It also checks if the secret already exists and is in use before attempting to create it.
 # If the secret exists but is not in use, it will remove the old secret and create a new one.
-loaddockersecrets() {
+load_docker_secrets() {
   
   local secrets_file=${1:-}
 
@@ -227,8 +227,111 @@ loaddockersecrets() {
     value="${value%\"}"
     value="${value#\"}"
 
-    createdockersecret "$key" "$key" "$value"
+    create_docker_secret "$key" "$key" "$value"
   done < "$secrets_file"
 
   echo "[+] Finished loading secrets."
+}
+
+# Function to get the Terraform output file path
+# Usage: get_terraform_file <TEMP_PATH>
+# Example: get_terraform_file /tmp/workspace
+# This function checks if the Terraform output file exists in the specified temporary path.
+# If it does, it returns the full path to the Terraform file.
+# If the file does not exist, it logs an error and returns 1.
+get_terraform_file() {
+  local TEMP_PATH="$1"
+
+  if [[ -z "$TEMP_PATH" ]]; then
+    log ERROR "[!] get_terraform_file requires TEMP_PATH argument."
+    return 1
+  fi
+
+  local TF_FILE="$TEMP_PATH/terraform.json"
+
+  log INFO "[*] Getting workspace information from $TF_FILE"
+
+  if [[ ! -f "$TF_FILE" ]]; then
+    log ERROR "[!] Terraform output file not found: $TF_FILE"
+    return 1
+  fi
+
+  echo "$WORKSPACE_FILE"
+}
+
+# Function to get Terraform data based on label and data type
+# Usage: get_terraform_data <terraform_file> <label> [data_type]
+# Example: get_terraform_data /tmp/workspace/terraform.json my_label private_ip
+# This function reads the specified Terraform file and extracts data for the given label.
+# If data_type is not specified, it defaults to "private_ip".
+get_terraform_data() {
+  local terraform_file="$1"
+  local label="$2"
+  local data_type="${3:-private_ip}"  # default to private_ip if not specified
+
+  if [[ ! -f "$terraform_file" ]]; then
+    log ERROR "[!] Terraform file not found: $terraform_file"
+    return 1
+  fi
+
+  jq -r --arg label "$label" --arg data_type "$data_type" \
+    '.include[] | select(.label == $label) | .[$data_type]' "$terraform_file"
+}
+
+# Function to get the workspace file path
+# Usage: get_workspace_file <TEMP_PATH> <WORKSPACE_NAME>
+# Example: get_workspace_file /tmp/workspace my_workspace
+# This function checks if the workspace file exists in the specified temporary path.
+# If it does, it returns the full path to the workspace file.
+# If the file does not exist, it logs an error and returns 1.
+get_workspace_file() {
+  local TEMP_PATH="$1"
+  local WORKSPACE_NAME="$2"
+
+  if [[ -z "$TEMP_PATH" || -z "$WORKSPACE_NAME" ]]; then
+    log ERROR "[!] get_workspace_file requires TEMP_PATH and WORKSPACE_NAME arguments."
+    return 1
+  fi
+
+  local WORKSPACE_FILE="$TEMP_PATH/$WORKSPACE_NAME.ws.json"
+
+  log INFO "[*] Getting workspace information from $WORKSPACE_FILE"
+
+  if [[ ! -f "$WORKSPACE_FILE" ]]; then
+    log ERROR "[!] Workspace definition file not found: $WORKSPACE_FILE"
+    return 1
+  fi
+
+  echo "$WORKSPACE_FILE"
+}
+
+# Function to get the server ID from the workspace file based on the hostname
+# Usage: get_server_id <WORKSPACE_FILE> <HOSTNAME>
+# Example: get_server_id /tmp/workspace/my_workspace.ws.json my_hostname
+# This function reads the workspace file and extracts the server ID that matches the given hostname.
+# If no matching server ID is found, it logs an error and returns 1.
+get_server_id() {
+  local WORKSPACE_FILE="$1"
+  local HOSTNAME="$2"
+
+  if [[ -z "$WORKSPACE_FILE" || -z "$HOSTNAME" ]]; then
+    log ERROR "[!] get_server_id requires WORKSPACE_FILE and HOSTNAME arguments."
+    return 1
+  fi
+
+  log INFO "[*] Getting server information for hostname: $HOSTNAME"
+
+  local SERVER_ID=$(jq -r '.servers[].id' "$WORKSPACE_FILE" | while read -r id; do
+    if [[ "$HOSTNAME" == *"$id"* ]]; then
+      echo "$id"
+      break
+    fi
+  done)
+
+  if [[ -z "$SERVER_ID" ]]; then
+    log ERROR "[!] No matching server ID found for hostname: $HOSTNAME"
+    return 1
+  fi
+
+  echo "$SERVER_ID"
 }

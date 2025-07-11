@@ -3,10 +3,6 @@ set -euo pipefail
 
 # Validate that the APP_PATH_TEMP variable is set and is a valid directory.
 : "${APP_PATH_TEMP:="/tmp/app"}"
-if [[ -z "${APP_PATH_TEMP}" ]]; then
-  echo "APP_PATH_TEMP is not set. Please set it to the desired temporary path."
-  exit 1
-fi
 if [[ ! -d "$APP_PATH_TEMP" ]]; then
   echo "Temporary path $APP_PATH_TEMP does not exist. Please create it or set a different path."
   exit 1
@@ -25,6 +21,10 @@ fi
 APP_REMOTE_IP="$1"
 APP_PRIVATE_IP="$2"
 APP_MANAGER_IP="$3"
+if [[ -z "$APP_REMOTE_IP" || -z "$APP_PRIVATE_IP" || -z "$APP_MANAGER_IP" ]]; then
+  log ERROR "One or more required arguments are empty. Please provide valid IP addresses."
+  exit 1
+fi
 
 # Create a temporary directory for the initialization scripts
 create_env_file() {

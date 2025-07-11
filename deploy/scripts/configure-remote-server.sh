@@ -1,15 +1,21 @@
 #!/bin/bash
 set -eo pipefail
-hostname=$(hostname)
+HOSTNAME=$(hostname)
 
 : "${WORKSPACE:?Missing WORKSPACE env var}"
 : "${PATH_TEMP:?Missing PATH_TEMP env var}"
 
-WORKSPACE_FILE="$PATH_TEMP/src/$WORKSPACE.ws.json"
-if [[ ! -f "$workspace_file" ]]; then
-  log ERROR "[!] Workspace file not found: $workspace_file"
-  return 1
-fi
+WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP" "$WORKSPACE") || exit 1
+TERRAFORM_FILE=$(get_terraform_file "$PATH_TEMP") || exit 1
+
+# Determine my server id
+SERVER_ID=$(get_server_id "$WORKSPACE_FILE" "$HOSTNAME") || exit 1
+MANAGER_IP=$(get_terraform_data "$TERRAFORM_FILE" "$SERVER_ID" "manager_ip") || exit 1
+# Load private IPs from terraform.json (as an array)
+readarray -t PRIVATE_IPS < <(jq -r '.include[].private_ip' "$TERRAFORM_FILE")
+
+log INFO "[*] MANAGER NODE: $MANAGER_IP"
+log INFO "[*] CLUSTER NODES: ${PRIVATE_IPS[*]}"
 
 # Fucntion that creates docker labels for each node based on its hostname
 # The labels are:
@@ -20,18 +26,17 @@ fi
 # This function reads the workspace file to get the node information and applies the labels to all nodes
 # It also reads the existing labels and updates them if they differ or are missing
 # Finally, it removes any labels that exist but are not desired
-createnodelabels() {
+create_docker_labels() {
   # Get the current hostname
   log INFO "[*] Applying role label to all nodes..."
-  local srvrole workspace_file nodes
+  local srvrole nodes
 
   # Get current hostname and parse role (3rd part of hyphen-separated hostname)
-  srvrole=$(echo "$hostname" | cut -d'-' -f3)
+  srvrole=$(echo "$HOSTNAME" | cut -d'-' -f3)
   log INFO "[*] ... Detected role: $srvrole"
 
   # Workspace JSON file path (environment variables assumed set)
-  workspace_file="$PATH_TEMP/src/$WORKSPACE.ws.json"
-  log INFO "[*] ... Using workspace file: $workspace_file"
+  log INFO "[*] ... Using workspace file: $WORKSPACE_FILE"
 
   # Get list of all Docker Swarm node hostnames
   log INFO "[*] ... Getting node hostnames"
@@ -87,7 +92,7 @@ createnodelabels() {
 
     # Add custom labels from workspace JSON (jq filters by node id)
     log INFO "[*] ...... Add custom labels from workspace on $node"
-    mapfile -t ws_labels < <(jq -r --arg id "$node" '.servers[] | select(.id == $id) | .labels[]?' "$workspace_file")
+    mapfile -t ws_labels < <(jq -r --arg id "$node" '.servers[] | select(.id == $id) | .labels[]?' "$WORKSPACE_FILE")
     for label in "${ws_labels[@]}"; do
       # Split label key and value
       local key="${label%%=*}"
@@ -129,17 +134,6 @@ createnodelabels() {
 # Returns 0 on success, 1 on failure
 create-fs-cluster() {
   log INFO "[*] Creating GlusterFS cluster..."
-  
-  local terraform = "$PATH_TEMP/src/terraform.json"
-  if [[ ! -f "$terraform" ]]; then
-    log ERROR "[!] Terraform configuration file not found: $terraform"
-    return 1
-  fi
-
-  # Determine my private IP
-  MANAGER_IP=$(hostname -I | awk '{print $1}')
-  log INFO "[*] MANAGER_IP IP: $MANAGER_IP"
-  log INFO "[*] Cluster nodes: ${PRIVATE_IPS[*]}"
 
   # Get current peer IPs from Gluster
   readarray -t CURRENT_PEERS < <(
@@ -186,19 +180,289 @@ create-fs-cluster() {
   log INFO "[+] GlusterFS cluster created successfully."
 }
 
+# Function to create the base server paths for GlusterFS volumes
+# It reads the workspace file to get the paths and mount points for each server
+# It then creates the directories on each server via SSH
+# It then creates the GlusterFS volumes based on the paths
+# It then creates environment variables for the paths > /PATH_TEMP/src/variables.env
+# At the end, it starts the volumes
+create-fs-volumes() {
+  log INFO "[*] Creating GlusterFS volumes..."
+  log INFO "[*] Workspace '$WORKSPACE' setup target server ID: $SERVER_ID"
+
+  # Loop over all servers in the workspace file
+  jq -c '.servers[]' "$WORKSPACE_FILE" | while read -r serverdata; do
+
+    local server=$(echo "$serverdata" | jq -r '.id')
+    local mountpoint=$(echo "$serverdata" | jq -r '.mountpoint')
+    
+    local private_ip=$(get_terraform_data "$TERRAFORM_FILE" "$SERVER_ID" "private_ip") || exit 1
+
+    commands=()
+    declare -A bricks_map
+
+    log INFO "[*] Processing server '$server' mounts with mountpoint '$mountpoint'"
+    jq -c '.mounts[]' <<< "$serverdata" | while read -r mount; do
+
+      # Extract mount type and disk from the mount object
+      local mounttype=$(echo "$mount" | jq -r '.type')
+      local mountdisk=$(echo "$mount" | jq -r '.disk')
+
+      # Get the path information for this mount type
+      local pathinfo=$(jq -r --arg type "$mounttype" '.paths[] | select(.type==$type)' "$WORKSPACE_FILE")
+      if [[ -z "$pathinfo" ]]; then
+        log ERROR "[!] No path information found for mount type '$mounttype'. Skipping."
+        continue
+      fi
+
+      local volume=$(echo "$pathinfo" | jq -r '.volume')
+      local mountpath=$(echo "$pathinfo" | jq -r '.path')
+      if [[ -z "$volume" || -z "$mountpath" ]]; then
+        log ERROR "[!] Missing volume or mount path for mount type '$mounttype'. Skipping."
+        continue
+      fi
+
+      # Resolve the full path
+      local fullpath="${mountpoint//\$\{disk\}/$mountdisk}${mountpath}"
+      log INFO "[*] Creating directory with type $mounttype on server '$server': $full_path"
+
+      # Add the path to the creation command
+      commands+=(" '$fullpath'")
+
+      # Add to environment variables file
+      echo "PATH_${server^^}_${mounttype^^}=$fullpath" >> "$PATH_TEMP/src/variables.env"
+
+      # Add to bricks array for GlusterFS volume creation
+      local brick="${private_ip}:${fullpath}"
+
+      # Use workspace prefix in the volume name
+      volumename="${WORKSPACE}_${mounttype}"
+      BRICKS_MAP["$volumename"]+="$brick "
+      log INFO "[*] Adding brick '$brick' to volume '$volumename'"
+    done
+    
+    # Create the directories on the server via SSH
+    if [[ ${#commands[@]} -gt 0 ]]; then
+      if [[ "$server" == "$SERVER_ID" ]]; then
+        log INFO "[*] Creating directories on local server '$server'..."
+        local cli_cmd="mkdir -p ${commands[*]}"
+        if ! eval "$cli_cmd"; then
+          log ERROR "[!] Failed to create directories on local server '$server'."
+          return 1
+        fi
+        log INFO "[*] Creating directories on local server '$server'...DONE"
+        continue
+      fi
+
+      log INFO "[*] Creating directories on server '$server' via SSH..."
+      local ssh_cmd="ssh -o BatchMode=yes -o ConnectTimeout=5 root@${server} 'mkdir -p ${commands[*]}'"
+      if ! eval "$ssh_cmd"; then
+        log ERROR "[!] Failed to create directories on server '$server'."
+        return 1
+      fi
+      log INFO "[*] Directories created successfully on server '$server'."
+    else
+      log WARN "[!] No directories to create on server '$server'. Skipping."
+      continue
+    fi
+    
+    # Create and start volumes
+    for volname in "${!BRICKS_MAP[@]}"; do
+      bricks=(${BRICKS_MAP[$volname]})
+
+      # Extract the mount_type back from the volname
+      mount_type="${volname#${WORKSPACE}_}"
+
+      asdfasfasfasf XXX TODO HERE : Fix this COntinue here
+
+
+      volume_type="${VOLUME_TYPE_MAP[$mount_type]}"
+
+      if [[ ${#bricks[@]} -eq 0 ]]; then
+        log WARN "No bricks defined for volume '$volname', skipping."
+        continue
+      fi
+
+      # Check if volume already exists
+      if gluster volume info "$volname" &>/dev/null; then
+        log INFO "Volume '$volname' already exists, skipping creation."
+      else
+        log INFO "Creating volume '$volname' of type '$volume_type' with bricks: ${bricks[*]}"
+
+        if [[ "$volume_type" == "replicated" ]]; then
+          replica_count=${#bricks[@]}
+          gluster volume create "$volname" replica "$replica_count" "${bricks[@]}"
+        elif [[ "$volume_type" == "distributed" ]]; then
+          gluster volume create "$volname" "${bricks[@]}"
+        else
+          log WARN "Unknown volume type '$volume_type' for volume '$volname', skipping."
+          continue
+        fi
+
+        gluster volume start "$volname"
+        log INFO "Volume '$volname' created and started."
+      fi
+    done
+
+  done
+
+  log INFO "[+] GlusterFS volumes created successfully."
+}
+
+# Main function to configure the remote server based on its role
+main_manager() {
+  log INFO "[*] Configuring Manager Node: $HOSTNAME..."
+
+  create_docker_network "wan-$WORKSPACE"
+  create_docker_network "lan-$WORKSPACE"
+  create_docker_network "lan-test"
+  create_docker_network "lan-staging"
+  create_docker_network "lan-production"
+  load_docker_secrets "$PATH_TEMP/src/secrets.env"
+  create_docker_labels || {
+    log ERROR "[!] Failed to create node labels."
+    return 1
+  }
+
+  create-fs-cluster || {
+    log ERROR "[!] Failed to create GlusterFS cluster."
+    return 1
+  }
+
+  create-fs-volumes || {
+    log ERROR "[!] Failed to create GlusterFS volumes."
+    return 1
+  }
+
+  log INFO "[*] Configuring Manager Node: $HOSTNAME...DONE"
+}
+
+# Main function to configure the worker node
+main_worker() {
+  log INFO "[*] Configuring Worker Node: $HOSTNAME..."
+  log INFO "[*] Configuring Worker Node: $HOSTNAME...DONE"
+}
+
+# Main function to configure the remote server
+main() {
+  log INFO "[*] Configuring Swarm Node: $HOSTNAME..."
+
+  docker info --format '{{.Swarm.LocalNodeState}}' | grep -q "active" || {
+    log ERROR "[!] Docker Swarm is not active. Run 'docker swarm init' first."
+    exit 1
+  }
+
+  if [[ "$HOSTNAME" == *"manager-1"* ]]; then
+    main_manager || {
+      log ERROR "[!] Failed to configure manager node."
+      exit 1
+    }
+  else
+    main_worker || {
+      log ERROR "[!] Failed to configure worker node."
+      exit 1
+    }
+  fi
+
+  log INFO "[*] Remote server cleanup..."
+  chmod 755 "$PATH_CONFIG"/*
+  rm -f "$PATH_CONFIG"/develop.env
+  rm -f "$PATH_CONFIG"/secrets.env
+  rm -rf "/tmp/app/"*
+
+  log INFO "[+] Configuring Swarm Node: $HOSTNAME...DONE"
+}
+
+main
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Cache data from terraform.json into arrays
+
+
+# Load SERVER_IP_MAP from terraform.json: map label -> private_ip
+declare -A SERVER_IP_MAP
+while IFS=$'\t' read -r LABEL IP; do
+  SERVER_IP_MAP[$LABEL]=$IP
+done < <(jq -r '.include[] | "\(.label)\t\(.private_ip)"' "$TERRAFORM_FILE")
+
+MANAGER_IP=$(jq -r --arg label "manager-1" '.include[] | select(.label==$label) | .private_ip' "$TERRAFORM_JSON")
+
+# Cache data from workspace file into arrays
+# Load server info from workspace file (ids, mountpoints, mounts counts)
+# We’ll store server count and server IDs in arrays for easy reuse
+SERVERS_COUNT=$(jq '.servers | length' "$WORKSPACE_FILE")
+
+declare -a SERVER_IDS
+declare -a SERVER_MOUNTPOINTS
+declare -a SERVER_MOUNTS_COUNTS
+
+for (( i=0; i < SERVERS_COUNT; i++ )); do
+  SERVER_IDS[i]=$(jq -r ".servers[$i].id" "$WORKSPACE_FILE")
+  SERVER_MOUNTPOINTS[i]=$(jq -r ".servers[$i].mountpoint" "$WORKSPACE_FILE")
+  SERVER_MOUNTS_COUNTS[i]=$(jq ".servers[$i].mounts | length" "$WORKSPACE_FILE")
+done
+
+# Load PATH_MAP and VOLUME_TYPE_MAP as associative arrays from workspace file
+declare -A PATH_MAP
+declare -A VOLUME_TYPE_MAP
+while IFS=$'\t' read -r TYPE PATH VOLUME; do
+  PATH_MAP[$TYPE]=$PATH
+  VOLUME_TYPE_MAP[$TYPE]=$VOLUME
+done < <(jq -r '.paths[] | "\(.type)\t\(.path)\t\(.volume)"' "$WORKSPACE_FILE")
+
+
 # Function to create server paths for GlusterFS volumes
 # It reads the workspace file to get the paths and mount points for each server
 # It then creates the directories on each server via SSH
 # Returns 0 on success, 1 on failure
-create-fs-paths() {
+create-fs-paths2() {
   log INFO "[*] Starting GlusterFS volume creation..."
-
-  # Check if workspace file exists and is readable
-  if [[ ! -r "$WORKSPACE_FILE" ]]; then
-    log ERROR "[X] Workspace file '$WORKSPACE_FILE' not found or not readable."
-    return 1
-  fi
-
+  
   # Extract paths into associative array PATH_MAP[type]=path
   declare -A PATH_MAP
 
@@ -249,6 +513,8 @@ create-fs-paths() {
     fi
 
     mkdir_cmds=()
+    
+
     for (( j=0; j<mounts_count; j++ )); do
       mount_type=$(jq -r ".servers[$i].mounts[$j].type" "$WORKSPACE_FILE")
       disk=$(jq -r ".servers[$i].mounts[$j].disk" "$WORKSPACE_FILE")
@@ -313,10 +579,11 @@ create-fs-paths() {
   log INFO "[+] GlusterFS volume '$volume_name' created successfully."
 }
 
+
 # Function to create GlusterFS volumes based on the workspace configuration
 # It reads the workspace file to get the mount types, paths, and volume types
 # It then creates the volumes with the appropriate bricks and starts them
-create-fs-volumes(){
+create-fs-volumes2(){
   log INFO "[*] Creating GlusterFS volumes..."
 
   # Derive workspace prefix from filename
@@ -421,73 +688,6 @@ create-fs-volumes(){
   log INFO "[*] Creating GlusterFS volumes...DONE"
 }
 
-# Main function to configure the remote server based on its role
-main_manager() {
-  log INFO "[*] Configuring Manager Node: $hostname..."
 
-  createnetwork "wan-$WORKSPACE"
-  createnetwork "lan-$WORKSPACE"
-  createnetwork "lan-test"
-  createnetwork "lan-staging"
-  createnetwork "lan-production"
-  loaddockersecrets "$PATH_TEMP/src/secrets.env"
-  createnodelabels || {
-    log ERROR "[!] Failed to create node labels."
-    return 1
-  }
 
-  create-fs-cluster || {
-    log ERROR "[!] Failed to create GlusterFS cluster."
-    return 1
-  }
 
-  create-fs-paths || {
-    log ERROR "[!] Failed to create the base server paths."
-    return 1
-  }
-
-  create-fs-volumes || {
-    log ERROR "[!] Failed to create GlusterFS volumes."
-    return 1
-  }
-
-  log INFO "[*] Configuring Manager Node: $hostname...DONE"
-}
-
-# Main function to configure the worker node
-main_worker() {
-  log INFO "[*] Configuring Worker Node: $hostname..."
-  log INFO "[*] Configuring Worker Node: $hostname...DONE"
-}
-
-# Main function to configure the remote server
-main() {
-  log INFO "[*] Configuring Swarm Node: $hostname..."
-
-  docker info --format '{{.Swarm.LocalNodeState}}' | grep -q "active" || {
-    log ERROR "[!] Docker Swarm is not active. Run 'docker swarm init' first."
-    exit 1
-  }
-
-  if [[ "$hostname" == *"manager-1"* ]]; then
-    main_manager || {
-      log ERROR "[!] Failed to configure manager node."
-      exit 1
-    }
-  else
-    main_worker || {
-      log ERROR "[!] Failed to configure worker node."
-      exit 1
-    }
-  fi
-
-  log INFO "[*] Remote server cleanup..."
-  chmod 755 "$PATH_CONFIG"/*
-  rm -f "$PATH_CONFIG"/develop.env
-  rm -f "$PATH_CONFIG"/secrets.env
-  rm -rf "/tmp/app/"*
-
-  log INFO "[+] Configuring Swarm Node: $hostname...DONE"
-}
-
-main
