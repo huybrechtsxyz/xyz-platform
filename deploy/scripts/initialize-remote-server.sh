@@ -20,7 +20,7 @@ install_private_key() {
 
 # Function to configure the firewall using UFW
 # This function reads rules from an external file and applies them
-# It assumes the rules file is located at $PATH_TEMP/firewall-rules
+# It assumes the rules file is located at $PATH_TEMP/initialize-firewall-rules
 # and that the file contains valid UFW commands.
 configure_firewall() {
   log INFO "[*] Configuring firewall..."
@@ -33,7 +33,7 @@ configure_firewall() {
   fi
 
   # Load UFW rules from an external file
-  RULES_FILE="$PATH_TEMP/firewall-rules"
+  RULES_FILE="$PATH_TEMP/initialize-firewall-rules"
   if [[ -f "$RULES_FILE" ]]; then
     while IFS= read -r rule; do
       # Skip empty lines and comments
