@@ -51,3 +51,9 @@ allow out proto tcp to 10.0.0.0/23 port 5432 comment 'Postgres OUT'
 # Redis traffic between nodes
 allow proto tcp from 10.0.0.0/23 to any port 6379 comment 'Redis IN'
 allow out proto tcp to 10.0.0.0/23 port 6379 comment 'Redis OUT'
+
+# Gluser traeffic between nodes
+allow proto tcp from 10.0.0.0/23 to any port 24007:24008 comment 'GlusterFS Management IN'
+allow proto tcp from 10.0.0.0/23 to any port 49152:49156 comment 'GlusterFS Bricks IN'
+allow out proto tcp to 10.0.0.0/23 port 24007:24008 comment 'GlusterFS Management OUT'
+allow out proto tcp to 10.0.0.0/23 port 49152:49156 comment 'GlusterFS Bricks OUT'
