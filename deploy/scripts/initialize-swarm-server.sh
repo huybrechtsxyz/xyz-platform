@@ -1,20 +1,34 @@
 #!/bin/bash
 set -euo pipefail
 
+# Validate that the APP_PATH_TEMP variable is set and is a valid directory.
+: "${APP_PATH_TEMP:="/tmp/app"}"
+if [[ -z "${APP_PATH_TEMP}" ]]; then
+  echo "APP_PATH_TEMP is not set. Please set it to the desired temporary path."
+  exit 1
+fi
+if [[ ! -d "$APP_PATH_TEMP" ]]; then
+  echo "Temporary path $APP_PATH_TEMP does not exist. Please create it or set a different path."
+  exit 1
+fi
+
+# Load utility functions and environment variables
 source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
 
+# Check if the required arguments are provided
 if [ "$#" -ne 3 ]; then
   log ERROR "Usage: $0 <APP_REMOTE_IP> <APP_PRIVATE_IP> <APP_MANAGER_IP>"
   exit 1
 fi
 
+# Assign command line arguments to variables
 APP_REMOTE_IP="$1"
 APP_PRIVATE_IP="$2"
 APP_MANAGER_IP="$3"
 
 # Create a temporary directory for the initialization scripts
 create_env_file() {
-  generate_env_file "APP_" "./deploy/scripts/initialize.env"
+  generate_env_file "APP_" "./deploy/scripts/variables.env"
 }
 
 # Function to copy configuration files to the remote server
@@ -48,11 +62,14 @@ if ! ssh -o StrictHostKeyChecking=no root@"$APP_REMOTE_IP" << EOF
   set -e
   echo "[*] Executing initialization on REMOTE server..."
   set -a
-  source "$APP_PATH_TEMP/initialize.env"
+  source "$APP_PATH_TEMP/variables.env"
   source "$APP_PATH_TEMP/utilities.sh"
   set +a
   chmod +x "$APP_PATH_TEMP/initialize-remote-server.sh"
   "$APP_PATH_TEMP/initialize-remote-server.sh"
+  echo "[*] Initialization script executed successfully on REMOTE server."
+  echo "[*] Cleaning up swarm cluster..."
+  rm -rf "$APP_PATH_TEMP/*"
   echo "[*] Executing on REMOTE server...DONE"
 EOF
 then

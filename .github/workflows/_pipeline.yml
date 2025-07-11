@@ -189,7 +189,12 @@ jobs:
 
   # Initialize the Swarm Cluster
   # This job will run if the cache is not hit or if the initialize input is set to true
-  # Initializes the Swarm cluster
+  # Initializes the Swarm cluster by
+  # - copying the private key to the remote server
+  # - running the firewall script on the remote server
+  # - installing docker and initializing the Swarm cluster
+  # - mounting the necessary disks
+  # - installing glusterfs
   initialization:
     name: Initialize Cluster
     needs: [restore]
@@ -245,6 +250,10 @@ jobs:
           ./deploy/scripts/initialize-swarm-server.sh "${{ matrix.ip }}" "${{ matrix.private_ip }}" "${{ matrix.manager_ip }}"
           echo "[*] Initializing swarm cluster on ${{ matrix.ip }} ...DONE"
 
+  # Configure the Swarm Cluster
+  # This job will run if the restore and initialization jobs are successful or skipped
+  # Configures the Swarm cluster with the necessary settings and secrets
+  # - 
   configuration:
     name: Configure Cluster
     needs: [restore, initialization]
