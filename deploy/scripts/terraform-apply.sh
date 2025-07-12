@@ -44,7 +44,7 @@ echo "}" >> "$OUTPUT_FILE"
 echo "[+] Terraform tfvars file generated at $OUTPUT_FILE"
 echo "[+] Terraform tfvars file workspace.tfvars content:"
 cat "$OUTPUT_FILE"
-echo "[*] ...Generating ${WORKSPACE}.tfvars file completed"
+echo "[*] ...Generating workspace.tfvars file completed"
 
 # Substitute environment variables in the main.template.tf file
 cd "$SCRIPT_DIR/../terraform"
@@ -62,10 +62,10 @@ mkdir -p "$APP_PATH_TEMP"
 terraform init
 
 echo "[*] ...Running terraform...PLAN"
-terraform plan -var-file="${WORKSPACE}.tfvars" -input=false
+terraform plan -var-file="workspace.tfvars" -input=false
 
 echo "[*] ...Running terraform...APPLY"
-#terraform apply -auto-approve -var-file="${WORKSPACE}.tfvars" -input=false
+#terraform apply -auto-approve -var-file="workspace.tfvars" -input=false
 echo "[*] ...Running terraform...APPLY skipped for safety"
 
 echo "[*] ...Reading Terraform output..."
