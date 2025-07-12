@@ -13,6 +13,9 @@ if [[ ! -d "$APP_PATH_TEMP" ]]; then
   exit 1
 fi
 
+WORKSPACE_FILE=$(get_workspace_file "$APP_PATH_TEMP" "$WORKSPACE") || exit 1
+MANAGER_LABEL=$(get_manager_id "$WORKSPACE_FILE") || exit 1
+
 # source /tmp/app/utilities.sh (set in pipeline)
 # source /tmp/app/initialize.env (set in pipeline)
 export PRIVATE_IP="$PRIVATE_IP"
@@ -277,7 +280,7 @@ configure_swarm() {
   log INFO "[*] Configuring Docker Swarm on $HOSTNAME..."
 
   if [ "$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null)" = "active" ]; then
-    if [[ "$HOSTNAME" == *"manager-1"* ]]; then
+    if [[ "$HOSTNAME" == *"$MANAGER_LABEL"* ]]; then
       log INFO "[*] Manager node already part of a Swarm. Creating join-tokens."
       docker swarm join-token manager -q > /tmp/manager_token.txt
       docker swarm join-token worker -q > /tmp/worker_token.txt
@@ -287,7 +290,7 @@ configure_swarm() {
     return
   fi
 
-  if [[ "$HOSTNAME" == *"manager-1"* ]]; then
+  if [[ "$HOSTNAME" == *"$MANAGER_LABEL"* ]]; then
     log INFO "[*] ... Initializing new Swarm cluster..."
     docker swarm init --advertise-addr "$PRIVATE_IP"
     mkdir -p /tmp/app

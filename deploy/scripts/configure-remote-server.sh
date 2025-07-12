@@ -11,6 +11,7 @@ TERRAFORM_FILE=$(get_terraform_file "$PATH_TEMP") || exit 1
 # Determine my server id
 SERVER_ID=$(get_server_id "$WORKSPACE_FILE" "$HOSTNAME") || exit 1
 MANAGER_IP=$(get_terraform_data "$TERRAFORM_FILE" "$SERVER_ID" "manager_ip") || exit 1
+MANAGER_LABEL=$(get_manager_id "$WORKSPACE_FILE") || exit 1
 # Load private IPs from terraform.json (as an array)
 readarray -t PRIVATE_IPS < <(jq -r '.include[].private_ip' "$TERRAFORM_FILE")
 
@@ -355,7 +356,7 @@ main() {
     exit 1
   }
 
-  if [[ "$HOSTNAME" == *"manager-1"* ]]; then
+  if [[ "$HOSTNAME" == *"MANAGER_LABEL"* ]]; then
     main_manager || {
       log ERROR "[!] Failed to configure manager node."
       exit 1

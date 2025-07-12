@@ -335,3 +335,33 @@ get_server_id() {
 
   echo "$SERVER_ID"
 }
+
+# Function to get the main manager ID from the workspace file
+# Usage: get_manager_id <WORKSPACE_FILE>
+# Example: get_manager_id /tmp/workspace/my_workspace.ws.json
+# This function reads the workspace file and extracts the main manager ID.
+# If no main manager ID is found, it logs an error and returns 1.
+get_manager_id() {
+  local WORKSPACE_FILE="$1"
+
+  if [[ -z "$WORKSPACE_FILE" ]]; then
+    log ERROR "[!] get_manager_id requires WORKSPACE_FILE argument."
+    return 1
+  fi
+
+  log INFO "[*] Getting main manager ID from workspace file: $WORKSPACE_FILE"
+
+  if [[ ! -f "$WORKSPACE_FILE" ]]; then
+    log ERROR "[!] Workspace definition file not found: $WORKSPACE_FILE"
+    return 1
+  fi
+
+  local MAIN_MANAGER_ID=$(jq -r '.servers[0].id' "$WORKSPACE_FILE")
+
+  if [[ -z "$MAIN_MANAGER_ID" || "$MAIN_MANAGER_ID" == "null" ]]; then
+    log ERROR "[!] No main manager ID found in workspace file."
+    return 1
+  fi
+
+  echo "$MAIN_MANAGER_ID"
+}

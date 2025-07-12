@@ -253,7 +253,6 @@ jobs:
   # Configure the Swarm Cluster
   # This job will run if the restore and initialization jobs are successful or skipped
   # Configures the Swarm cluster with the necessary settings and secrets
-  # - 
   configuration:
     name: Configure Cluster
     needs: [restore, initialization]
