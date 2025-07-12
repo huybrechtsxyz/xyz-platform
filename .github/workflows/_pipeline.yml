@@ -1,0 +1,318 @@
+# [Workspace Setup Guide]
+# To create new servers
+#  - Create a new {workspace-name}.ws.json file
+#  - To recreate the servers delete existing:
+#    - Servers and networks in Kamatera
+#      on https://console.kamatera.com
+#    - The HCP Terraform Cloud Workspace
+#      on https://app.terraform.io/app/xyz/workspaces/{workspace}
+#
+# To add a new path:
+#  - Update env vars in the pipeline accordingly
+#  - Add the new path under "paths" in workspace.json
+#  - Add a corresponding mount entry under "mounts" for the target server
+#  - Check service.json if the service uses this path
+#
+# To add a new disk:
+#  - Add disk details to the "disks" array for the target server in workspace.json
+#  - Update or add matching "mounts" entries for relevant path types
+#
+# To add environment variables:
+#  - Use the APP_ prefix for application config (e.g., APP_PORT, APP_ENV)
+#  - Add them under the "env:" block of the relevant pipeline step
+#  - The SECRET_ prefix is dropped when exporting variables to the remote server.
+#
+# To add secrets:
+#  - Use the SECRET_ prefix (e.g., SECRET_API_KEY)
+#  - Add them under the "env:" block, referencing the secret store as needed
+#  - The APP_ prefix is dropped when exporting variables to the remote server.
+
+# Build and Deploy Jobs
+name: _InfraBuildDeploy
+
+on:
+  workflow_call:
+    inputs:
+      workspace:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+      infrastructure:
+        required: true
+        type: boolean
+    secrets:
+      BITWARDEN_TOKEN:
+        required: true
+
+env:
+  # Environment variables for the pipeline
+  APP_PATH_TEMP: /tmp/app
+
+jobs:
+  # Terraform Plan and Apply
+  # This job will run if the cache is not hit or if the initialize input is set to true
+  # Stores the output in a JSON file and uploads it as an artifact and caches it for future runs
+  terraform:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    if: inputs.infrastructure == true
+    steps:
+      # Check out the repo
+      - name: Check Out
+        uses: actions/checkout@v4
+      
+      # Load secret uuid for Bitwarden
+      - name: Load Workspace Secrets
+        working-directory: ./deploy
+        run: |
+          echo "[*] Load secret identifiers ..."
+          source ./scripts/utilities.sh
+          load_secret_identifiers "./workspaces/${{ inputs.workspace }}.ws.json" "${{ inputs.environment }}"
+          echo "[*] Load secret identifiers ...DONE"
+
+      # Set up GitHub Secrets
+      - name: Get General Secrets
+        uses: bitwarden/sm-action@v2
+        id: get-secrets
+        with:
+          access_token: ${{ secrets.BITWARDEN_TOKEN }}
+          secrets: |
+            $UUID_TERRAFORM_API_TOKEN > TERRAFORM_API_TOKEN
+            $UUID_KAMATERA_API_KEY > KAMATERA_API_KEY
+            $UUID_KAMATERA_API_SECRET > KAMATERA_API_SECRET
+            $UUID_KAMATERA_PUBLIC_KEY > KAMATERA_PUBLIC_KEY
+            $UUID_KAMATERA_PRIVATE_KEY > KAMATERA_PRIVATE_KEY
+            $UUID_KAMATERA_ROOT_PASSWORD > KAMATERA_ROOT_PASSWORD
+      
+      # Set up the Terraform CLI
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+          terraform_wrapper: false
+      
+      # Run Terraform to create docker swarm cluster
+      - name: Run Terraform Apply
+        id: tfapply
+        working-directory: ./deploy/terraform
+        run: |
+          echo "[*] Server deployment and configuration ..."
+          export TF_TOKEN_app_terraform_io=$TERRAFORM_API_TOKEN
+          export TF_VAR_api_key=$KAMATERA_API_KEY
+          export TF_VAR_api_secret=$KAMATERA_API_SECRET
+          export TF_VAR_ssh_public_key=$KAMATERA_PUBLIC_KEY
+          export TF_VAR_password=$KAMATERA_ROOT_PASSWORD
+          export TF_VAR_workspace=${{ inputs.workspace }}
+          export TF_VAR_environment=${{ inputs.environment }}
+          export TF_LOG=DEBUG
+          export WORKSPACE=${{ inputs.workspace }}
+          export ENVIRONMENT=${{ inputs.environment }}
+          export APP_PATH_TEMP=${{ env.APP_PATH_TEMP }}
+          echo "[*] Server deployment and configuration ... APPLY"
+          chmod +x ../scripts/terraform-apply.sh
+          ../scripts/terraform-apply.sh
+          echo "[+] Server deployment and configuration ... DONE"
+
+      # Upload the Terraform output as an artifact
+      - name: Upload Terraform Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-output-${{ inputs.workspace }}
+          path: ${{ env.APP_PATH_TEMP }}/tf_output.json
+          if-no-files-found: error
+      
+      # Check if Terraform cache exists
+      - name: Check Existing Terraform Cache
+        id: check-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.APP_PATH_TEMP }}/tf_output.json
+          key: terraform-output-${{ inputs.workspace }}
+
+      # Upload the Terraform output as a job output
+      - name: Cache Terraform Output
+        if: steps.check-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.APP_PATH_TEMP }}/tf_output.json
+          key: terraform-output-${{ inputs.workspace }}
+
+  # Download the Terraform output artifact and parse it to find Swarm servers
+  # This job will run if the cache is not hit or if the initialize input is set to true
+  # Parses the output to find Swarm servers and sets them as a matrix for the next jobs
+  # restore:
+  #   name: Download Terraform Output
+  #   runs-on: ubuntu-latest
+  #   needs: [terraform]
+  #   environment: ${{ inputs.environment }}
+  #   if: always()
+  #   outputs:
+  #     matrix: ${{ steps.parse.outputs.matrix }}
+  #   steps:
+  #     # Download Terraform Artifact
+  #     - name: Download Terraform Artifact
+  #       if: inputs.infrastructure == true
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: terraform-output-${{ inputs.workspace }}
+  #         path: ${{ env.APP_PATH_TEMP }}
+
+  #     # Restore Terraform Cache
+  #     - name: Restore Terraform Cache
+  #       id: restore-cache
+  #       if: inputs.infrastructure != true
+  #       uses: actions/cache/restore@v4
+  #       with:
+  #         path: ${{ env.APP_PATH_TEMP }}/tf_output.json
+  #         key: terraform-output-${{ inputs.workspace }}
+
+  #     # Check if the artifact exists
+  #     - name: Validate Terraform Output
+  #       run: |
+  #         if [ ! -f ${{ env.APP_PATH_TEMP }}/tf_output.json ]; then
+  #           echo "[!] Artifact terraform-output-${{ inputs.workspace }} not found or tf_output.json missing. Exiting."
+  #           exit 1
+  #         fi
+
+  #     # Parse Terraform Output to find Swarm Servers
+  #     - name: Parse Swarm Servers
+  #       id: parse
+  #       run: |
+  #         matrix=$(jq -c '.' ${{ env.APP_PATH_TEMP }}/tf_output.json)
+  #         echo "================"
+  #         echo "$matrix"
+  #         echo "================"
+  #         echo "matrix=$matrix" >> $GITHUB_OUTPUT
+
+  # Initialize the Swarm Cluster
+  # This job will run if the cache is not hit or if the initialize input is set to true
+  # Initializes the Swarm cluster by
+  # - copying the private key to the remote server
+  # - running the firewall script on the remote server
+  # - installing docker and initializing the Swarm cluster
+  # - mounting the necessary disks
+  # - installing glusterfs
+  # initialization:
+  #   name: Initialize Cluster
+  #   needs: [restore]
+  #   runs-on: ubuntu-latest
+  #   environment: ${{ inputs.environment }}
+  #   if: ${{ inputs.infrastructure == true }}
+  #   strategy:
+  #     matrix: ${{ fromJson(needs.restore.outputs.matrix) }}
+  #   steps:
+  #     # Check out the repo
+  #     - name: Check Out
+  #       uses: actions/checkout@v4
+
+  #     # Load secret uuid for Bitwarden
+  #     - name: Load Workspace Secrets
+  #       working-directory: ./deploy
+  #       run: |
+  #         echo "[*] Load secret identifiers ..."
+  #         source ./scripts/utilities.sh
+  #         load_secret_identifiers "./workspaces/${{ inputs.workspace }}.ws.json" "${{ inputs.environment }}"
+  #         echo "[*] Load secret identifiers ...DONE"
+
+  #     # Set up GitHub Secrets
+  #     - name: Get General Secrets
+  #       uses: bitwarden/sm-action@v2
+  #       id: get-secrets
+  #       with:
+  #         access_token: ${{ secrets.BITWARDEN_TOKEN }}
+  #         secrets: |
+  #           $UUID_KAMATERA_PRIVATE_KEY > KAMATERA_PRIVATE_KEY
+
+  #     # Set up SSH connection
+  #     - name: Set up SSH connection
+  #       env:
+  #         KAMATERA_PRIVATE_KEY: ${{ steps.get-secrets.outputs.KAMATERA_PRIVATE_KEY }}
+  #       run: |
+  #         mkdir -p ~/.ssh
+  #         echo "$KAMATERA_PRIVATE_KEY" > ~/.ssh/id_rsa
+  #         chmod 600 ~/.ssh/id_rsa
+
+  #     # Step: Copy the key securely to the remote server using scp
+  #     - name: Upload Private Key
+  #       run: |
+  #         scp -o StrictHostKeyChecking=no ~/.ssh/id_rsa root@${{ matrix.ip }}:/root/.ssh/id_rsa_temp || { echo "[x] Failed to transfer private key to remote server"; exit 1; }
+
+  #     # Step: Initialize the Swarm cluster
+  #     - name: Initialize Swarm Cluster
+  #       env:
+  #         APP_WORKSPACE: ${{ inputs.workspace }}
+  #       run: |
+  #         echo "[*] Initializing swarm cluster on ${{ matrix.ip }} ..."
+  #         chmod +x deploy/scripts/initialize-swarm-server.sh
+  #         ./deploy/scripts/initialize-swarm-server.sh "${{ matrix.ip }}" "${{ matrix.private_ip }}" "${{ matrix.manager_ip }}"
+  #         echo "[*] Initializing swarm cluster on ${{ matrix.ip }} ...DONE"
+
+  # Configure the Swarm Cluster
+  # This job will run if the restore and initialization jobs are successful or skipped
+  # Configures the Swarm cluster with the necessary settings and secrets
+  # configuration:
+  #   name: Configure Cluster
+  #   needs: [restore, initialization]
+  #   runs-on: ubuntu-latest
+  #   environment: ${{ inputs.environment }}
+  #   if: ${{ always() && !contains(needs.*.result, 'failure') }}
+  #   strategy:
+  #     matrix: ${{ fromJson(needs.restore.outputs.matrix) }}
+  #   steps:
+  #     # Check out the repo
+  #     - name: Check Out
+  #       uses: actions/checkout@v4
+
+  #     # Load secret uuid for Bitwarden
+  #     - name: Load Workspace Secrets
+  #       working-directory: ./deploy
+  #       run: |
+  #         echo "[*] Load secret identifiers ..."
+  #         source ./scripts/utilities.sh
+  #         load_secret_identifiers "./workspaces/${{ inputs.workspace }}.ws.json" "${{ inputs.environment }}"
+  #         echo "[*] Load secret identifiers ...DONE"
+
+  #     # Set up GitHub Secrets
+  #     - name: Get General Secrets
+  #       uses: bitwarden/sm-action@v2
+  #       id: get-secrets
+  #       with:
+  #         access_token: ${{ secrets.BITWARDEN_TOKEN }}
+  #         secrets: |
+  #           $UUID_KAMATERA_API_KEY > KAMATERA_API_KEY
+  #           $UUID_KAMATERA_API_SECRET > KAMATERA_API_SECRET
+  #           $UUID_KAMATERA_PUBLIC_KEY > KAMATERA_PUBLIC_KEY
+  #           $UUID_KAMATERA_PRIVATE_KEY > KAMATERA_PRIVATE_KEY
+  #           $UUID_KAMATERA_ROOT_PASSWORD > KAMATERA_ROOT_PASSWORD
+  #           $UUID_PLATFORM_USERNAME > PLATFORM_USERNAME
+  #           $UUID_PLATFORM_PASSWORD > PLATFORM_PASSWORD
+  #           $UUID_VERSIO_USERNAME > VERSIO_USERNAME
+  #           $UUID_VERSIO_PASSWORD > VERSIO_PASSWORD
+
+  #     # Set up SSH connection
+  #     - name: Set up SSH connection
+  #       env:
+  #         KAMATERA_PRIVATE_KEY: ${{ steps.get-secrets.outputs.KAMATERA_PRIVATE_KEY }}
+  #       run: |
+  #         mkdir -p ~/.ssh
+  #         echo "$KAMATERA_PRIVATE_KEY" > ~/.ssh/id_rsa
+  #         chmod 600 ~/.ssh/id_rsa
+
+  #     # Step: Configure Server
+  #     - name: Configure Server
+  #       env:
+  #         VAR_MATRIX: ${{ needs.restore.outputs.matrix }}
+  #         VAR_ENVIRONMENT: ${{ inputs.environment }}
+  #         VAR_WORKSPACE: ${{ inputs.workspace }}
+  #         SECRET_PLATFORM_USERNAME: ${{ steps.get-secrets.outputs.PLATFORM_USERNAME }}
+  #         SECRET_PLATFORM_PASSWORD: ${{ steps.get-secrets.outputs.PLATFORM_PASSWORD }}
+  #         SECRET_VERSIO_USERNAME : ${{ steps.get-secrets.outputs.VERSIO_USERNAME }}
+  #         SECRET_VERSIO_PASSWORD : ${{ steps.get-secrets.outputs.VERSIO_PASSWORD }}
+  #       run: |
+  #         echo "[*] Configuring swarm server ${{ matrix.ip }} ..."
+  #         chmod +x deploy/scripts/configure-swarm-server.sh
+  #         ./deploy/scripts/configure-swarm-server.sh "${{ matrix.ip }}" "$VAR_MATRIX"
+  #         echo "[*] Configuring swarm server ${{ matrix.ip }} ...DONE"
