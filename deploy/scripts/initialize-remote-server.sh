@@ -39,30 +39,64 @@ install_private_key() {
 }
 
 # Function to configure the firewall using UFW
-# This function reads rules from an external file and applies them
-# It assumes the rules file is located at $PATH_TEMP/initialize-firewall-rules
-# and that the file contains valid UFW commands.
 configure_firewall() {
   log INFO "[*] Configuring firewall..."
   
   if ! command -v ufw &> /dev/null; then
-  log INFO "[*] ... Installing UFW ..."
-  apt-get install -y ufw
-  log INFO "[*] ... Installing UFW ...DONE"
+    log INFO "[*] ... Installing UFW ..."
+    apt-get install -y ufw
+    log INFO "[*] ... Installing UFW ...DONE"
   fi
 
-  # Load UFW rules from an external file
-  RULES_FILE="$PATH_TEMP/initialize-firewall-rules"
-  if [[ -f "$RULES_FILE" ]]; then
-    while IFS= read -r rule; do
-      # Skip empty lines and comments
-      [[ -z "$rule" || "$rule" =~ ^# ]] && continue
-      ufw $rule
-    done < "$RULES_FILE"
-  else
-    echo "[ERROR] Rules file not found: $RULES_FILE"
-    exit 1
-  fi
+  # Deny all traffic by default
+  ufw --force reset
+  ufw default deny incoming
+  ufw default deny outgoing
+
+  # Essential System Services
+  ufw allow out 53/tcp comment 'DNS (TCP)'
+  ufw allow out 53/udp comment 'DNS (UDP)'
+  ufw allow out 123/udp comment 'NTP'
+
+  # Loopback
+  ufw allow in on lo comment 'Loopback IN'
+  ufw allow out on lo comment 'Loopback OUT'
+
+  # Package Management (Optional)
+  ufw allow out 20,21/tcp comment 'FTP'
+  ufw allow out 11371/tcp comment 'GPG keyserver'
+
+  # Web & SSH
+  ufw allow 22/tcp comment 'SSH'
+  ufw allow 80/tcp comment 'HTTP'
+  ufw allow 443/tcp comment 'HTTPS'
+  ufw allow out 80/tcp comment 'HTTP'
+  ufw allow out 443/tcp comment 'HTTPS'
+
+  # SSH Outbound to internal nodes
+  ufw allow out proto tcp to 10.0.0.0/23 port 22 comment 'SSH Outbound to internal nodes'
+
+  # Docker Swarm management traffic (TCP) over VLAN
+  ufw allow proto tcp from 10.0.0.0/23 to any port 2377 comment 'Swarm Control IN'
+  ufw allow out proto tcp to 10.0.0.0/23 port 2377 comment 'Swarm Control OUT'
+
+  # Docker VXLAN overlay network (UDP) over VLAN
+  ufw allow proto udp from 10.0.0.0/23 to any port 4789 comment 'Swarm Overlay Network IN'
+  ufw allow out proto udp to 10.0.0.0/23 port 4789 comment 'Swarm Overlay Network OUT'
+
+  # Docker overlay network discovery (TCP + UDP) over VLAN
+  ufw allow proto tcp from 10.0.0.0/23 to any port 7946 comment 'Swarm Discovery TCP'
+  ufw allow proto udp from 10.0.0.0/23 to any port 7946 comment 'Swarm Discovery UDP'
+  ufw allow out proto tcp to 10.0.0.0/23 port 7946 comment 'Swarm Gossip TCP OUT'
+  ufw allow out proto udp to 10.0.0.0/23 port 7946 comment 'Swarm Gossip UDP OUT'
+
+  # Postgres traffic between nodes
+  ufw allow proto tcp from 10.0.0.0/23 to any port 5432 comment 'Postgres IN'
+  ufw allow out proto tcp to 10.0.0.0/23 port 5432 comment 'Postgres OUT'
+
+  # Redis traffic between nodes
+  ufw allow proto tcp from 10.0.0.0/23 to any port 6379 comment 'Redis IN'
+  ufw allow out proto tcp to 10.0.0.0/23 port 6379 comment 'Redis OUT'
 
   # Enable firewall only if not active
   if ! ufw status | grep -q "Status: active"; then

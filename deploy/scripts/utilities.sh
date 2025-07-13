@@ -59,50 +59,6 @@ generate_env_file() {
   log INFO "[+] Environment file generated at '$output_file'"
 }
 
-# Function to load secret identifiers from a JSON file
-# Usage: load_secret_identifiers <path-to-ws.json> <environment>
-# Example: load_secret_identifiers /path/to/workspace.json dev
-# This function exports environment variables in the format UUID_<SECRET_NAME> with their values.
-load_secret_identifiers() {
-  # Workspace is required
-  FILE="$1"
-  ENVIRONMENT="$2"
-
-  if [ -z "$FILE" ] || [ -z "$ENVIRONMENT" ]; then
-    echo "Usage: load_secret_identifiers <path-to-ws.json> <environment>"
-    return 1
-  fi
-
-  echo "[*] ... Loading secrets for environment '$ENVIRONMENT' from '$FILE'..."
-
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "Error: 'jq' is required but not installed."
-    exit 1
-  fi
-
-  if [ ! -f "$FILE" ]; then
-    echo "Error: JSON file '$FILE' not found."
-    exit 1
-  fi
-
-  # Extract secrets for the specified environment
-  secrets=$(jq -r --arg env "$ENVIRONMENT" '.secrets.environment[$env]' "$FILE")
-  if [ "$secrets" == "null" ]; then
-    echo "[!] ERROR No secrets found for environment '$ENVIRONMENT'."
-    return 1
-  fi
-
-  # Iterate and export
-  echo "$secrets" | jq -r 'to_entries[] | "\(.key)=\(.value)"' | while IFS="=" read -r key value; do
-    UPPER_KEY=$(echo "$key" | tr '[:lower:]' '[:upper:]')
-    CLEAN_VALUE=$(echo "$value" | sed 's/^"//;s/"$//')
-    export "UUID_${UPPER_KEY}"="$CLEAN_VALUE"
-    echo "Exported UUID_${UPPER_KEY}"
-  done
-
-  echo "[*] ... Loading secrets for environment '$ENVIRONMENT' from '$FILE'...DONE"
-}
-
 # Function to create a Docker network if it doesn't exist
 # Usage: create_docker_network <network_name>
 # Example: create_docker_network my_overlay_network
@@ -315,8 +271,6 @@ get_server_id() {
     return 1
   fi
 
-  log INFO "[*] Getting server information for hostname: $HOSTNAME"
-
   local SERVER_ID=$(jq -r '.servers[].id' "$WORKSPACE_FILE" | while read -r id; do
     if [[ "$HOSTNAME" == *"$id"* ]]; then
       echo "$id"
@@ -344,8 +298,6 @@ get_manager_id() {
     log ERROR "[!] get_manager_id requires WORKSPACE_FILE argument."
     return 1
   fi
-
-  log INFO "[*] Getting main manager ID from workspace file: $WORKSPACE_FILE"
 
   if [[ ! -f "$WORKSPACE_FILE" ]]; then
     log ERROR "[!] Workspace definition file not found: $WORKSPACE_FILE"
