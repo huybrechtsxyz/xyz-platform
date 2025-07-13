@@ -249,8 +249,6 @@ get_terraform_file() {
 
   local TF_FILE="$TEMP_PATH/terraform.json"
 
-  log INFO "[*] Getting workspace information from $TF_FILE"
-
   if [[ ! -f "$TF_FILE" ]]; then
     log ERROR "[!] Terraform output file not found: $TF_FILE"
     return 1
@@ -294,8 +292,6 @@ get_workspace_file() {
   fi
 
   local WORKSPACE_FILE="$TEMP_PATH/$WORKSPACE_NAME.ws.json"
-
-  log INFO "[*] Getting workspace information from $WORKSPACE_FILE"
 
   if [[ ! -f "$WORKSPACE_FILE" ]]; then
     log ERROR "[!] Workspace definition file not found: $WORKSPACE_FILE"
