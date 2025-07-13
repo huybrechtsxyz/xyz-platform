@@ -38,7 +38,7 @@ create_secret_file() {
 init_copy_files() {
 log INFO "[*] Initializing REMOTE configuration..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-mkdir -p "$APP_PATH_TEMP" "$APP_PATH_TEMP"/deploy "$APP_PATH_TEMP"/src
+mkdir -p "$VAR_PATH_TEMP" "$VAR_PATH_TEMP"/deploy "$VAR_PATH_TEMP"/src
 echo "[*] Initializing REMOTE server...DONE"
 EOF
 then
@@ -57,7 +57,7 @@ copy_config_files() {
   log INFO "[*] Copying environment files to remote server...Deploy"
   scp -o StrictHostKeyChecking=no \
     ./deploy/scripts/*.* \
-    root@"$REMOTE_IP":"$APP_PATH_TEMP"/deploy || {
+    root@"$REMOTE_IP":"$VAR_PATH_TEMP"/deploy || {
       log ERROR "[x] Failed to transfer configuration scripts to remote server"
       exit 1
     }
@@ -66,7 +66,7 @@ copy_config_files() {
     ./deploy/workspaces/*.* \
     ./scripts/*.sh \
     ./src/*.* \
-    root@"$REMOTE_IP":"$APP_PATH_TEMP"/src || {
+    root@"$REMOTE_IP":"$VAR_PATH_TEMP"/src || {
       log ERROR "[x] Failed to transfer configuration scripts to remote server"
       exit 1
     }
@@ -82,15 +82,15 @@ log INFO "[*] Executing REMOTE configuration..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
 set -e
 echo "[*] Executing on REMOTE server..."
-echo "[*] Using temporary path: $APP_PATH_TEMP"
+echo "[*] Using temporary path: $VAR_PATH_TEMP"
 shopt -s nullglob
 set -a
-source "$APP_PATH_TEMP/src/variables.env"
-source "$APP_PATH_TEMP/src/secrets.env"
-source "$APP_PATH_TEMP/deploy/utilities.sh"
+source "$VAR_PATH_TEMP/src/variables.env"
+source "$VAR_PATH_TEMP/src/secrets.env"
+source "$VAR_PATH_TEMP/deploy/utilities.sh"
 set +a
-chmod +x "$APP_PATH_TEMP/deploy/configure-remote-server.sh"
-"$APP_PATH_TEMP/deploy/configure-remote-server.sh"
+chmod +x "$VAR_PATH_TEMP/deploy/configure-remote-server.sh"
+"$VAR_PATH_TEMP/deploy/configure-remote-server.sh"
 echo "[*] Executing on REMOTE server...DONE"
 EOF
 then

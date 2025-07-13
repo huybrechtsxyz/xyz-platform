@@ -48,7 +48,7 @@ on:
 
 env:
   # Environment variables for the pipeline
-  APP_PATH_TEMP: /tmp/app
+  VAR_PATH_TEMP: /tmp/app
 
 jobs:
   # Terraform Plan and Apply
@@ -101,7 +101,7 @@ jobs:
           export TF_LOG=DEBUG
           export WORKSPACE=${{ inputs.workspace }}
           export ENVIRONMENT=${{ inputs.environment }}
-          export APP_PATH_TEMP=${{ env.APP_PATH_TEMP }}
+          export VAR_PATH_TEMP=${{ env.VAR_PATH_TEMP }}
           echo "[*] Server deployment and configuration ... APPLY"
           chmod +x ../scripts/terraform-apply.sh
           ../scripts/terraform-apply.sh
@@ -112,7 +112,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: terraform-output-${{ inputs.workspace }}
-          path: ${{ env.APP_PATH_TEMP }}/tf_output.json
+          path: ${{ env.VAR_PATH_TEMP }}/tf_output.json
           if-no-files-found: error
       
       # Check if Terraform cache exists
@@ -120,7 +120,7 @@ jobs:
         id: check-cache
         uses: actions/cache/restore@v4
         with:
-          path: ${{ env.APP_PATH_TEMP }}/tf_output.json
+          path: ${{ env.VAR_PATH_TEMP }}/tf_output.json
           key: terraform-output-${{ inputs.workspace }}
 
       # Upload the Terraform output as a job output
@@ -128,7 +128,7 @@ jobs:
         if: steps.check-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: ${{ env.APP_PATH_TEMP }}/tf_output.json
+          path: ${{ env.VAR_PATH_TEMP }}/tf_output.json
           key: terraform-output-${{ inputs.workspace }}
 
   # Download the Terraform output artifact and parse it to find Swarm servers
@@ -149,7 +149,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: terraform-output-${{ inputs.workspace }}
-          path: ${{ env.APP_PATH_TEMP }}
+          path: ${{ env.VAR_PATH_TEMP }}
 
       # Restore Terraform Cache
       - name: Restore Terraform Cache
@@ -157,13 +157,13 @@ jobs:
         if: inputs.infrastructure != true
         uses: actions/cache/restore@v4
         with:
-          path: ${{ env.APP_PATH_TEMP }}/tf_output.json
+          path: ${{ env.VAR_PATH_TEMP }}/tf_output.json
           key: terraform-output-${{ inputs.workspace }}
 
       # Check if the artifact exists
       - name: Validate Terraform Output
         run: |
-          if [ ! -f ${{ env.APP_PATH_TEMP }}/tf_output.json ]; then
+          if [ ! -f ${{ env.VAR_PATH_TEMP }}/tf_output.json ]; then
             echo "[!] Artifact terraform-output-${{ inputs.workspace }} not found or tf_output.json missing. Exiting."
             exit 1
           fi
@@ -172,7 +172,7 @@ jobs:
       - name: Parse Swarm Servers
         id: parse
         run: |
-          matrix=$(jq -c '.' ${{ env.APP_PATH_TEMP }}/tf_output.json)
+          matrix=$(jq -c '.' ${{ env.VAR_PATH_TEMP }}/tf_output.json)
           echo "================"
           echo "$matrix"
           echo "================"

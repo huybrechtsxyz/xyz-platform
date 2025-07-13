@@ -58,7 +58,7 @@ cat main.tf
 # Terraform Cloud does not support saving the generated execution plan
 
 echo "[*] ...Running terraform...INIT"
-mkdir -p "$APP_PATH_TEMP"
+mkdir -p "$VAR_PATH_TEMP"
 terraform init
 
 echo "[*] ...Running terraform...PLAN"
@@ -69,6 +69,6 @@ echo "[*] ...Running terraform...APPLY"
 echo "[*] ...Running terraform...APPLY skipped for safety"
 
 echo "[*] ...Reading Terraform output..."
-terraform output -json serverdata | jq -c '.' | tee $APP_PATH_TEMP/tf_output.json
+terraform output -json serverdata | jq -c '.' | tee $VAR_PATH_TEMP/tf_output.json
 
-echo "[*] ...Terraform output saved to tf_output.json and $APP_PATH_TEMP/tf_output.json"
+echo "[*] ...Terraform output saved to tf_output.json and $VAR_PATH_TEMP/tf_output.json"

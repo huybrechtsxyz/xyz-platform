@@ -6,24 +6,24 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
 
 # Check if the required arguments are provided
 if [ "$#" -ne 3 ]; then
-  log ERROR "Usage: $0 <APP_REMOTE_IP> <APP_PRIVATE_IP> <APP_MANAGER_IP>"
+  log ERROR "Usage: $0 <VAR_REMOTE_IP> <VAR_PRIVATE_IP> <VAR_MANAGER_IP>"
   exit 1
 fi
 
 # Assign command line arguments to variables
-: "${TEMPPATH:="/tmp/app"}"
+: "${VAR_PATH_TEMP:="/tmp/app"}"
 
-APP_REMOTE_IP="$1"
-APP_PRIVATE_IP="$2"
-APP_MANAGER_IP="$3"
-if [[ -z "$APP_REMOTE_IP" || -z "$APP_PRIVATE_IP" || -z "$APP_MANAGER_IP" ]]; then
+VAR_REMOTE_IP="$1"
+VAR_PRIVATE_IP="$2"
+VAR_MANAGER_IP="$3"
+if [[ -z "$VAR_REMOTE_IP" || -z "$VAR_PRIVATE_IP" || -z "$VAR_MANAGER_IP" ]]; then
   log ERROR "One or more required arguments are empty. Please provide valid IP addresses."
   exit 1
 fi
 
 # Create a temporary directory for the initialization scripts
 create_env_file() {
-  generate_env_file "APP_" "./deploy/scripts/variables.env"
+  generate_env_file "VAR_" "./deploy/scripts/variables.env"
 }
 
 # Function to copy configuration files to the remote server
@@ -32,23 +32,23 @@ create_env_file() {
 # and cluster configuration files to that directory.
 copy_config_files() {
 log INFO "[*] Copying initialization script to remote server..."
-ssh -o StrictHostKeyChecking=no root@$APP_REMOTE_IP << EOF
-  mkdir -p "$TEMPPATH"
-  chmod 777 "$TEMPPATH"
+ssh -o StrictHostKeyChecking=no root@$VAR_REMOTE_IP << EOF
+  mkdir -p "$VAR_PATH_TEMP"
+  chmod 777 "$VAR_PATH_TEMP"
 EOF
 
 log INFO "[*] Copying initialization scripts and cluster config to remote server..."
 scp -o StrictHostKeyChecking=no \
   ./deploy/scripts/* \
   ./deploy/workspaces/* \
-  root@"$APP_REMOTE_IP":"$TEMPPATH"/ || {
+  root@"$VAR_REMOTE_IP":"$VAR_PATH_TEMP"/ || {
     echo "[x] Failed to transfer initialization scripts to remote server"
     exit 1
   }
 
 log INFO "[*] Debugging temporary path of remote server..."
-ssh -o StrictHostKeyChecking=no root@$APP_REMOTE_IP << EOF
-  ls -la "$TEMPPATH"
+ssh -o StrictHostKeyChecking=no root@$VAR_REMOTE_IP << EOF
+  ls -la "$VAR_PATH_TEMP"
 EOF
 }
 
@@ -58,22 +58,22 @@ EOF
 # It also ensures that the script is executable and handles any errors during execution.
 execute_initialization() {
 log INFO "[*] Executing REMOTE server initialization..."
-if ! ssh -o StrictHostKeyChecking=no root@"$APP_REMOTE_IP" << EOF
+if ! ssh -o StrictHostKeyChecking=no root@"$VAR_REMOTE_IP" << EOF
   set -e
   echo "[*] Executing initialization on REMOTE server..."
   set -a
-  source "$TEMPPATH/variables.env"
-  source "$TEMPPATH/utilities.sh"
+  source "$VAR_PATH_TEMP/variables.env"
+  source "$VAR_PATH_TEMP/utilities.sh"
   set +a
-  chmod +x "$TEMPPATH/initialize-remote-server.sh"
-  "$TEMPPATH/initialize-remote-server.sh"
+  chmod +x "$VAR_PATH_TEMP/initialize-remote-server.sh"
+  "$VAR_PATH_TEMP/initialize-remote-server.sh"
   echo "[*] Initialization script executed successfully on REMOTE server."
   echo "[*] Cleaning up swarm cluster..."
-  rm -rf "$TEMPPATH/*"
+  rm -rf "$VAR_PATH_TEMP/*"
   echo "[*] Executing on REMOTE server...DONE"
 EOF
 then
-  log ERROR "[!] Remote initialization failed on $APP_REMOTE_IP"
+  log ERROR "[!] Remote initialization failed on $VAR_REMOTE_IP"
   exit 1
 fi
 }

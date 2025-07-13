@@ -2,23 +2,23 @@
 set -euo pipefail
 HOSTNAME=$(hostname)
 
-# Validate that the APP_PATH_TEMP variable is set and is a valid directory.
-: "${APP_PATH_TEMP:="/tmp/app"}"
+# Validate that the PATH_TEMP variable is set and is a valid directory.
+: "${PATH_TEMP:="/tmp/app"}"
 : "${WORKSPACE:?Missing WORKSPACE}"
 : "${MANAGER_IP:?Missing MANAGER_IP}"
 : "${PRIVATE_IP:?Missing PRIVATE_IP}"
 
-log INFO "[*] APP_PATH_TEMP: $APP_PATH_TEMP"
+log INFO "[*] PATH_TEMP: $PATH_TEMP"
 log INFO "[*] WORKSPACE: $WORKSPACE"
 log INFO "[*] MANAGER_IP: $MANAGER_IP"
 log INFO "[*] PRIVATE_IP: $PRIVATE_IP"
 
-if [[ ! -d "$APP_PATH_TEMP" ]]; then
-  echo "Temporary path $APP_PATH_TEMP does not exist. Please create it or set a different path."
+if [[ ! -d "$PATH_TEMP" ]]; then
+  echo "Temporary path $PATH_TEMP does not exist. Please create it or set a different path."
   exit 1
 fi
 
-WORKSPACE_FILE=$(get_workspace_file "$APP_PATH_TEMP" "$WORKSPACE") || exit 1
+WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP" "$WORKSPACE") || exit 1
 MANAGER_LABEL=$(get_manager_id "$WORKSPACE_FILE") || exit 1
 
 # source /tmp/app/utilities.sh (set in pipeline)
