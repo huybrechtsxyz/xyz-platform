@@ -4,18 +4,6 @@
     "version": "1.0.0",
     "description": "Workspace deployment configuration for the shared Kamatera Platform."
   },
-  "secrets": {
-    "environment": {
-      "platform": {
-        "TERRAFORM_API_TOKEN": "d47e736b-2db8-47d5-b46b-b2c8016ece73",
-        "KAMATERA_API_KEY": "357068b9-9f5f-4f79-940c-b2c8016cb88f",
-        "KAMATERA_API_SECRET": "6c9295a8-9fa4-4d38-8929-b2c8016d9b43",
-        "KAMATERA_PUBLIC_KEY": "6cc5b975-56a9-4d7a-80c7-b2c90151cce0",
-        "KAMATERA_PRIVATE_KEY": "f16fffe2-77b7-4d20-bf6c-b2c9015c71d3",
-        "KAMATERA_ROOT_PASSWORD": "5083ae32-429d-428b-b7df-b2c901441bbb"
-      }
-    }
-  },
   "roles": {
     "manager": {
       "cpu_type": "A",
