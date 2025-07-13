@@ -6,11 +6,12 @@ HOSTNAME=$(hostname)
 : "${PATH_TEMP:?Missing PATH_TEMP env var}"
 
 # All files are either in $PATH_TEMP/src or $PATH_TEMP/deploy!
-
+log INFO "[*] Getting workspace and terraform files"
 WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP/src" "$WORKSPACE") || exit 1
 TERRAFORM_FILE=$(get_terraform_file "$PATH_TEMP/src") || exit 1
 
 # Determine my server id
+log INFO "[*] Getting server information"
 SERVER_ID=$(get_server_id "$WORKSPACE_FILE" "$HOSTNAME") || exit 1
 MANAGER_IP=$(get_terraform_data "$TERRAFORM_FILE" "$SERVER_ID" "manager_ip") || exit 1
 MANAGER_LABEL=$(get_manager_id "$WORKSPACE_FILE") || exit 1
