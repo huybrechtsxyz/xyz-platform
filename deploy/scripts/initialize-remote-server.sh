@@ -8,6 +8,11 @@ HOSTNAME=$(hostname)
 : "${MANAGER_IP:?Missing MANAGER_IP}"
 : "${PRIVATE_IP:?Missing PRIVATE_IP}"
 
+log INFO "[*] APP_PATH_TEMP: $APP_PATH_TEMP"
+log INFO "[*] WORKSPACE: $WORKSPACE"
+log INFO "[*] MANAGER_IP: $MANAGER_IP"
+log INFO "[*] PRIVATE_IP: $PRIVATE_IP"
+
 if [[ ! -d "$APP_PATH_TEMP" ]]; then
   echo "Temporary path $APP_PATH_TEMP does not exist. Please create it or set a different path."
   exit 1

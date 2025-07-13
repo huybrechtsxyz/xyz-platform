@@ -45,6 +45,11 @@ scp -o StrictHostKeyChecking=no \
     echo "[x] Failed to transfer initialization scripts to remote server"
     exit 1
   }
+
+log INFO "[*] Debugging temporary path of remote server..."
+ssh -o StrictHostKeyChecking=no root@$APP_REMOTE_IP << EOF
+  ls -la "$APP_PATH_TEMP"
+EOF
 }
 
 # Function to execute the initialization script on the remote server
