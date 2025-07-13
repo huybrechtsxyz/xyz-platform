@@ -11,7 +11,7 @@ if [ "$#" -ne 3 ]; then
 fi
 
 # Assign command line arguments to variables
-: "${APP_PATH_TEMP:="/tmp/app"}"
+: "${TEMPPATH:="/tmp/app"}"
 
 APP_REMOTE_IP="$1"
 APP_PRIVATE_IP="$2"
@@ -33,22 +33,22 @@ create_env_file() {
 copy_config_files() {
 log INFO "[*] Copying initialization script to remote server..."
 ssh -o StrictHostKeyChecking=no root@$APP_REMOTE_IP << EOF
-  mkdir -p "$APP_PATH_TEMP"
-  chmod 777 "$APP_PATH_TEMP"
+  mkdir -p "$TEMPPATH"
+  chmod 777 "$TEMPPATH"
 EOF
 
 log INFO "[*] Copying initialization scripts and cluster config to remote server..."
 scp -o StrictHostKeyChecking=no \
   ./deploy/scripts/* \
   ./deploy/workspaces/* \
-  root@"$APP_REMOTE_IP":"$APP_PATH_TEMP"/ || {
+  root@"$APP_REMOTE_IP":"$TEMPPATH"/ || {
     echo "[x] Failed to transfer initialization scripts to remote server"
     exit 1
   }
 
 log INFO "[*] Debugging temporary path of remote server..."
 ssh -o StrictHostKeyChecking=no root@$APP_REMOTE_IP << EOF
-  ls -la "$APP_PATH_TEMP"
+  ls -la "$TEMPPATH"
 EOF
 }
 
@@ -62,14 +62,14 @@ if ! ssh -o StrictHostKeyChecking=no root@"$APP_REMOTE_IP" << EOF
   set -e
   echo "[*] Executing initialization on REMOTE server..."
   set -a
-  source "$APP_PATH_TEMP/variables.env"
-  source "$APP_PATH_TEMP/utilities.sh"
+  source "$TEMPPATH/variables.env"
+  source "$TEMPPATH/utilities.sh"
   set +a
-  chmod +x "$APP_PATH_TEMP/initialize-remote-server.sh"
-  "$APP_PATH_TEMP/initialize-remote-server.sh"
+  chmod +x "$TEMPPATH/initialize-remote-server.sh"
+  "$TEMPPATH/initialize-remote-server.sh"
   echo "[*] Initialization script executed successfully on REMOTE server."
   echo "[*] Cleaning up swarm cluster..."
-  rm -rf "$APP_PATH_TEMP/*"
+  rm -rf "$TEMPPATH/*"
   echo "[*] Executing on REMOTE server...DONE"
 EOF
 then

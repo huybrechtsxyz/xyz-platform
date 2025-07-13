@@ -25,10 +25,10 @@
     }
   },
   "paths": [
-    { "type": "config", "path": "/etc"     , "volume": "replicated" },
-    { "type": "data",   "path": "/var/data", "volume": "local" },
-    { "type": "logs",   "path": "/var/logs", "volume": "local" },
-    { "type": "serve",  "path": "/srv"     , "volume": "distributed" }
+    { "type": "config", "path": "/etc/app"     , "volume": "replicated" },
+    { "type": "data",   "path": "/var/data/app", "volume": "local" },
+    { "type": "logs",   "path": "/var/logs/app", "volume": "local" },
+    { "type": "serve",  "path": "/srv/app"     , "volume": "distributed" }
   ],
   "servers": [
     {
