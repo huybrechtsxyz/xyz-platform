@@ -5,8 +5,10 @@ HOSTNAME=$(hostname)
 : "${WORKSPACE:?Missing WORKSPACE env var}"
 : "${PATH_TEMP:?Missing PATH_TEMP env var}"
 
-WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP" "$WORKSPACE") || exit 1
-TERRAFORM_FILE=$(get_terraform_file "$PATH_TEMP") || exit 1
+# All files are either in $PATH_TEMP/src or $PATH_TEMP/deploy!
+
+WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP/src" "$WORKSPACE") || exit 1
+TERRAFORM_FILE=$(get_terraform_file "$PATH_TEMP/src") || exit 1
 
 # Determine my server id
 SERVER_ID=$(get_server_id "$WORKSPACE_FILE" "$HOSTNAME") || exit 1
