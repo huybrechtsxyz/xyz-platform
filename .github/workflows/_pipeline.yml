@@ -18,14 +18,14 @@
 #  - Update or add matching "mounts" entries for relevant path types
 #
 # To add environment variables:
-#  - Use the APP_ prefix for application config (e.g., APP_PORT, APP_ENV)
+#  - Use the VAR_ prefix for application config (e.g., VAR_PORT, VAR_ENV)
 #  - Add them under the "env:" block of the relevant pipeline step
 #  - The SECRET_ prefix is dropped when exporting variables to the remote server.
 #
 # To add secrets:
 #  - Use the SECRET_ prefix (e.g., SECRET_API_KEY)
 #  - Add them under the "env:" block, referencing the secret store as needed
-#  - The APP_ prefix is dropped when exporting variables to the remote server.
+#  - The VAR_ prefix is dropped when exporting variables to the remote server.
 
 # Build and Deploy Jobs
 name: _InfraBuildDeploy
@@ -225,7 +225,7 @@ jobs:
       # Step: Initialize the Swarm cluster
       - name: Initialize Swarm Cluster
         env:
-          APP_WORKSPACE: ${{ inputs.workspace }}
+          VAR_WORKSPACE: ${{ inputs.workspace }}
         run: |
           echo "[*] Initializing swarm cluster on ${{ matrix.ip }} ..."
           chmod +x deploy/scripts/initialize-swarm-server.sh
