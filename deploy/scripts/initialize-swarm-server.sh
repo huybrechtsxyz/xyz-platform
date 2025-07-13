@@ -1,13 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-# Validate that the APP_PATH_TEMP variable is set and is a valid directory.
-: "${APP_PATH_TEMP:="/tmp/app"}"
-if [[ ! -d "$APP_PATH_TEMP" ]]; then
-  echo "Temporary path $APP_PATH_TEMP does not exist. Please create it or set a different path."
-  exit 1
-fi
-
 # Load utility functions and environment variables
 source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
 
@@ -18,6 +11,8 @@ if [ "$#" -ne 3 ]; then
 fi
 
 # Assign command line arguments to variables
+: "${APP_PATH_TEMP:="/tmp/app"}"
+
 APP_REMOTE_IP="$1"
 APP_PRIVATE_IP="$2"
 APP_MANAGER_IP="$3"
