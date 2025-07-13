@@ -370,7 +370,6 @@ enable_docker_service() {
 install_gluster() {
   log INFO "[*] Installing GlusterFS..."
   if ! command -v glusterfs --version &> /dev/null; then
-    apt-get update
     apt-get install -y glusterfs-server
     systemctl enable --now glusterd
     log INFO "[+] Installing GlusterFS...DONE"
