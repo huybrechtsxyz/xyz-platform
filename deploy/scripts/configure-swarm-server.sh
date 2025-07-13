@@ -84,11 +84,10 @@ set -e
 echo "[*] Executing on REMOTE server..."
 echo "[*] Using temporary path: $APP_PATH_TEMP"
 shopt -s nullglob
-echo "[*] Executing on REMOTE server...Copy source files"
 set -a
 source "$APP_PATH_TEMP/src/variables.env"
 source "$APP_PATH_TEMP/src/secrets.env"
-source "$APP_PATH_TEMP/src/utilities.sh"
+source "$APP_PATH_TEMP/deploy/utilities.sh"
 set +a
 chmod +x "$APP_PATH_TEMP/deploy/configure-remote-server.sh"
 "$APP_PATH_TEMP/deploy/configure-remote-server.sh"
