@@ -23,7 +23,7 @@ for role in $roles; do
   # Count servers of this role
   count=$(jq --arg role "$role" '[.servers[] | select(.role == $role)] | length' "$SERVERS_JSON")
   # Get disk sizes from the first server of this role
-  disks=$(jq --arg role "$role" '[.servers[] | select(.role == $role)][0].disks | map(.size) | join(", ")' "$SERVERS_JSON")
+  disks=$(jq --arg role "$role" '[.servers[] | select(.role == $role)][0].disks | map(.size)' "$SERVERS_JSON")
   # Get hardware profile for the role
   cpu_type=$(jq -r --arg role "$role" '.roles[$role].cpu_type' "$SERVERS_JSON")
   cpu_cores=$(jq -r --arg role "$role" '.roles[$role].cpu_cores' "$SERVERS_JSON")
