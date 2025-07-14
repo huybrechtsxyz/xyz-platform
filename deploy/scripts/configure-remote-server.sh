@@ -28,8 +28,6 @@ log INFO "[*] MANAGER LABEL: $MANAGER_LABEL"
 log INFO "[*] MANAGER NODE: $MANAGER_IP"
 log INFO "[*] CLUSTER NODES: ${PRIVATE_IPS[*]}"
 
-return 0
-
 # Fucntion that creates docker labels for each node based on its hostname
 # The labels are:
 # - role: the role of the node (e.g. manager, worker)
