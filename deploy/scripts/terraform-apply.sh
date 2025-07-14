@@ -65,8 +65,8 @@ echo "[*] ...Running terraform...PLAN"
 terraform plan -var-file="workspace.tfvars" -input=false
 
 echo "[*] ...Running terraform...APPLY"
-#terraform apply -auto-approve -var-file="workspace.tfvars" -input=false
-echo "[*] ...Running terraform...APPLY skipped for safety"
+terraform apply -auto-approve -var-file="workspace.tfvars" -input=false
+#echo "[*] ...Running terraform...APPLY skipped for safety"
 
 echo "[*] ...Reading Terraform output..."
 terraform output -json serverdata | jq -c '.' | tee $VAR_PATH_TEMP/tf_output.json
