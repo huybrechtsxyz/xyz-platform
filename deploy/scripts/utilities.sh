@@ -290,6 +290,7 @@ get_server_id() {
 }
 
 # Function to get the main manager ID from the workspace file
+# This is always the first server defined in the workspace
 # Usage: get_manager_id <WORKSPACE_FILE>
 # Example: get_manager_id /tmp/workspace/my_workspace.ws.json
 # This function reads the workspace file and extracts the main manager ID.

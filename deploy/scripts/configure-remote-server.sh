@@ -23,8 +23,12 @@ MANAGER_IP=$(get_terraform_data "$TERRAFORM_FILE" "$SERVER_ID" "manager_ip") || 
 # Load private IPs from terraform.json (as an array)
 readarray -t PRIVATE_IPS < <(jq -r '.include[].private_ip' "$TERRAFORM_FILE")
 
+log INFO "[*] CURRENT SERVER: $SERVER_ID"
+log INFO "[*] MANAGER LABEL: $MANAGER_LABEL"
 log INFO "[*] MANAGER NODE: $MANAGER_IP"
 log INFO "[*] CLUSTER NODES: ${PRIVATE_IPS[*]}"
+
+retun 0
 
 # Fucntion that creates docker labels for each node based on its hostname
 # The labels are:
