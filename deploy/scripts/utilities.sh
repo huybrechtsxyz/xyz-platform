@@ -229,7 +229,10 @@ get_terraform_data() {
   fi
 
   jq -r --arg label "$label" --arg data_type "$data_type" \
-    '.include[] | select(.label == $label) | .[$data_type]' "$terraform_file"
+    '.include[] | select(.label == $label) | .[$data_type]' "$terraform_file" || {
+      log ERROR "[!] Unable to retrieve $data_type for $label in $terraform_file"
+      return 1
+    }
 }
 
 # Function to get the workspace file path
