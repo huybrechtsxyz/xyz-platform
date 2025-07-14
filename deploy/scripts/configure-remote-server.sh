@@ -366,7 +366,7 @@ main() {
     exit 1
   }
 
-  if [[ "$HOSTNAME" == *"MANAGER_LABEL"* ]]; then
+  if [[ "$HOSTNAME" == *"$MANAGER_LABEL"* ]]; then
     main_manager || {
       log ERROR "[!] Failed to configure manager node."
       exit 1
