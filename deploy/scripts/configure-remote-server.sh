@@ -8,7 +8,9 @@ HOSTNAME=$(hostname)
 # All files are either in $PATH_TEMP/src or $PATH_TEMP/deploy!
 log INFO "[*] Getting workspace and terraform files"
 WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP/src" "$WORKSPACE") || exit 1
+log INFO "[*] Getting workspace and terraform files $WORKSPACE_FILE"
 TERRAFORM_FILE=$(get_terraform_file "$PATH_TEMP/src") || exit 1
+log INFO "[*] Getting workspace and terraform files $TERRAFORM_FILE"
 
 # Determine my server id
 log INFO "[*] Getting server information: server id"
