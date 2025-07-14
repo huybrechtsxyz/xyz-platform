@@ -210,7 +210,7 @@ get_terraform_file() {
     return 1
   fi
 
-  echo "$WORKSPACE_FILE"
+  echo "$TF_FILE"
 }
 
 # Function to get Terraform data based on label and data type
