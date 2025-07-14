@@ -11,10 +11,13 @@ WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP/src" "$WORKSPACE") || exit 1
 TERRAFORM_FILE=$(get_terraform_file "$PATH_TEMP/src") || exit 1
 
 # Determine my server id
-log INFO "[*] Getting server information"
+log INFO "[*] Getting server information: server id"
 SERVER_ID=$(get_server_id "$WORKSPACE_FILE" "$HOSTNAME") || exit 1
-MANAGER_IP=$(get_terraform_data "$TERRAFORM_FILE" "$SERVER_ID" "manager_ip") || exit 1
+log INFO "[*] Getting server information: manager label"
 MANAGER_LABEL=$(get_manager_id "$WORKSPACE_FILE") || exit 1
+log INFO "[*] Getting server information: manager ip"
+MANAGER_IP=$(get_terraform_data "$TERRAFORM_FILE" "$SERVER_ID" "manager_ip") || exit 1
+
 # Load private IPs from terraform.json (as an array)
 readarray -t PRIVATE_IPS < <(jq -r '.include[].private_ip' "$TERRAFORM_FILE")
 
