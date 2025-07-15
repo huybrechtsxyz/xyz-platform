@@ -150,13 +150,16 @@ create-fs-cluster() {
   readarray -t CURRENT_PEERS < <(
     gluster peer status | awk '/Hostname:/ {print $2}'
   )
+  log INFO "[*] Current peers $CURRENT_PEERS..."
 
   # Extract all private IPs
+  log INFO "[*] Extracting private ips from $TERRAFORM_FILE..."
   readarray -t PRIVATE_IPS < <(
-    jq -r '.include[].private_ip' "$terraform"
+    jq -r '.include[].private_ip' "$TERRAFORM_FILE"
   )
 
   # Add any missing peers
+  log INFO "[*] Add any missing peers"
   for ip in "${PRIVATE_IPS[@]}"; do
     if [[ "$ip" == "$MANAGER_IP" ]]; then
       continue
@@ -170,6 +173,7 @@ create-fs-cluster() {
   done
 
   # Remove peers no longer in desired state
+  log INFO "[*] Remove peers no longer in desired state"
   for ip in "${CURRENT_PEERS[@]}"; do
     if [[ "$ip" == "$MANAGER_IP" ]]; then
       continue
@@ -272,7 +276,7 @@ create-fs-volumes() {
         log INFO "[*] Creating directories on local server '$server'...DONE"
       else
         log INFO "[*] Creating directories on server '$server' via SSH..."
-        if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "root@$server" mkdir -p "${commands[@]}"; then
+        if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "root@$private_ip" mkdir -p "${commands[@]}"; then
           log ERROR "[!] Failed to create directories on server '$server'."
           return 1
         fi
