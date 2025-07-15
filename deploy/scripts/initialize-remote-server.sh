@@ -98,6 +98,12 @@ configure_firewall() {
   ufw allow proto tcp from 10.0.0.0/23 to any port 6379 comment 'Redis IN'
   ufw allow out proto tcp to 10.0.0.0/23 port 6379 comment 'Redis OUT'
 
+  # Gluser traeffic between nodes
+  ufw allow proto tcp from 10.0.0.0/23 to any port 24007:24008 comment 'GlusterFS Management IN'
+  ufw allow proto tcp from 10.0.0.0/23 to any port 49152:49251 comment 'GlusterFS Bricks IN'
+  ufw allow out proto tcp to 10.0.0.0/23 port 24007:24008 comment 'GlusterFS Management OUT'
+  ufw allow out proto tcp to 10.0.0.0/23 port 49152:49251 comment 'GlusterFS Bricks OUT'
+
   # Enable firewall only if not active
   if ! ufw status | grep -q "Status: active"; then
   log INFO "[*] Enabling UFW..."
