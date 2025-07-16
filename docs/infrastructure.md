@@ -12,8 +12,7 @@ The infrastructure for this self-hosted platform is created and maintained using
   Cloud environment for storing the state for Terraform.
 
 - **Workspace Configuration:**  
-  Each deployment workspace is described by a JSON configuration file located in the `/deploy` directory.  
-  The file is named using the pattern `workspace,{workspaceid}.json`.
+  Each deployment workspace is described by a JSON configuration file located in the `/deploy/workspaces` directory. The file is named using the pattern `{workspaceid}.ws.json`.
 
 ## What is a Workspace?
 
@@ -59,89 +58,6 @@ Current setup:
 - **Name:** Platform Workspace  
 - **Version:** 1.0.0  
 - **Description:** Workspace deployment configuration for the shared Platform.
-
-### Workspace Secrets: secrets
-
-In our deployment pipeline, we use:
-
-- Workspace-specific configuration stored in JSON files ({worspace}.ws.json)
-- Environment-specific secret mappings (e.g., dev, prod)
-- Bash utility script to load secrets as environment variables
-- Bitwarden Secret Manager GitHub Action to retrieve actual secrets by UUID
-
-This approach allows you to:
-
-- Keep all UUID references organized in version-controlled JSON files
-- Support multiple environments (dev, staging, prod)
-- Avoid hardcoding UUIDs into pipeline YAML
-
-Repository structure:
-
-```
-deploy/
-├── workspaces/
-│   ├── dev.ws.json
-│   ├── prod.ws.json
-│   └── staging.ws.json
-├── scripts/
-│   └── utilities.sh
-```
-
-Example of the secret path in the workspace definition:
-
-```json
-{
-  "secrets": {
-    "environment": {
-      "dev": {
-        "kamatera_private_key": "f16fffe2-...",
-        "terraform_api_token": "abcde-..."
-      },
-      "prod": {
-        "kamatera_private_key": "prod-uuid-...",
-        "terraform_api_token": "prod-abcde-..."
-      }
-    }
-  }
-}
-```
-
-Example use of the script
-
-```bash
-source ./deploy/scripts/utilities.sh
-load_secret_identifiers ./deploy/workspaces/dev.ws.json dev
-```
-
-Full workflow example
-
-```yml
-steps:
-  - name: Checkout repository
-    uses: actions/checkout@v4
-
-  - name: Load Secret UUIDs from workspace
-    working-directory: ./deploy
-    run: |
-      echo "[*] Loading secret identifiers..."
-      source ./scripts/utilities.sh
-      load_secret_identifiers ./workspaces/${{ inputs.workspace }}.ws.json ${{ inputs.environment }}
-      echo "[*] Secret identifiers loaded."
-
-  - name: Get Secrets from Bitwarden
-    uses: bitwarden/sm-action@v2
-    id: get-secrets
-    with:
-      access_token: ${{ secrets.BITWARDEN_TOKEN }}
-      secrets: |
-        $UUID_KAMATERA_PRIVATE_KEY > KAMATERA_PRIVATE_KEY
-        $UUID_TERRAFORM_API_TOKEN > TERRAFORM_API_TOKEN
-
-  - name: Use Secrets in your steps
-    run: |
-      echo "Kamatera Private Key: $KAMATERA_PRIVATE_KEY"
-      echo "Terraform API Token: $TERRAFORM_API_TOKEN"
-```
 
 ### Workspace Server Roles: roles
 
@@ -189,14 +105,39 @@ Specifies the types of data storage used by services and their corresponding dir
 
 Each service uses standardized directory paths for different data types:
 
-| Type    | Path Template           | Purpose                         |
-|---------|-------------------------|---------------------------------|
-| config  | `/${service}/config`    | Configuration files             |
-| data    | `/${service}/data`      | Persistent application data     |
-| logs    | `/${service}/logs`      | Service-generated logs          |
-| serve   | `/${service}/serve`     | Content served by the services  |
+| Type    | Path Template   | Purpose                         |
+|---------|-----------------|---------------------------------|
+| config  | `/etc/app`      | Configuration files             |
+| data    | `/var/data/app` | Persistent application data     |
+| logs    | `/var/logs/app` | Service-generated logs          |
+| serve   | `/srv/app`      | Content served by the services  |
 
-These paths are mounted onto servers' disks according to the mount configuration described below.
+These paths are mounted onto servers' disks according to the mount configuration described below. Each path is added to a cluster volume maintained by GlusterFS.GlusterFS is an open-source, distributed file system that lets you pool storage across multiple servers into a single network volume.
+
+- Replicated volumes: Keep identical copies of files on multiple nodes (for redundancy).
+- Distributed volumes: Spread files across nodes to scale storage capacity.
+- Network-based: All servers see the same filesystem.
+- Resilient: Survives node failures if replication is configured.
+- Flexible: You can grow storage by adding more servers or disks.
+
+Each service path has a standardized cluster behaviour:
+
+| Type | Description |
+| -----|-------------|
+| replicated | Replicated. Data is mirrored (copied) across multiple nodes. If one node fails, data is still available from another. High availability, but uses more storage. |
+| distributed | Distributed. Data is spread across nodes, not copied. Stores different chunks on different servers. Good for scalability, not redundancy. |
+| local | Local. Not managed by GlusterFS — data stays only on the local disk of one server. No syncing, no redundancy. |
+
+Example for standard layout:
+
+```json
+"paths": [
+  { "type": "config", "path": "/etc/app"     , "volume": "replicated" },
+  { "type": "data",   "path": "/var/data/app", "volume": "local" },
+  { "type": "logs",   "path": "/var/logs/app", "volume": "local" },
+  { "type": "serve",  "path": "/srv/app"     , "volume": "distributed" }
+],
+```
 
 ### Workspace Server Configuration: servers
 
@@ -216,7 +157,6 @@ An array of server definitions describing the nodes within the workspace. Each s
 - `disks`:
   - An array of attached storage disks with their sizes (in GB) and labels.
   - Each disk is mounted under `/mnt/data{disk}/app` where `${disk}` corresponds to the disk index (1 or 2).
-  
 - `mountpoint`:
   - The base path where disks are mounted, supporting disk number substitution.
   - The service data types (`config`, `data`, `logs`, `serve`) are mapped to specific disks based on the `mounts` array to separate storage concerns.
@@ -259,6 +199,19 @@ The platform consists of multiple server nodes with different roles and storage 
 This structured configuration allows Terraform scripts to automate the provisioning of servers and storage according to predefined roles and capacity requirements, ensuring consistent and repeatable infrastructure deployments.
 
 This setup allows clear separation of roles and data on distinct nodes with explicit storage configurations, ensuring a scalable and maintainable platform deployment.
+
+### Workspace Secrets
+
+The following secrets are required for the workspace to function:
+
+| Secret Name              | Description                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------------- |
+| `TERRAFORM_API_TOKEN`    | Terraform Cloud or HCP API token. Used to authenticate when running Terraform plans/applies. |
+| `KAMATERA_API_KEY`       | Kamatera API Key (used together with `KAMATERA_API_SECRET`) to create and manage servers.    |
+| `KAMATERA_API_SECRET`    | Kamatera API Secret for authenticating API requests.                                         |
+| `KAMATERA_PUBLIC_KEY`    | SSH public key for provisioning servers (injected into cloud instances).                     |
+| `KAMATERA_PRIVATE_KEY`   | SSH private key to connect to provisioned servers over SSH.                                  |
+| `KAMATERA_ROOT_PASSWORD` | Root password for servers (fallback access if SSH keys fail).                                |
 
 ## Terraform Infrastructure Provisioning
 

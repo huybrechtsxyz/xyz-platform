@@ -6,8 +6,7 @@ The system only requires you to edit the workspace JSON file. Running the platfo
 
 ## Workflow Overview
 
-- You only need to edit the relevant sections of your workspace file.  
-- Re-run the platform deployment pipeline.
+You only need to edit the relevant sections of your workspace file and re-run the platform deployment pipeline.
 
 ## How to Add a New Server Role or Increase Server Count
 
@@ -51,7 +50,7 @@ Change any of the role properties in the roles section:
     "unit_cost": 12.00
   }
 }
-```json
+```
 
 ## How to Add Extra Disks
 
@@ -66,7 +65,7 @@ Adjust the disks_gb property in the role definition:
     "disks_gb": [20,40,50]  // Added 50GB disk
   }
 }
-```json
+```
 
 Update any mounts to reference the new disk index:
 
@@ -84,8 +83,8 @@ Add the new path type in your workspace JSON then update any volume mounts in th
 
 ```json
 "paths": [
-  { "type": "config", "path": "/${service}/config" },
-  { "type": "cache",  "path": "/${service}/cache" }
+  { "type": "config", "path": "/etc/app"  , "volume"= "replicated"},
+  { "type": "cache",  "path": "/var/cache", "volume"= "distributed" }
 ]
 ```
 
