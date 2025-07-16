@@ -209,8 +209,16 @@ create-fs-volumes() {
   declare -A bricks_map
   declare -A volume_map
 
-  log INFO "[*] Workspace data loaded. Servers found: $(jq -r '.servers[].id' "$WORKSPACE_FILE" | paste -sd "," -)"
-  log INFO "[*] Terraform data loaded. Servers found: $(jq -r '.include[].label' "$TERRAFORM_FILE" | paste -sd ',')"
+  # Read all servers for debugging
+  mapfile -t wservers < <(jq -c '.servers[]' "$WORKSPACE_FILE")
+  wserver_count=${#wservers[@]}
+  log INFO "[*] Workspace data loaded: $wserver_count servers found: $(jq -r '.servers[].id' "$WORKSPACE_FILE" | paste -sd "," -)"
+
+  mapfile -t tservers < <(jq -c '.include[]' "$TERRAFORM_FILE")
+  tserver_count=${#tservers[@]}
+  log INFO "[*] Terraform data loaded: $ servers found: $(jq -r '.include[].label' "$TERRAFORM_FILE" | paste -sd ',')"
+
+  log INFO "[*] Servers to be processed ($server_count): $server_ids"
 
   # First pass: Create directories and collect all bricks
   # Loop over all servers in the workspace file
