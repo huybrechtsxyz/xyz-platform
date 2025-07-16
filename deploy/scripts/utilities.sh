@@ -228,8 +228,9 @@ get_terraform_data() {
     return 1
   fi
 
-  local result=jq -r --arg label "$label" --arg data_type "$data_type" \
-    '.include[] | select(.label == $label) | .[$data_type]' "$terraform_file" || {
+  local result
+  result=$(jq -r --arg label "$label" --arg data_type "$data_type" \
+    '.include[] | select(.label == $label) | .[$data_type]' "$terraform_file") || {
       log ERROR "[!] Unable to retrieve $data_type for $label in $terraform_file"
       return 1
     }
