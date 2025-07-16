@@ -201,6 +201,19 @@ create-fs-cluster() {
 # It then creates the GlusterFS volumes based on the paths
 # It then creates environment variables for the paths > /PATH_TEMP/src/variables.env
 # At the end, it starts the volumes
+# ------------------------------------------------------------------------------
+# NOTE: This function uses 'force' when creating GlusterFS volumes.
+#
+# Rationale for using 'force':
+#   - Many nodes in this cluster do not have extra attached disks.
+#   - GlusterFS is only used here for synchronizing config files and small operational data.
+#   - Persistent workloads and stateful services store data in Redis, Consul, or Postgres.
+#   - Therefore, creating volumes on the root (/) filesystem is acceptable.
+#
+# WARNING:
+#   - If you expand GlusterFS usage to store large data, re-evaluate this decision.
+#   - Monitor root filesystem capacity to avoid filling up the OS partition.
+# ------------------------------------------------------------------------------
 create-fs-volumes() {
   log INFO "[*] Creating GlusterFS volumes..."
   log INFO "[*] Workspace '$WORKSPACE' setup target server ID: $SERVER_ID"
@@ -324,23 +337,23 @@ create-fs-volumes() {
 
     # Check if volume already exists
     if gluster volume info "$volumename" &>/dev/null; then
-      log INFO "Volume '$volumename' already exists, skipping creation."
+      log INFO "[*] Volume '$volumename' already exists, skipping creation."
     else
-      log INFO "Creating volume '$volumename' of type '$volumetype' with bricks: ${bricks[*]}"
+      log INFO "[*] Creating volume '$volumename' of type '$volumetype' with bricks: ${bricks[*]}"
 
       if [[ "$volumetype" == "replicated" ]]; then
         replica_count=${#bricks[@]}
-        log INFO "Executing: gluster volume create $volumename with $replica_count replicas..."
-        gluster volume create "$volumename" replica "$replica_count" "${bricks[@]}"
+        log INFO "[*] Executing: gluster volume create $volumename with $replica_count replicas..."
+        gluster volume create "$volumename" replica "$replica_count" "${bricks[@]}" force
       elif [[ "$volumetype" == "distributed" ]]; then
-        gluster volume create "$volumename" "${bricks[@]}"
+        gluster volume create "$volumename" "${bricks[@]}" force
       else
-        log WARN "Unknown volume type '$volumetype' for volume '$volumename', skipping."
+        log WARN "[!] Unknown volume type '$volumetype' for volume '$volumename', skipping."
         continue
       fi
 
       gluster volume start "$volumename"
-      log INFO "Volume '$volumename' created and started."
+      log INFO "[*] Volume '$volumename' created and started."
     fi
   done
 

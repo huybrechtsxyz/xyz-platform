@@ -114,7 +114,10 @@ create_docker_secret() {
     fi
 
     log INFO "[*] ... Removing old secret '$name'..."
-    docker secret rm "$name"
+    if ! docker secret rm "$name"; then
+      log WARN "[!] Could not remove secret '$name' (possibly still in use). Skipping recreate."
+      return 0
+    fi
   fi
 
   # Use printf to avoid trailing newline
@@ -132,25 +135,35 @@ create_docker_secret() {
 # This function checks if a Docker secret is currently in use by any service or container.
 is_secret_in_use() {
   local secret_name="$1"
+  local usage_found=0
 
   # Check services using the secret
-  if docker service ls --format '{{.Name}}' | \
-    xargs -r -n1 -I{} docker service inspect {} --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{if eq .SecretName "'"$secret_name"'"}}1{{end}}{{end}}' 2>/dev/null | \
-    grep -q "1"; then
-    log INFO "[*] ... Secret '$secret_name' is in use by a Docker service."
-    return 0
+  local services_using
+  services_using=$(docker service ls --format '{{.Name}}' | \
+    xargs -r -n1 -I{} docker service inspect {} --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{if eq .SecretName "'"$secret_name"'"}}{{$.Spec.Name}}{{end}}{{end}}' 2>/dev/null | grep -v '^$' || true)
+
+  if [[ -n "$services_using" ]]; then
+    log INFO "[*] ... Secret '$secret_name' is in use by Docker service(s): $services_using"
+    usage_found=1
   fi
 
-  # Check containers using the secret (Swarm services mount secrets as /run/secrets/*)
-  if docker ps --format '{{.ID}}' | \
+  # Check containers using the secret (running standalone containers might mount secrets differently)
+  local containers_using
+  containers_using=$(docker ps --format '{{.ID}}' | \
     xargs -r -n1 -I{} docker inspect {} --format '{{range .Mounts}}{{if and (eq .Type "bind") (hasPrefix .Source "/var/lib/docker/swarm/secrets/")}}{{.Name}}{{end}}{{end}}' 2>/dev/null | \
-    grep -q "$secret_name"; then
-    log INFO "[*] ... Secret '$secret_name' is in use by a running container."
-    return 0
+    grep -w "$secret_name" || true)
+
+  if [[ -n "$containers_using" ]]; then
+    log INFO "[*] ... Secret '$secret_name' is in use by running container(s)."
+    usage_found=1
   fi
 
-  log INFO "[*] ... Secret '$secret_name' is not in use."
-  return 1
+  if [[ $usage_found -eq 1 ]]; then
+    return 0
+  else
+    log INFO "[*] ... Secret '$secret_name' is not in use."
+    return 1
+  fi
 }
 
 # Function to load Docker secrets from a file
