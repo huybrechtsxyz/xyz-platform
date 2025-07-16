@@ -209,6 +209,7 @@ create-fs-volumes() {
   declare -A bricks_map
   declare -A volume_map
 
+  log INFO "[*] Workspace data loaded. Servers found: $(jq -r '.servers[].id' "$WORKSPACE_FILE" | paste -sd "," -)"
   log INFO "[*] Terraform data loaded. Servers found: $(jq -r '.include[].label' "$TERRAFORM_FILE" | paste -sd ',')"
 
   # First pass: Create directories and collect all bricks
