@@ -210,19 +210,18 @@ create-fs-volumes() {
   declare -A volume_map
 
   # Read all servers for debugging
-  mapfile -t wservers < <(jq -c '.servers[]' "$WORKSPACE_FILE")
-  wserver_count=${#wservers[@]}
-  log INFO "[*] Workspace data loaded: $wserver_count servers found: $(jq -r '.servers[].id' "$WORKSPACE_FILE" | paste -sd "," -)"
+  mapfile -t servers < <(jq -c '.servers[]' "$WORKSPACE_FILE")
+  server_count=${#servers[@]}
+  log INFO "[*] Workspace data loaded: $server_count servers found: $(jq -r '.servers[].id' "$WORKSPACE_FILE" | paste -sd "," -)"
 
   mapfile -t tservers < <(jq -c '.include[]' "$TERRAFORM_FILE")
   tserver_count=${#tservers[@]}
-  log INFO "[*] Terraform data loaded: $ servers found: $(jq -r '.include[].label' "$TERRAFORM_FILE" | paste -sd ',')"
-
-  log INFO "[*] Servers to be processed ($server_count): $server_ids"
+  log INFO "[*] Terraform data loaded: $tserver_count servers found: $(jq -r '.include[].label' "$TERRAFORM_FILE" | paste -sd ',')"
 
   # First pass: Create directories and collect all bricks
   # Loop over all servers in the workspace file
-  while read -r serverdata; do
+  #while read -r serverdata; do
+  for serverdata in "${servers[@]}"; do
     local server=$(echo "$serverdata" | jq -r '.id')
     local mountpoint=$(echo "$serverdata" | jq -r '.mountpoint')
     local private_ip=$(get_terraform_data "$TERRAFORM_FILE" "$server" "private_ip") || exit 1
@@ -236,7 +235,11 @@ create-fs-volumes() {
 
     log INFO "[*] Processing server '$server' mounts with mountpoint '$mountpoint' for ip '$private_ip'"
 
-    while read -r mount; do
+    # Read mounts into an array
+    mapfile -t mounts < <(jq -c '.mounts[]' <<< "$serverdata")
+
+    #while read -r mount; do
+    for mount in "${mounts[@]}"; do
       # Extract mount type and disk from the mount object
       # Get the path information for this mount type
       local mounttype=$(echo "$mount" | jq -r '.type')
@@ -281,7 +284,7 @@ create-fs-volumes() {
         log INFO "[*] Adding brick '$brick' to volume '$volumename'"
       fi
 
-    done < <(jq -c '.mounts[]' <<< "$serverdata")
+    done
 
     # Create the directories on the server via SSH
     # GlusterFS requires the directories to exist before creating volumes
@@ -301,7 +304,7 @@ create-fs-volumes() {
     else
       log WARN "[!] No directories to create on server '$server'. Skipping."
     fi
-  done < <(jq -c '.servers[]' "$WORKSPACE_FILE")
+  done
 
   # Create and start volumes
   # Iterate over the bricks_map to create volumes
