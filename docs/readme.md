@@ -4,7 +4,10 @@
 
 Huybrechts-XYZ is a self-hosted platform by Vincent Huybrechts designed to provide centralized authentication, secure service access, and streamlined deployment of custom and third-party applications. The platform enables the user to run various services such as personal websites, blogs, and internally developed software with ease and security.
 
-## Sections
+## Documentation
+
+- [Deploying infrastructure](./infrastructure.md)
+- [Troubleshooting guidelines](./troubleshooting.md)
 
 ## Getting Started
 
@@ -135,4 +138,3 @@ The repository is organized to cover all aspects of the self-hosted system, incl
 | `docs/`                    | User manuals, technical documentation, and maintenance guides.              |
 | `scripts/`                 | Runtime scripts for system maintenance, available for both Windows and Bash environments. |
 | `src/`                     | Source code and configuration files, organized by individual service.      |
-
