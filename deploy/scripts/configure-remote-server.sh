@@ -209,6 +209,8 @@ create-fs-volumes() {
   declare -A bricks_map
   declare -A volume_map
 
+  log INFO "[*] Terraform data loaded. Servers found: $(jq -r '.include[].label' "$TERRAFORM_FILE" | paste -sd ',')"
+
   # First pass: Create directories and collect all bricks
   # Loop over all servers in the workspace file
   while read -r serverdata; do
@@ -216,9 +218,14 @@ create-fs-volumes() {
     local mountpoint=$(echo "$serverdata" | jq -r '.mountpoint')
     local private_ip=$(get_terraform_data "$TERRAFORM_FILE" "$server" "private_ip") || exit 1
 
+    if [[ -z "$private_ip" ]]; then
+      log ERROR "[!] No private_ip found for server '$server'. Skipping."
+      continue
+    fi
+
     commands=()
 
-    log INFO "[*] Processing server '$server' mounts with mountpoint '$mountpoint'"
+    log INFO "[*] Processing server '$server' mounts with mountpoint '$mountpoint' for ip '$private_ip'"
 
     while read -r mount; do
       # Extract mount type and disk from the mount object
@@ -241,7 +248,7 @@ create-fs-volumes() {
       fi
 
       # Resolve the full path
-      log INFO "[*] Creating directory with type $mounttype on server '$server': $fullpath"
+      log INFO "[*] Creating directory on $mountdisk with type $mounttype on server '$server': $fullpath"
 
       # Add the path to the creation command
       commands+=("$fullpath")
@@ -287,38 +294,41 @@ create-fs-volumes() {
     fi
   done < <(jq -c '.servers[]' "$WORKSPACE_FILE")
 
-  # Create and start volumes 
+  # Create and start volumes
   # Iterate over the bricks_map to create volumes
   log INFO "[*] Creating GlusterFS volumes ..."
-  for volname in "${!bricks_map[@]}"; do
+  for volumename in "${!bricks_map[@]}"; do
     # Extract the mount_type back from the volname
-    bricks=(${bricks_map[$volname]})
-    mount_type="${volname#${WORKSPACE}_}"
-    volume_type="${volume_map[$mount_type]}"
+    bricks=(${bricks_map[$volumename]})
+    mounttype="${volumename#${WORKSPACE}_}"
+    volumetype=${volume_map[$mounttype]}
 
     if [[ ${#bricks[@]} -eq 0 ]]; then
-      log WARN "No bricks defined for volume '$volname', skipping."
+      log WARN "No bricks defined for volume '$volumename', skipping."
       continue
     fi
 
-    # Check if volume already exists
-    if gluster volume info "$volname" &>/dev/null; then
-      log INFO "Volume '$volname' already exists, skipping creation."
-    else
-      log INFO "Creating volume '$volname' of type '$volume_type' with bricks: ${bricks[*]}"
+    validate_volume_configuration "$volumename" "$volumetype" "${bricks[@]}" || continue
 
-      if [[ "$volume_type" == "replicated" ]]; then
+    # Check if volume already exists
+    if gluster volume info "$volumename" &>/dev/null; then
+      log INFO "Volume '$volumename' already exists, skipping creation."
+    else
+      log INFO "Creating volume '$volumename' of type '$volumetype' with bricks: ${bricks[*]}"
+
+      if [[ "$volumetype" == "replicated" ]]; then
         replica_count=${#bricks[@]}
-        gluster volume create "$volname" replica "$replica_count" "${bricks[@]}"
-      elif [[ "$volume_type" == "distributed" ]]; then
-        gluster volume create "$volname" "${bricks[@]}"
+        log INFO "Executing: gluster volume create $volumename with $replica_count replicas..."
+        gluster volume create "$volumename" replica "$replica_count" "${bricks[@]}"
+      elif [[ "$volumetype" == "distributed" ]]; then
+        gluster volume create "$volumename" "${bricks[@]}"
       else
-        log WARN "Unknown volume type '$volume_type' for volume '$volname', skipping."
+        log WARN "Unknown volume type '$volumetype' for volume '$volumename', skipping."
         continue
       fi
 
-      gluster volume start "$volname"
-      log INFO "Volume '$volname' created and started."
+      gluster volume start "$volumename"
+      log INFO "Volume '$volumename' created and started."
     fi
   done
 

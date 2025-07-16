@@ -228,11 +228,18 @@ get_terraform_data() {
     return 1
   fi
 
-  jq -r --arg label "$label" --arg data_type "$data_type" \
+  local result=jq -r --arg label "$label" --arg data_type "$data_type" \
     '.include[] | select(.label == $label) | .[$data_type]' "$terraform_file" || {
       log ERROR "[!] Unable to retrieve $data_type for $label in $terraform_file"
       return 1
     }
+
+  if [[ -z "$result" || "$result" == "null" ]]; then
+    log ERROR "[!] Empty or null $data_type for $label in $terraform_file"
+    return 1
+  fi
+
+  echo "$result"
 }
 
 # Function to get the workspace file path
@@ -316,4 +323,44 @@ get_manager_id() {
   fi
 
   echo "$MAIN_MANAGER_ID"
+}
+
+# Function to validite the volume configuration
+# Usage: validate_volume_configuration <volumename> <volumetype> <bricks[]>
+# Example validate_volume_configuration "$volumename" "$volumetype" "${bricks[@]}"
+validate_volume_configuration() {
+  local volname="$1"
+  local voltype="$2"
+  shift 2
+  local bricks=("$@")
+  local brick_count="${#bricks[@]}"
+
+  log INFO "[*] Validating configuration for volume '$volname' of type '$voltype' with $brick_count bricks"
+
+  # Check for duplicate brick paths
+  local unique_count
+  unique_count=$(printf "%s\n" "${bricks[@]}" | sort -u | wc -l)
+  if [[ "$unique_count" -ne "$brick_count" ]]; then
+    log ERROR "[!] Duplicate brick paths detected in volume '$volname'"
+    return 1
+  fi
+
+  if [[ "$voltype" == "replicated" ]]; then
+    if (( brick_count < 2 )); then
+      log ERROR "[!] Replicated volume requires at least 2 bricks (found $brick_count)"
+      return 1
+    elif (( brick_count == 2 )); then
+      log WARN "[!] Replica 2 volumes are prone to split-brain. Consider Replica 3 or thin-arbiter."
+    fi
+  elif [[ "$voltype" == "distributed" ]]; then
+    if (( brick_count < 1 )); then
+      log ERROR "[!] Distributed volume requires at least 1 brick."
+      return 1
+    fi
+  else
+    log ERROR "[!] Unsupported volume type: $voltype"
+    return 1
+  fi
+
+  log INFO "[+] Volume '$volname' configuration validated successfully."
 }
