@@ -7,7 +7,7 @@ on:
 jobs:
   deploy_platform:
     name: Deploy Platform
-    uses: ./.github/workflows/_pipeline.yml
+    uses: ./.github/workflows/_workspace.yml
     with:
       workspace: platform
       environment: platform
