@@ -10,7 +10,7 @@ jobs:
     uses: ./.github/workflows/_pipeline.yml
     with:
       workspace: platform
-      environment: shared
+      environment: platform
       infrastructure: true
     secrets:
       BITWARDEN_TOKEN: ${{ secrets.BITWARDEN_TOKEN }}

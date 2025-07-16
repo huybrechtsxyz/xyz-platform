@@ -59,50 +59,6 @@ generate_env_file() {
   log INFO "[+] Environment file generated at '$output_file'"
 }
 
-# Function to load secret identifiers from a JSON file
-# Usage: load_secret_identifiers <path-to-ws.json> <environment>
-# Example: load_secret_identifiers /path/to/workspace.json dev
-# This function exports environment variables in the format UUID_<SECRET_NAME> with their values.
-load_secret_identifiers() {
-  # Workspace is required
-  FILE="$1"
-  ENVIRONMENT="$2"
-
-  if [ -z "$FILE" ] || [ -z "$ENVIRONMENT" ]; then
-    echo "Usage: load_secret_identifiers <path-to-ws.json> <environment>"
-    return 1
-  fi
-
-  echo "[*] ... Loading secrets for environment '$ENVIRONMENT' from '$FILE'..."
-
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "Error: 'jq' is required but not installed."
-    exit 1
-  fi
-
-  if [ ! -f "$FILE" ]; then
-    echo "Error: JSON file '$FILE' not found."
-    exit 1
-  fi
-
-  # Extract secrets for the specified environment
-  secrets=$(jq -r --arg env "$ENVIRONMENT" '.secrets.environment[$env]' "$FILE")
-  if [ "$secrets" == "null" ]; then
-    echo "[!] ERROR No secrets found for environment '$ENVIRONMENT'."
-    return 1
-  fi
-
-  # Iterate and export
-  echo "$secrets" | jq -r 'to_entries[] | "\(.key)=\(.value)"' | while IFS="=" read -r key value; do
-    UPPER_KEY=$(echo "$key" | tr '[:lower:]' '[:upper:]')
-    CLEAN_VALUE=$(echo "$value" | sed 's/^"//;s/"$//')
-    export "UUID_${UPPER_KEY}"="$CLEAN_VALUE"
-    echo "Exported UUID_${UPPER_KEY}"
-  done
-
-  echo "[*] ... Loading secrets for environment '$ENVIRONMENT' from '$FILE'...DONE"
-}
-
 # Function to create a Docker network if it doesn't exist
 # Usage: create_docker_network <network_name>
 # Example: create_docker_network my_overlay_network
@@ -158,7 +114,10 @@ create_docker_secret() {
     fi
 
     log INFO "[*] ... Removing old secret '$name'..."
-    docker secret rm "$name"
+    if ! docker secret rm "$name"; then
+      log WARN "[!] Could not remove secret '$name' (possibly still in use). Skipping recreate."
+      return 0
+    fi
   fi
 
   # Use printf to avoid trailing newline
@@ -176,25 +135,35 @@ create_docker_secret() {
 # This function checks if a Docker secret is currently in use by any service or container.
 is_secret_in_use() {
   local secret_name="$1"
+  local usage_found=0
 
   # Check services using the secret
-  if docker service ls --format '{{.Name}}' | \
-    xargs -r -n1 -I{} docker service inspect {} --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{if eq .SecretName "'"$secret_name"'"}}1{{end}}{{end}}' 2>/dev/null | \
-    grep -q "1"; then
-    log INFO "[*] ... Secret '$secret_name' is in use by a Docker service."
-    return 0
+  local services_using
+  services_using=$(docker service ls --format '{{.Name}}' | \
+    xargs -r -n1 -I{} docker service inspect {} --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{if eq .SecretName "'"$secret_name"'"}}{{$.Spec.Name}}{{end}}{{end}}' 2>/dev/null | grep -v '^$' || true)
+
+  if [[ -n "$services_using" ]]; then
+    log INFO "[*] ... Secret '$secret_name' is in use by Docker service(s): $services_using"
+    usage_found=1
   fi
 
-  # Check containers using the secret (Swarm services mount secrets as /run/secrets/*)
-  if docker ps --format '{{.ID}}' | \
+  # Check containers using the secret (running standalone containers might mount secrets differently)
+  local containers_using
+  containers_using=$(docker ps --format '{{.ID}}' | \
     xargs -r -n1 -I{} docker inspect {} --format '{{range .Mounts}}{{if and (eq .Type "bind") (hasPrefix .Source "/var/lib/docker/swarm/secrets/")}}{{.Name}}{{end}}{{end}}' 2>/dev/null | \
-    grep -q "$secret_name"; then
-    log INFO "[*] ... Secret '$secret_name' is in use by a running container."
-    return 0
+    grep -w "$secret_name" || true)
+
+  if [[ -n "$containers_using" ]]; then
+    log INFO "[*] ... Secret '$secret_name' is in use by running container(s)."
+    usage_found=1
   fi
 
-  log INFO "[*] ... Secret '$secret_name' is not in use."
-  return 1
+  if [[ $usage_found -eq 1 ]]; then
+    return 0
+  else
+    log INFO "[*] ... Secret '$secret_name' is not in use."
+    return 1
+  fi
 }
 
 # Function to load Docker secrets from a file
@@ -249,14 +218,12 @@ get_terraform_file() {
 
   local TF_FILE="$TEMP_PATH/terraform.json"
 
-  log INFO "[*] Getting workspace information from $TF_FILE"
-
   if [[ ! -f "$TF_FILE" ]]; then
     log ERROR "[!] Terraform output file not found: $TF_FILE"
     return 1
   fi
 
-  echo "$WORKSPACE_FILE"
+  echo "$TF_FILE"
 }
 
 # Function to get Terraform data based on label and data type
@@ -274,8 +241,19 @@ get_terraform_data() {
     return 1
   fi
 
-  jq -r --arg label "$label" --arg data_type "$data_type" \
-    '.include[] | select(.label == $label) | .[$data_type]' "$terraform_file"
+  local result
+  result=$(jq -r --arg label "$label" --arg data_type "$data_type" \
+    '.include[] | select(.label == $label) | .[$data_type]' "$terraform_file") || {
+      log ERROR "[!] Unable to retrieve $data_type for $label in $terraform_file"
+      return 1
+    }
+
+  if [[ -z "$result" || "$result" == "null" ]]; then
+    log ERROR "[!] Empty or null $data_type for $label in $terraform_file"
+    return 1
+  fi
+
+  echo "$result"
 }
 
 # Function to get the workspace file path
@@ -294,8 +272,6 @@ get_workspace_file() {
   fi
 
   local WORKSPACE_FILE="$TEMP_PATH/$WORKSPACE_NAME.ws.json"
-
-  log INFO "[*] Getting workspace information from $WORKSPACE_FILE"
 
   if [[ ! -f "$WORKSPACE_FILE" ]]; then
     log ERROR "[!] Workspace definition file not found: $WORKSPACE_FILE"
@@ -319,8 +295,6 @@ get_server_id() {
     return 1
   fi
 
-  log INFO "[*] Getting server information for hostname: $HOSTNAME"
-
   local SERVER_ID=$(jq -r '.servers[].id' "$WORKSPACE_FILE" | while read -r id; do
     if [[ "$HOSTNAME" == *"$id"* ]]; then
       echo "$id"
@@ -337,6 +311,7 @@ get_server_id() {
 }
 
 # Function to get the main manager ID from the workspace file
+# This is always the first server defined in the workspace
 # Usage: get_manager_id <WORKSPACE_FILE>
 # Example: get_manager_id /tmp/workspace/my_workspace.ws.json
 # This function reads the workspace file and extracts the main manager ID.
@@ -348,8 +323,6 @@ get_manager_id() {
     log ERROR "[!] get_manager_id requires WORKSPACE_FILE argument."
     return 1
   fi
-
-  log INFO "[*] Getting main manager ID from workspace file: $WORKSPACE_FILE"
 
   if [[ ! -f "$WORKSPACE_FILE" ]]; then
     log ERROR "[!] Workspace definition file not found: $WORKSPACE_FILE"
@@ -364,4 +337,44 @@ get_manager_id() {
   fi
 
   echo "$MAIN_MANAGER_ID"
+}
+
+# Function to validite the volume configuration
+# Usage: validate_volume_configuration <volumename> <volumetype> <bricks[]>
+# Example validate_volume_configuration "$volumename" "$volumetype" "${bricks[@]}"
+validate_volume_configuration() {
+  local volname="$1"
+  local voltype="$2"
+  shift 2
+  local bricks=("$@")
+  local brick_count="${#bricks[@]}"
+
+  log INFO "[*] Validating configuration for volume '$volname' of type '$voltype' with $brick_count bricks"
+
+  # Check for duplicate brick paths
+  local unique_count
+  unique_count=$(printf "%s\n" "${bricks[@]}" | sort -u | wc -l)
+  if [[ "$unique_count" -ne "$brick_count" ]]; then
+    log ERROR "[!] Duplicate brick paths detected in volume '$volname'"
+    return 1
+  fi
+
+  if [[ "$voltype" == "replicated" ]]; then
+    if (( brick_count < 2 )); then
+      log ERROR "[!] Replicated volume requires at least 2 bricks (found $brick_count)"
+      return 1
+    elif (( brick_count == 2 )); then
+      log WARN "[!] Replica 2 volumes are prone to split-brain. Consider Replica 3 or thin-arbiter."
+    fi
+  elif [[ "$voltype" == "distributed" ]]; then
+    if (( brick_count < 1 )); then
+      log ERROR "[!] Distributed volume requires at least 1 brick."
+      return 1
+    fi
+  else
+    log ERROR "[!] Unsupported volume type: $voltype"
+    return 1
+  fi
+
+  log INFO "[+] Volume '$volname' configuration validated successfully."
 }

@@ -5,16 +5,26 @@ HOSTNAME=$(hostname)
 : "${WORKSPACE:?Missing WORKSPACE env var}"
 : "${PATH_TEMP:?Missing PATH_TEMP env var}"
 
-WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP" "$WORKSPACE") || exit 1
-TERRAFORM_FILE=$(get_terraform_file "$PATH_TEMP") || exit 1
+# All files are either in $PATH_TEMP/src or $PATH_TEMP/deploy!
+log INFO "[*] Getting workspace and terraform files"
+WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP/src" "$WORKSPACE") || exit 1
+log INFO "[*] Getting workspace and terraform files $WORKSPACE_FILE"
+TERRAFORM_FILE=$(get_terraform_file "$PATH_TEMP/src") || exit 1
+log INFO "[*] Getting workspace and terraform files $TERRAFORM_FILE"
 
 # Determine my server id
+log INFO "[*] Getting server information: server id"
 SERVER_ID=$(get_server_id "$WORKSPACE_FILE" "$HOSTNAME") || exit 1
-MANAGER_IP=$(get_terraform_data "$TERRAFORM_FILE" "$SERVER_ID" "manager_ip") || exit 1
+log INFO "[*] Getting server information: manager label"
 MANAGER_LABEL=$(get_manager_id "$WORKSPACE_FILE") || exit 1
+log INFO "[*] Getting server information: manager ip"
+MANAGER_IP=$(get_terraform_data "$TERRAFORM_FILE" "$SERVER_ID" "manager_ip") || exit 1
+
 # Load private IPs from terraform.json (as an array)
 readarray -t PRIVATE_IPS < <(jq -r '.include[].private_ip' "$TERRAFORM_FILE")
 
+log INFO "[*] CURRENT SERVER: $SERVER_ID"
+log INFO "[*] MANAGER LABEL: $MANAGER_LABEL"
 log INFO "[*] MANAGER NODE: $MANAGER_IP"
 log INFO "[*] CLUSTER NODES: ${PRIVATE_IPS[*]}"
 
@@ -140,13 +150,16 @@ create-fs-cluster() {
   readarray -t CURRENT_PEERS < <(
     gluster peer status | awk '/Hostname:/ {print $2}'
   )
+  log INFO "[*] Current peers $CURRENT_PEERS..."
 
   # Extract all private IPs
+  log INFO "[*] Extracting private ips from $TERRAFORM_FILE..."
   readarray -t PRIVATE_IPS < <(
-    jq -r '.include[].private_ip' "$terraform"
+    jq -r '.include[].private_ip' "$TERRAFORM_FILE"
   )
 
   # Add any missing peers
+  log INFO "[*] Add any missing peers"
   for ip in "${PRIVATE_IPS[@]}"; do
     if [[ "$ip" == "$MANAGER_IP" ]]; then
       continue
@@ -160,6 +173,7 @@ create-fs-cluster() {
   done
 
   # Remove peers no longer in desired state
+  log INFO "[*] Remove peers no longer in desired state"
   for ip in "${CURRENT_PEERS[@]}"; do
     if [[ "$ip" == "$MANAGER_IP" ]]; then
       continue
@@ -187,47 +201,79 @@ create-fs-cluster() {
 # It then creates the GlusterFS volumes based on the paths
 # It then creates environment variables for the paths > /PATH_TEMP/src/variables.env
 # At the end, it starts the volumes
+# ------------------------------------------------------------------------------
+# NOTE: This function uses 'force' when creating GlusterFS volumes.
+#
+# Rationale for using 'force':
+#   - Many nodes in this cluster do not have extra attached disks.
+#   - GlusterFS is only used here for synchronizing config files and small operational data.
+#   - Persistent workloads and stateful services store data in Redis, Consul, or Postgres.
+#   - Therefore, creating volumes on the root (/) filesystem is acceptable.
+#
+# WARNING:
+#   - If you expand GlusterFS usage to store large data, re-evaluate this decision.
+#   - Monitor root filesystem capacity to avoid filling up the OS partition.
+# ------------------------------------------------------------------------------
 create-fs-volumes() {
   log INFO "[*] Creating GlusterFS volumes..."
   log INFO "[*] Workspace '$WORKSPACE' setup target server ID: $SERVER_ID"
 
-  # Loop over all servers in the workspace file
-  while read -r serverdata; do
+  # Array declartions
+  declare -A bricks_map
+  declare -A volume_map
 
+  # Read all servers for debugging
+  mapfile -t servers < <(jq -c '.servers[]' "$WORKSPACE_FILE")
+  server_count=${#servers[@]}
+  log INFO "[*] Workspace data loaded: $server_count servers found: $(jq -r '.servers[].id' "$WORKSPACE_FILE" | paste -sd "," -)"
+
+  mapfile -t tservers < <(jq -c '.include[]' "$TERRAFORM_FILE")
+  tserver_count=${#tservers[@]}
+  log INFO "[*] Terraform data loaded: $tserver_count servers found: $(jq -r '.include[].label' "$TERRAFORM_FILE" | paste -sd ',')"
+
+  # First pass: Create directories and collect all bricks
+  # Loop over all servers in the workspace file
+  #while read -r serverdata; do
+  for serverdata in "${servers[@]}"; do
     local server=$(echo "$serverdata" | jq -r '.id')
     local mountpoint=$(echo "$serverdata" | jq -r '.mountpoint')
-    
     local private_ip=$(get_terraform_data "$TERRAFORM_FILE" "$server" "private_ip") || exit 1
 
+    if [[ -z "$private_ip" ]]; then
+      log ERROR "[!] No private_ip found for server '$server'. Skipping."
+      continue
+    fi
+
     commands=()
-    declare -A bricks_map
-    declare -A volume_map
 
-    log INFO "[*] Processing server '$server' mounts with mountpoint '$mountpoint'"
+    log INFO "[*] Processing server '$server' mounts with mountpoint '$mountpoint' for ip '$private_ip'"
 
-    while read -r mount; do
+    # Read mounts into an array
+    mapfile -t mounts < <(jq -c '.mounts[]' <<< "$serverdata")
 
+    #while read -r mount; do
+    for mount in "${mounts[@]}"; do
       # Extract mount type and disk from the mount object
+      # Get the path information for this mount type
       local mounttype=$(echo "$mount" | jq -r '.type')
       local mountdisk=$(echo "$mount" | jq -r '.disk')
-
-      # Get the path information for this mount type
       local pathinfo=$(jq -r --arg type "$mounttype" '.paths[] | select(.type==$type)' "$WORKSPACE_FILE")
+      local volume=$(echo "$pathinfo" | jq -r '.volume')
+      local mountpath=$(echo "$pathinfo" | jq -r '.path')
+      local fullpath="${mountpoint//\$\{disk\}/$mountdisk}${mountpath}"
+
       if [[ -z "$pathinfo" ]]; then
         log ERROR "[!] No path information found for mount type '$mounttype'. Skipping."
         continue
       fi
 
-      local volume=$(echo "$pathinfo" | jq -r '.volume')
-      local mountpath=$(echo "$pathinfo" | jq -r '.path')
       if [[ -z "$volume" || -z "$mountpath" ]]; then
         log ERROR "[!] Missing volume or mount path for mount type '$mounttype'. Skipping."
         continue
       fi
 
       # Resolve the full path
-      local fullpath="${mountpoint//\$\{disk\}/$mountdisk}${mountpath}"
-      log INFO "[*] Creating directory with type $mounttype on server '$server': $fullpath"
+      log INFO "[*] Creating directory on $mountdisk with type $mounttype on server '$server': $fullpath"
 
       # Add the path to the creation command
       commands+=("$fullpath")
@@ -244,14 +290,14 @@ create-fs-volumes() {
         log INFO "[*] Skipping local storage volume '$mounttype' for server '$server'."
       else
         log INFO "[*] Adding GlusterFS volume '$mounttype' for server '$server'."
-        volume_map["$mounttype"]="$volume"
-        local brick="${private_ip}:${fullpath}"
         volumename="${WORKSPACE}_${mounttype}"
+        brick="${private_ip}:${fullpath}"
+        volume_map["$mounttype"]="$volume"
         bricks_map["$volumename"]+="$brick "
         log INFO "[*] Adding brick '$brick' to volume '$volumename'"
       fi
 
-    done < <(jq -c '.mounts[]' <<< "$serverdata")
+    done
 
     # Create the directories on the server via SSH
     # GlusterFS requires the directories to exist before creating volumes
@@ -262,7 +308,7 @@ create-fs-volumes() {
         log INFO "[*] Creating directories on local server '$server'...DONE"
       else
         log INFO "[*] Creating directories on server '$server' via SSH..."
-        if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "root@$server" mkdir -p "${commands[@]}"; then
+        if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "root@$private_ip" mkdir -p "${commands[@]}"; then
           log ERROR "[!] Failed to create directories on server '$server'."
           return 1
         fi
@@ -271,44 +317,45 @@ create-fs-volumes() {
     else
       log WARN "[!] No directories to create on server '$server'. Skipping."
     fi
+  done
 
-    # Create and start volumes 
-    # Iterate over the bricks_map to create volumes
-    log INFO "[*] Creating GlusterFS volumes for server '$server'..."
-    for volname in "${!bricks_map[@]}"; do
-      bricks=(${bricks_map[$volname]})
+  # Create and start volumes
+  # Iterate over the bricks_map to create volumes
+  log INFO "[*] Creating GlusterFS volumes ..."
+  for volumename in "${!bricks_map[@]}"; do
+    # Extract the mount_type back from the volname
+    bricks=(${bricks_map[$volumename]})
+    mounttype="${volumename#${WORKSPACE}_}"
+    volumetype=${volume_map[$mounttype]}
 
-      # Extract the mount_type back from the volname
-      mount_type="${volname#${WORKSPACE}_}"
-      volume_type="${volume_map[$mount_type]}"
+    if [[ ${#bricks[@]} -eq 0 ]]; then
+      log WARN "No bricks defined for volume '$volumename', skipping."
+      continue
+    fi
 
-      if [[ ${#bricks[@]} -eq 0 ]]; then
-        log WARN "No bricks defined for volume '$volname', skipping."
+    validate_volume_configuration "$volumename" "$volumetype" "${bricks[@]}" || continue
+
+    # Check if volume already exists
+    if gluster volume info "$volumename" &>/dev/null; then
+      log INFO "[*] Volume '$volumename' already exists, skipping creation."
+    else
+      log INFO "[*] Creating volume '$volumename' of type '$volumetype' with bricks: ${bricks[*]}"
+
+      if [[ "$volumetype" == "replicated" ]]; then
+        replica_count=${#bricks[@]}
+        log INFO "[*] Executing: gluster volume create $volumename with $replica_count replicas..."
+        gluster volume create "$volumename" replica "$replica_count" "${bricks[@]}" force
+      elif [[ "$volumetype" == "distributed" ]]; then
+        gluster volume create "$volumename" "${bricks[@]}" force
+      else
+        log WARN "[!] Unknown volume type '$volumetype' for volume '$volumename', skipping."
         continue
       fi
 
-      # Check if volume already exists
-      if gluster volume info "$volname" &>/dev/null; then
-        log INFO "Volume '$volname' already exists, skipping creation."
-      else
-        log INFO "Creating volume '$volname' of type '$volume_type' with bricks: ${bricks[*]}"
-
-        if [[ "$volume_type" == "replicated" ]]; then
-          replica_count=${#bricks[@]}
-          gluster volume create "$volname" replica "$replica_count" "${bricks[@]}"
-        elif [[ "$volume_type" == "distributed" ]]; then
-          gluster volume create "$volname" "${bricks[@]}"
-        else
-          log WARN "Unknown volume type '$volume_type' for volume '$volname', skipping."
-          continue
-        fi
-
-        gluster volume start "$volname"
-        log INFO "Volume '$volname' created and started."
-      fi
-    done
-
-  done < <(jq -c '.servers[]' "$WORKSPACE_FILE")
+      gluster volume start "$volumename"
+      log INFO "[*] Volume '$volumename' created and started."
+    fi
+  done
 
   log INFO "[+] GlusterFS volumes created successfully."
 }
@@ -356,7 +403,7 @@ main() {
     exit 1
   }
 
-  if [[ "$HOSTNAME" == *"MANAGER_LABEL"* ]]; then
+  if [[ "$HOSTNAME" == *"$MANAGER_LABEL"* ]]; then
     main_manager || {
       log ERROR "[!] Failed to configure manager node."
       exit 1

@@ -4,7 +4,7 @@
 #     {
 #       "index": "1",
 #       "ip": "123...",
-#       "label": "infra_1",
+#       "label": "infra-1",
 #       "manager_ip": "10.0.0.1",
 #       "name": "srv-platform-infra-1-jesj",
 #       "private_ip": "10.0.0.4",
@@ -13,7 +13,7 @@
 #     {
 #       "index": "2",
 #       "ip": "123...",
-#       "label": "infra_2",
+#       "label": "infra-2",
 #       "manager_ip": "10.0.0.1",
 #       "name": "srv-platform-infra-2-jesj",
 #       "private_ip": "10.0.0.5",
@@ -22,7 +22,7 @@
 #     {
 #       "index": "1",
 #       "ip": "123...",
-#       "label": "manager_1",
+#       "label": "manager-1",
 #       "manager_ip": "10.0.0.1",
 #       "name": "srv-platform-manager-1-jesj",
 #       "private_ip": "10.0.0.1",
@@ -31,7 +31,7 @@
 #     {
 #       "index": "1",
 #       "ip": "123...",
-#       "label": "worker_1",
+#       "label": "worker-",
 #       "manager_ip": "10.0.0.1",
 #       "name": "srv-platform-worker-1-jesj",
 #       "private_ip": "10.0.0.3",
@@ -40,7 +40,7 @@
 #     {
 #       "index": "2",
 #       "ip": "123...",
-#       "label": "worker_2",
+#       "label": "worker-2",
 #       "manager_ip": "10.0.0.1",
 #       "name": "srv-platform-worker-2-jesj",
 #       "private_ip": "10.0.0.2",
@@ -57,7 +57,7 @@ output "serverdata" {
       for key, srv in kamatera_server.server : {
         role       = split("-", key)[0]
         index      = split("-", key)[1]
-        label      = "${split("-", key)[0]}_${tonumber(split("-", key)[1])}"
+        label      = "${split("-", key)[0]}-${tonumber(split("-", key)[1])}"
         name       = srv.name
         ip         = srv.public_ips[0]
         private_ip = srv.private_ips[0]
