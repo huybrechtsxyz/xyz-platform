@@ -1,0 +1,136 @@
+# Build and Deploy Jobs
+name: _ServiceDeployment
+
+on:
+  workflow_call:
+    inputs:
+      workspace:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+      service:
+        required: true
+        type: string
+      variables:
+        required: true
+        type: string
+    secrets:
+      BITWARDEN_TOKEN:
+        required: true
+      SECRET_TOKENS:
+        required: true
+
+env:
+  # Environment variables for the pipeline
+  VAR_PATH_TEMP: /tmp/app
+
+jobs:
+  # Download the Terraform output artifact and parse it to find Swarm servers
+  # This job will run if the cache is not hit or if the initialize input is set to true
+  # Parses the output to find Swarm servers and sets them as a matrix for the next jobs
+  setup:
+    name: Download Terraform Output
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      matrix: ${{ steps.parse.outputs.matrix }}
+    steps:
+      # Check out the repo
+      - name: Check Out
+        uses: actions/checkout@v4
+
+      # Restore Terraform Cache
+      - name: Restore Terraform Cache
+        id: restore-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.VAR_PATH_TEMP }}/tf_output.json
+          key: terraform-output-${{ inputs.workspace }}
+
+      # Check if the artifact exists
+      - name: Validate Terraform Output
+        run: |
+          if [ ! -f ${{ env.VAR_PATH_TEMP }}/tf_output.json ]; then
+            echo "[!] Artifact terraform-output-${{ inputs.workspace }} not found or tf_output.json missing. Exiting."
+            exit 1
+          fi
+
+      # Parse Terraform Output to find Swarm Servers
+      - name: Parse Swarm Servers
+        id: parse
+        run: |
+          # Read raw JSON
+          matrix=$(jq -c '.' "${{ env.VAR_PATH_TEMP }}/tf_output.json")
+          echo "================"
+          echo "$matrix"
+          echo "================"
+          # Load helper functions
+          source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
+          # Determine workspace file
+          WORKSPACE_FILE=$(get_workspace_file "$(dirname "${BASH_SOURCE[0]}")/../../deploy/workspaces" "${WORKSPACE}") || exit 1
+          echo "Using workspace file: $WORKSPACE_FILE"
+          # Determine manager label
+          MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
+          echo "Using manager label: $MANAGER_ID"
+          # Extract only the manager node
+          MANAGER_DATA=$(jq -c --arg label "$MANAGER_ID" '{ include: [ .include[] | select(.label == $label) ] }' "${{ env.VAR_PATH_TEMP }}/tf_output.json")
+          echo "================"
+          echo "Filtered manager data: $MANAGER_DATA"
+          echo "================"
+          # Export to GitHub Actions output
+          echo "matrix=$MANAGER_DATA" >> "$GITHUB_OUTPUT"
+
+      # Store the service variables and secrets
+      - name: Setup Variables
+        run: |
+          echo "${{ inputs.variables }}" > ${{ env.VAR_PATH_TEMP }}/vars-${{ inputs.service }}.env
+          echo "${{ inputs.variables }}" > ${{ env.VAR_PATH_TEMP }}/secrets-${{ inputs.secrets }}.env
+
+  deployment:
+    name: Deploy Service
+    needs: ["setup"]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    if: ${{ always() && !contains(needs.*.result, 'failure') }}
+    strategy:
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    steps:
+      # Check out the repo
+      - name: Check Out
+        uses: actions/checkout@v4
+
+      # Set up GitHub Secrets
+      - name: Get General Secrets
+        uses: bitwarden/sm-action@v2
+        id: get-secrets
+        with:
+          access_token: ${{ secrets.BITWARDEN_TOKEN }}
+          secrets: |
+            f16fffe2-77b7-4d20-bf6c-b2c9015c71d3 > KAMATERA_PRIVATE_KEY
+            f53a76ab-b87f-4af0-9aa4-b2d1016aba2b > VERSIO_USERNAME
+            3d7bbfcd-18a5-4762-9064-b2d1016aef63 > VERSIO_PASSWORD
+
+      # Set up SSH connection
+      - name: Set up SSH connection
+        env:
+          KAMATERA_PRIVATE_KEY: ${{ steps.get-secrets.outputs.KAMATERA_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$KAMATERA_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      # Step: Configure Service
+      - name: Configure Service
+        env:
+          VAR_MATRIX: ${{ needs.restore.outputs.matrix }}
+          VAR_ENVIRONMENT: ${{ inputs.environment }}
+          VAR_WORKSPACE: ${{ inputs.workspace }}
+          SECRET_VERSIO_USERNAME : ${{ steps.get-secrets.outputs.VERSIO_USERNAME }}
+          SECRET_VERSIO_PASSWORD : ${{ steps.get-secrets.outputs.VERSIO_PASSWORD }}
+        run: |
+          echo "[*] Configuring swarm server ${{ matrix.ip }} ..."
+          chmod +x deploy/scripts/configure-swarm-server.sh
+          ./deploy/scripts/configure-swarm-server.sh "${{ matrix.ip }}" "$VAR_MATRIX"
+          echo "[*] Configuring swarm server ${{ matrix.ip }} ...DONE"

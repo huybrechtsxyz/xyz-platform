@@ -28,7 +28,7 @@
 #  - The VAR_ prefix is dropped when exporting variables to the remote server.
 
 # Build and Deploy Jobs
-name: _InfraBuildDeploy
+name: _WorkspaceDeployment
 
 on:
   workflow_call:
@@ -261,6 +261,8 @@ jobs:
             6cc5b975-56a9-4d7a-80c7-b2c90151cce0 > KAMATERA_PUBLIC_KEY
             f16fffe2-77b7-4d20-bf6c-b2c9015c71d3 > KAMATERA_PRIVATE_KEY
             5083ae32-429d-428b-b7df-b2c901441bbb > KAMATERA_ROOT_PASSWORD
+            09171644-23c8-4b7f-9015-b2e5015a4572 > PLATFORM_USERNAME
+            ffa5e6f9-de6a-47fa-887e-b2e5015ae1a4 > PLATFORM_PASSWORD
 
       # Set up SSH connection
       - name: Set up SSH connection
@@ -279,8 +281,6 @@ jobs:
           VAR_WORKSPACE: ${{ inputs.workspace }}
           SECRET_PLATFORM_USERNAME: ${{ steps.get-secrets.outputs.PLATFORM_USERNAME }}
           SECRET_PLATFORM_PASSWORD: ${{ steps.get-secrets.outputs.PLATFORM_PASSWORD }}
-          SECRET_VERSIO_USERNAME : ${{ steps.get-secrets.outputs.VERSIO_USERNAME }}
-          SECRET_VERSIO_PASSWORD : ${{ steps.get-secrets.outputs.VERSIO_PASSWORD }}
         run: |
           echo "[*] Configuring swarm server ${{ matrix.ip }} ..."
           chmod +x deploy/scripts/configure-swarm-server.sh
