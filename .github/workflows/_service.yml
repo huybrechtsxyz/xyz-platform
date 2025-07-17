@@ -31,7 +31,7 @@ jobs:
   # This job will run if the cache is not hit or if the initialize input is set to true
   # Parses the output to find Swarm servers and sets them as a matrix for the next jobs
   setup:
-    name: Download Terraform Output
+    name: Setup Service
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     outputs:
@@ -85,9 +85,14 @@ jobs:
       # Store the service variables and secrets
       - name: Setup Variables
         run: |
-          echo "${{ inputs.variables }}" > ${{ env.VAR_PATH_TEMP }}/vars-${{ inputs.service }}.env
-          echo "${{ inputs.variables }}" > ${{ env.VAR_PATH_TEMP }}/secrets-${{ inputs.secrets }}.env
+          echo "${{ inputs.variables }}" > ${{ env.VAR_PATH_TEMP }}/${{ inputs.service }}.var.env
+          echo "${{ inputs.variables }}" > ${{ env.VAR_PATH_TEMP }}/${{ inputs.service }}.secrets.env
 
+      - name: Get Bitwarden
+        uses: ./.github/actions/get-bitwarden
+        with:
+          bitwarden_token: ${{ secrets.BITWARDEN_TOKEN }}
+          
   deployment:
     name: Deploy Service
     needs: ["setup"]
@@ -124,7 +129,7 @@ jobs:
       # Step: Configure Service
       - name: Configure Service
         env:
-          VAR_MATRIX: ${{ needs.restore.outputs.matrix }}
+          VAR_MATRIX: ${{ needs.setup.outputs.matrix }}
           VAR_ENVIRONMENT: ${{ inputs.environment }}
           VAR_WORKSPACE: ${{ inputs.workspace }}
           SECRET_VERSIO_USERNAME : ${{ steps.get-secrets.outputs.VERSIO_USERNAME }}
