@@ -76,6 +76,13 @@ Steps to get your Terraform Cloud API token:
 - Give it a descriptive name, e.g., platform-deploy.
 - Copy the token shown (you can’t retrieve it again).
 
+- Logon to HCP
+- Make an organization
+- Go to your settings an tokens
+- Create a Github App OAuth Token
+- go to bitwarden secret amnagement
+- create a new secret linked to the machine account
+
 ### 4. Set Up Bitwarden Secrets
 
 Secrets are securely managed in Bitwarden Secret Manager.

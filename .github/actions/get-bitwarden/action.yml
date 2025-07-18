@@ -1,0 +1,26 @@
+name: Get Bitwarden
+description: Installs Bitwarden CLI and authenticates using BITWARDEN_TOKEN
+
+inputs:
+  bitwarden_token:
+    description: Bitwarden session token
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Bitwarden CLI
+      shell: bash
+      run: |
+        curl -Lso bw.zip "https://vault.bitwarden.com/download/?app=cli&platform=linux"
+        unzip bw.zip -d /usr/local/bin
+        chmod +x /usr/local/bin/bw
+        bw --version
+
+    - name: Unlock Bitwarden Session
+      shell: bash
+      run: |
+        export BW_SESSION=$(bw unlock --raw "$BITWARDEN_TOKEN")
+        echo "BW_SESSION=$BW_SESSION" >> "$GITHUB_ENV"
+      env:
+        BITWARDEN_TOKEN: ${{ inputs.bitwarden_token }}
