@@ -36,20 +36,13 @@ jobs:
         uses: actions/checkout@v4
 
       # Restore Terraform Cache
-      - name: Restore Terraform Cache
-        id: restore-cache
-        uses: actions/cache/restore@v4
+      - name: Fetch Terraform Output
+        uses: ./.github/actions/get-terraform
         with:
-          path: ${{ env.VAR_PATH_TEMP }}/tf_output.json
-          key: terraform-output-${{ inputs.workspace }}
-
-      # Check if the artifact exists
-      - name: Validate Terraform Output
-        run: |
-          if [ ! -f ${{ env.VAR_PATH_TEMP }}/tf_output.json ]; then
-            echo "[!] Artifact terraform-output-${{ inputs.workspace }} not found or tf_output.json missing. Exiting."
-            exit 1
-          fi
+          workspace: ${{ inputs.workspace }}
+          environment: ${{ inputs.environment }}
+          VAR_PATH_TEMP: ${{ env.VAR_PATH_TEMP }}
+          TERRAFORM_API_TOKEN: ${{ secrets.TERRAFORM_API_TOKEN }}
 
       # Parse Terraform Output to find Manager Servers
       - name: Parse Swarm Servers
