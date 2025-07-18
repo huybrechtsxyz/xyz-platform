@@ -10,16 +10,11 @@ on:
       environment:
         required: true
         type: string
-      service:
-        required: true
-        type: string
-      variables:
+      services:
         required: true
         type: string
     secrets:
       BITWARDEN_TOKEN:
-        required: true
-      SECRET_TOKENS:
         required: true
 
 env:
@@ -27,17 +22,16 @@ env:
   VAR_PATH_TEMP: /tmp/app
 
 jobs:
-  # Download the Terraform output artifact and parse it to find Swarm servers
-  # This job will run if the cache is not hit or if the initialize input is set to true
-  # Parses the output to find Swarm servers and sets them as a matrix for the next jobs
+  # Setup the deployment of the service
   setup:
     name: Setup Service
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     outputs:
-      matrix: ${{ steps.parse.outputs.matrix }}
+      manager: ${{ steps.mgr.outputs.manager }}
+      matrix: ${{ steps.regs.outputs.matrix }}
     steps:
-      # Check out the repo
+      # Check out the platform repo
       - name: Check Out
         uses: actions/checkout@v4
 
@@ -57,9 +51,9 @@ jobs:
             exit 1
           fi
 
-      # Parse Terraform Output to find Swarm Servers
+      # Parse Terraform Output to find Manager Servers
       - name: Parse Swarm Servers
-        id: parse
+        id: mgr
         run: |
           # Read raw JSON
           matrix=$(jq -c '.' "${{ env.VAR_PATH_TEMP }}/tf_output.json")
@@ -75,27 +69,61 @@ jobs:
           MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
           echo "Using manager label: $MANAGER_ID"
           # Extract only the manager node
-          MANAGER_DATA=$(jq -c --arg label "$MANAGER_ID" '{ include: [ .include[] | select(.label == $label) ] }' "${{ env.VAR_PATH_TEMP }}/tf_output.json")
+          MANAGER_DATA=$(jq -c --arg label "$MANAGER_ID" '{ .include[] | select(.label == $label) }' "${{ env.VAR_PATH_TEMP }}/tf_output.json")
           echo "================"
           echo "Filtered manager data: $MANAGER_DATA"
           echo "================"
           # Export to GitHub Actions output
-          echo "matrix=$MANAGER_DATA" >> "$GITHUB_OUTPUT"
+          echo "manager=$MANAGER_DATA" >> "$GITHUB_OUTPUT"
 
-      # Store the service variables and secrets
-      - name: Setup Variables
+      # This step filters service definitions from the registry
+      # based on a list of requested service IDs (passed in as `inputs.services`).
+      # Example: inputs.services: "traefik,site"
+      # The script reads `registry/*.json`, each containing a `.service.id` field,
+      # and constructs a GitHub Actions matrix output including only the matched services.
+      # Output format:
+      # {
+      #   "include": [
+      #     { "id": "traefik", "name": "Traefik" },
+      #     { "id": "site", "name": "Website" }
+      #   ]
+      # }
+      - name: Parse service matrix
+        id: regs
         run: |
-          echo "${{ inputs.variables }}" > ${{ env.VAR_PATH_TEMP }}/${{ inputs.service }}.var.env
-          echo "${{ inputs.variables }}" > ${{ env.VAR_PATH_TEMP }}/${{ inputs.service }}.secrets.env
+          # inputs.services is a comma-separated list or JSON array of service IDs
+          SERVICES_JSON=$(jq -R '[split(",")[]]' <<< "${{ inputs.services }}")
 
-      - name: Get Bitwarden
-        uses: ./.github/actions/get-bitwarden
-        with:
-          bitwarden_token: ${{ secrets.BITWARDEN_TOKEN }}
-          
-  deployment:
-    name: Deploy Service
-    needs: ["setup"]
+          echo "Filtering for services: $SERVICES_JSON"
+          MATRIX='{ "include": ['
+
+          FIRST=true
+          for file in registry/*.json; do
+            ID=$(jq -r '.service.id' "$file")
+
+            # Check if the ID is in the input list
+            if jq -e --arg id "$ID" 'index($id)' <<< "$SERVICES_JSON" >/dev/null; then
+              SERVICE_JSON=$(jq -c '.service' "$file")
+
+              # Optional: enrich or customize structure here
+              ENTRY=$(jq -n --argjson svc "$SERVICE_JSON" '{ id: $svc.id, name: $svc.name }')
+
+              if [ "$FIRST" = true ]; then
+                MATRIX+="$ENTRY"
+                FIRST=false
+              else
+                MATRIX+=",$ENTRY"
+              fi
+            fi
+          done
+
+          MATRIX+='] }'
+          echo "Generated matrix: $MATRIX"
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Deploy Services
+    needs: [setup]
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     if: ${{ always() && !contains(needs.*.result, 'failure') }}
@@ -103,39 +131,31 @@ jobs:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
       # Check out the repo
-      - name: Check Out
+      - name: Check Out Platform
         uses: actions/checkout@v4
 
-      # Set up GitHub Secrets
-      - name: Get General Secrets
-        uses: bitwarden/sm-action@v2
-        id: get-secrets
+      # Load Bitwarden CLI (from reusable action or install directly)
+      - name: Setup Bitwarden CLI
+        uses: ./.github/actions/setup-bitwarden
         with:
-          access_token: ${{ secrets.BITWARDEN_TOKEN }}
-          secrets: |
-            f16fffe2-77b7-4d20-bf6c-b2c9015c71d3 > KAMATERA_PRIVATE_KEY
-            f53a76ab-b87f-4af0-9aa4-b2d1016aba2b > VERSIO_USERNAME
-            3d7bbfcd-18a5-4762-9064-b2d1016aef63 > VERSIO_PASSWORD
+          bitwarden_token: ${{ secrets.BITWARDEN_TOKEN }}
 
-      # Set up SSH connection
-      - name: Set up SSH connection
-        env:
-          KAMATERA_PRIVATE_KEY: ${{ steps.get-secrets.outputs.KAMATERA_PRIVATE_KEY }}
+      # Load service metadata from registry
+      - name: Load Service Metadata
+        id: load
         run: |
-          mkdir -p ~/.ssh
-          echo "$KAMATERA_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          SERVICE_ID="${{ matrix.id }}"
+          SERVICE_FILE="registry/${SERVICE_ID}.json"
+          echo "Reading $SERVICE_FILE"
+          SERVICE_JSON=$(cat "$SERVICE_FILE")
+          echo "service_json=$SERVICE_JSON" >> $GITHUB_OUTPUT
+          # Extract repo URL if needed for clone
+          REPO_URL=$(jq -r '.service.repository // "https://github.com/org/'"$SERVICE_ID"'.git"' <<< "$SERVICE_JSON")
+          echo "repo_url=$REPO_URL" >> $GITHUB_OUTPUT
 
-      # Step: Configure Service
-      - name: Configure Service
-        env:
-          VAR_MATRIX: ${{ needs.setup.outputs.matrix }}
-          VAR_ENVIRONMENT: ${{ inputs.environment }}
-          VAR_WORKSPACE: ${{ inputs.workspace }}
-          SECRET_VERSIO_USERNAME : ${{ steps.get-secrets.outputs.VERSIO_USERNAME }}
-          SECRET_VERSIO_PASSWORD : ${{ steps.get-secrets.outputs.VERSIO_PASSWORD }}
-        run: |
-          echo "[*] Configuring swarm server ${{ matrix.ip }} ..."
-          chmod +x deploy/scripts/configure-swarm-server.sh
-          ./deploy/scripts/configure-swarm-server.sh "${{ matrix.ip }}" "$VAR_MATRIX"
-          echo "[*] Configuring swarm server ${{ matrix.ip }} ...DONE"
+      # Clone the service repository
+      - name: Clone Service Repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.load.outputs.repo_url }}
+          path: service/${{ matrix.id }}
