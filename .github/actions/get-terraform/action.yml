@@ -63,5 +63,6 @@ runs:
 
     # Debug output
     - name: View Debug Output
+      shell: bash
       run: |
         jq '.' ./.temp/tf_output.json | head -n 20
