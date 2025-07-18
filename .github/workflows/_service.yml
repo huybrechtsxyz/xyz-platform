@@ -159,3 +159,8 @@ jobs:
         with:
           repository: ${{ steps.load.outputs.repo_url }}
           path: service/${{ matrix.id }}
+
+      # Configure Service
+      - name: Configure Service
+        run: |
+          echo Service ${{ matrix.id }}
