@@ -65,4 +65,4 @@ runs:
     - name: View Debug Output
       shell: bash
       run: |
-        jq '.' ./.temp/tf_output.json | head -n 20
+        jq '.' ${VAR_PATH_TEMP}/tf_output.json | head -n 20
