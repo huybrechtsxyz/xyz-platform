@@ -56,7 +56,7 @@ jobs:
           # Load helper functions
           source "./deploy/scripts/utilities.sh"
           # Determine workspace file
-          WORKSPACE_FILE=$(get_workspace_file "./deploy/workspaces" "${WORKSPACE}") || exit 1
+          WORKSPACE_FILE=$(get_workspace_file "./deploy/workspaces" "${{ inputs.workspace }}") || exit 1
           echo "Using workspace file: $WORKSPACE_FILE"
           # Determine manager label
           MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
