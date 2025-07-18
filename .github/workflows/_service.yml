@@ -54,9 +54,9 @@ jobs:
           echo "$matrix"
           echo "================"
           # Load helper functions
-          source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
+          source "./deploy/scripts/utilities.sh"
           # Determine workspace file
-          WORKSPACE_FILE=$(get_workspace_file "$(dirname "${BASH_SOURCE[0]}")/../../deploy/workspaces" "${WORKSPACE}") || exit 1
+          WORKSPACE_FILE=$(get_workspace_file "./deploy/workspaces" "${WORKSPACE}") || exit 1
           echo "Using workspace file: $WORKSPACE_FILE"
           # Determine manager label
           MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
