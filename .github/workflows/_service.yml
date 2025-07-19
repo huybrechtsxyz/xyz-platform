@@ -131,19 +131,28 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
+      # Do we need to run?
+      - name: Skip dummy entry
+        if: matrix.id == ''
+        run: |
+          echo "No services to deploy — skipping dummy matrix entry."
+
       # Check out the repo
       - name: Check Out Platform
         uses: actions/checkout@v4
+        if: matrix.id != ''
 
       # Load Bitwarden CLI (from reusable action or install directly)
       - name: Setup Bitwarden CLI
         uses: ./.github/actions/setup-bitwarden
+        if: matrix.id != ''
         with:
           bitwarden_token: ${{ secrets.BITWARDEN_TOKEN }}
 
       # Load service metadata from registry
       - name: Load Service Metadata
         id: load
+        if: matrix.id != ''
         run: |
           SERVICE_ID="${{ matrix.id }}"
           SERVICE_FILE="registry/${SERVICE_ID}.json"
@@ -157,11 +166,13 @@ jobs:
       # Clone the service repository
       - name: Clone Service Repo
         uses: actions/checkout@v4
+        if: matrix.id != ''
         with:
           repository: ${{ steps.load.outputs.repo_url }}
           path: service/${{ matrix.id }}
 
       # Configure Service
       - name: Configure Service
+        if: matrix.id != ''
         run: |
           echo Service ${{ matrix.id }}
