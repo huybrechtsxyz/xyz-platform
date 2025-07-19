@@ -132,7 +132,7 @@ jobs:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
       # Do we need to run?
-      - name: Skip dummy entry
+      - name: Skip Empty Service List
         if: matrix.id == ''
         run: |
           echo "No services to deploy — skipping dummy matrix entry."
