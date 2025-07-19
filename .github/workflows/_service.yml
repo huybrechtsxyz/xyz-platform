@@ -95,6 +95,7 @@ jobs:
           FILES=(registry/*.json)
           if [ ${#FILES[@]} -eq 0 ]; then
             echo "No JSON files found in registry/"
+            echo "matrix=[]" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
