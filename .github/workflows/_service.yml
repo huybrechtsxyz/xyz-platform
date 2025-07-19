@@ -62,7 +62,7 @@ jobs:
           MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
           echo "Using manager label: $MANAGER_ID"
           # Extract only the manager node
-          MANAGER_DATA=$(jq -c --arg label "$MANAGER_ID" '{ .include[] | select(.label == $label) }' "${{ env.VAR_PATH_TEMP }}/tf_output.json")
+          MANAGER_DATA=$(jq -c --arg label "$MANAGER_ID" '.include[] | select(.label == $label)' "${{ env.VAR_PATH_TEMP }}/tf_output.json")
           echo "================"
           echo "Filtered manager data: $MANAGER_DATA"
           echo "================"
