@@ -91,7 +91,14 @@ jobs:
           MATRIX='{ "include": ['
 
           FIRST=true
-          for file in registry/*.json; do
+          shopt -s nullglob
+          FILES=(registry/*.json)
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "No JSON files found in registry/"
+            exit 0
+          fi
+
+          for file in "${FILES[@]}"; do
             ID=$(jq -r '.service.id' "$file")
 
             # Check if the ID is in the input list
