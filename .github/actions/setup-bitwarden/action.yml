@@ -10,6 +10,7 @@ runs:
   using: "composite"
   steps:
     - name: Install Bitwarden Secrets Manager CLI
+      shell: bash
       run: |
         curl -L "https://vault.bitwarden.com/download/?app=secrets-manager-cli&platform=linux" -o bws.zip
         unzip bws.zip -d /usr/local/bin
@@ -17,5 +18,6 @@ runs:
         bws --version
 
     - name: Authenticate with Bitwarden Secrets Manager
+      shell: bash
       run: |
         export BWS_ACCESS_TOKEN=${{ inputs.bitwarden_token }}
