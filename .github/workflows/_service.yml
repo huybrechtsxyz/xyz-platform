@@ -132,10 +132,10 @@ jobs:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
       # Do we need to run?
-      - name: Skip Empty Service List
+      - name: Skip Deployment
         if: matrix.id == ''
         run: |
-          echo "No services to deploy — skipping dummy matrix entry."
+          echo "No services to deploy — skipping empty matrix list."
 
       # Check out the repo
       - name: Check Out Platform
@@ -175,4 +175,6 @@ jobs:
       - name: Configure Service
         if: matrix.id != ''
         run: |
+          echo Manager IP ${{ needs.setup.outputs.manager }}
           echo Service ${{ matrix.id }}
+          echo Repo ${{ steps.load.outputs.repo_url }}
