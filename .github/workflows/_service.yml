@@ -104,7 +104,7 @@ jobs:
             ID=$(jq -r '.service.id' "$file")
 
             # Include everything if SERVICES=* or match against SERVICES_JSON
-            if [[ "$SERVICES" == "*" ]] || jq -e --arg id "$ID" 'index($id)' <<< "$SERVICES_JSON" >/dev/null; then
+            if [[ "${{ inputs.services }}" == "*" ]] || jq -e --arg id "$ID" 'index($id)' <<< "$SERVICES_JSON" >/dev/null; then
               SERVICE_JSON=$(jq -c '.service' "$file")
 
               # Optional: enrich or customize structure here
