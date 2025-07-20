@@ -124,6 +124,7 @@ jobs:
           COMPACT_MATRIX=$(jq -c '.' <<< "$MATRIX")
           echo "Generated matrix: $COMPACT_MATRIX"
           echo "matrix=$COMPACT_MATRIX" >> "$GITHUB_OUTPUT"
+
   deploy:
     name: Deploy Services
     needs: [setup]
