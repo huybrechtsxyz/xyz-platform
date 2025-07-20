@@ -77,8 +77,8 @@ jobs:
       # Output format:
       # {
       #   "include": [
-      #     { "id": "traefik", "name": "Traefik" },
-      #     { "id": "site", "name": "Website" }
+      #     { "id": "traefik" },
+      #     { "id": "site" }
       #   ]
       # }
       - name: Parse service matrix
@@ -108,7 +108,8 @@ jobs:
               SERVICE_JSON=$(jq -c '.service' "$file")
 
               # Optional: enrich or customize structure here
-              ENTRY=$(jq -n --argjson svc "$SERVICE_JSON" '{ id: $svc.id, name: $svc.name }')
+              #ENTRY=$(jq -n --argjson svc "$SERVICE_JSON" '{ id: $svc.id, name: $svc.name }')
+              ENTRY=$(jq -n --argjson svc "$SERVICE_JSON" '{ id: $svc.id }')
 
               if [ "$FIRST" = true ]; then
                 MATRIX+="$ENTRY"
