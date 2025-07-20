@@ -120,9 +120,9 @@ jobs:
           done
 
           MATRIX+='] }'
-          echo "Generated matrix: $MATRIX"
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
-
+          COMPACT_MATRIX=$(jq -c '.' <<< "$MATRIX")
+          echo "Generated matrix: $COMPACT_MATRIX"
+          echo "matrix=$COMPACT_MATRIX" >> "$GITHUB_OUTPUT"
   deploy:
     name: Deploy Services
     needs: [setup]
