@@ -6,7 +6,7 @@ set -euo pipefail
 : "${VAR_SERVICEDATA:?Missing SERVICEDATA env var}"
 : "${VAR_SERVERINFO:?Missing SERVERINFO env var}"
 
-source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/utilities.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/utilities.sh"
 
 create_variables_secrets() {
   SERVICE_PATH="/service/${SERVICE_ID}/src"
