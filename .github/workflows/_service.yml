@@ -28,8 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     outputs:
-      manager: ${{ steps.mgr.outputs.manager }}
-      matrix: ${{ steps.regs.outputs.matrix }}
+      server: ${{ steps.manager.outputs.serverinfo }}
+      matrix: ${{ steps.services.outputs.matrix }}
     steps:
       # Check out the platform repo
       - name: Check Out
@@ -46,7 +46,7 @@ jobs:
 
       # Parse Terraform Output to find Manager Servers
       - name: Parse Swarm Servers
-        id: mgr
+        id: manager
         run: |
           # Read raw JSON
           matrix=$(jq -c '.' "${{ env.VAR_PATH_TEMP }}/tf_output.json")
@@ -67,7 +67,7 @@ jobs:
           echo "Filtered manager data: $MANAGER_DATA"
           echo "================"
           # Export to GitHub Actions output
-          echo "manager=$MANAGER_DATA" >> "$GITHUB_OUTPUT"
+          echo "serverinfo=$MANAGER_DATA" >> "$GITHUB_OUTPUT"
 
       # This step filters service definitions from the registry
       # based on a list of requested service IDs (passed in as `inputs.services`).
@@ -82,7 +82,7 @@ jobs:
       #   ]
       # }
       - name: Parse service matrix
-        id: regs
+        id: services
         run: |
           # inputs.services is a comma-separated list or JSON array of service IDs
           SERVICES_JSON=$(jq -R '[split(",")[]]' <<< "${{ inputs.services }}")
@@ -145,39 +145,48 @@ jobs:
         uses: actions/checkout@v4
         if: matrix.id != ''
 
-      # Load Bitwarden CLI (from reusable action or install directly)
-      - name: Setup Bitwarden CLI
-        uses: ./.github/actions/setup-bitwarden
-        if: matrix.id != ''
-        with:
-          bitwarden_token: ${{ secrets.BITWARDEN_TOKEN }}
-
       # Load service metadata from registry
+      # Outputs
+      # - repository
+      # - ref
+      # - servicedata
       - name: Load Service Metadata
         id: load
         if: matrix.id != ''
         run: |
-          SERVICE_ID="${{ matrix.id }}"
-          SERVICE_FILE="registry/${SERVICE_ID}.json"
+          SERVICE_FILE="registry/${{ matrix.id }}.json"
           echo "Reading $SERVICE_FILE"
-          SERVICE_JSON=$(cat "$SERVICE_FILE")
-          echo "service_json=$SERVICE_JSON" >> $GITHUB_OUTPUT
-          # Extract repo URL if needed for clone
-          REPO_URL=$(jq -r '.service.repository // "https://github.com/org/'"$SERVICE_ID"'.git"' <<< "$SERVICE_JSON")
-          echo "repo_url=$REPO_URL" >> $GITHUB_OUTPUT
+          SERVICE_DATA=$(jq -c . "$SERVICE_FILE")
+          echo "Reading Repository and Ref"
+          SERVICE_REPO=$(jq -r '.service.repo' <<< "$SERVICE_JSON")
+          SERVICE_REF=$(jq -r '.service.ref // "main"' <<< "$SERVICE_JSON")
+          echo "repository=$SERVICE_REPO" >> "$GITHUB_OUTPUT"
+          echo "ref=$SERVICE_REF" >> "$GITHUB_OUTPUT"
+          echo "service=$SERVICE_DATA" >> "$GITHUB_OUTPUT"
 
       # Clone the service repository
       - name: Clone Service Repo
         uses: actions/checkout@v4
         if: matrix.id != ''
         with:
-          repository: ${{ steps.load.outputs.repo_url }}
+          repository: ${{ steps.load.outputs.repository }}
+          ref: ${{ steps.load.outputs.ref }}
           path: service/${{ matrix.id }}
+
+      # Fetch Bitwarden Secrets
+      - name: Fetch Bitwarden CLI
+        uses: ./.github/actions/get-bitwarden
+        if: matrix.id != ''
+        with:
+          bitwarden_token: ${{ secrets.BITWARDEN_TOKEN }}
 
       # Configure Service
       - name: Configure Service
         if: matrix.id != ''
         run: |
-          echo Manager IP ${{ needs.setup.outputs.manager }}
           echo Service ${{ matrix.id }}
-          echo Repo ${{ steps.load.outputs.repo_url }}
+          echo Service ${{ steps.load.outputs.service }}
+          echo Server Info ${{ needs.setup.outputs.server }}
+          echo Repo ${{ steps.load.outputs.repository }}
+          echo Ref ${{ steps.load.outputs.ref }}
+          echo Ref ${{ steps.load.outputs.ref }}
