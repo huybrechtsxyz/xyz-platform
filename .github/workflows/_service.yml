@@ -201,5 +201,5 @@ jobs:
         run: |
           echo "[*] Deploying service ${{ matrix.ip }} ..."
           chmod +x deploy/scripts/deploy-swarm-services.sh
-          .deploy/scripts/deploy-swarm-services.sh
+          ./deploy/scripts/deploy-swarm-services.sh
           echo "[*] Deploying service ${{ matrix.ip }} ... DONE"
