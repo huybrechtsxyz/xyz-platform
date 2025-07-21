@@ -173,7 +173,6 @@ jobs:
           echo Server Info ${{ needs.setup.outputs.server }}
           echo Repo ${{ steps.load.outputs.repository }}
           echo Ref ${{ steps.load.outputs.ref }}
-          echo Ref ${{ steps.load.outputs.ref }}
 
       # Clone the service repository
       - name: Clone Service Repo
@@ -194,10 +193,13 @@ jobs:
       # Configure Service
       - name: Configure Service
         if: matrix.id != ''
+        env:
+          VAR_WORKSPACE: ${{ inputs.workspace }}
+          VAR_ENVIRONMENT: ${{ inputs.environment }}
+          VAR_SERVICEDATA: ${{ steps.load.outputs.service }}
+          VAR_SERVERINFO: ${{ needs.setup.outputs.server }}
         run: |
-          echo Service ${{ matrix.id }}
-          echo Service ${{ steps.load.outputs.service }}
-          echo Server Info ${{ needs.setup.outputs.server }}
-          echo Repo ${{ steps.load.outputs.repository }}
-          echo Ref ${{ steps.load.outputs.ref }}
-          echo Ref ${{ steps.load.outputs.ref }}
+          echo "[*] Deploying service ${{ matrix.ip }} ..."
+          chmod +x deploy/scripts/deploy-swarm-services.sh
+          .deploy/scripts/deploy-swarm-services.sh
+          echo "[*] Deploying service ${{ matrix.ip }} ... DONE"

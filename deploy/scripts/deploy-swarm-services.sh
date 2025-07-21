@@ -1,12 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-# Usage: ./deploy.sh <service_id> <environment>
-SERVICE_ID="$1"
-ENVIRONMENT="$2"
-
-: "${SERVICE_ID:?Missing SERVICE_ID env var}"
-: "${ENVIRONMENT:?Missing ENVIRONMENT env var}"
+: "${VAR_WORKSPACE:?Missing WORKSPACE env var}"
+: "${VAR_ENVIRONMENT:?Missing ENVIRONMENT env var}"
+: "${VAR_SERVICEDATA:?Missing SERVICEDATA env var}"
+: "${VAR_SERVERINFO:?Missing SERVERINFO env var}"
 
 source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/utilities.sh"
 
@@ -33,7 +31,13 @@ create_variables_secrets() {
 }
 
 main() {
-  create_variables_secrets
+  echo "Reading service and information"
+  SERVICE_ID=$(jq -r '.service.id' <<< "$VAR_SERVICEDATA")
+  SERVER_IP=$(jq -r '.ip' <<< "$VAR_SERVERINFO")
+
+  log INFO "[*] Deploying service $SERVICE_ID on $SERVER_IP ..."
+
+  log INFO "[*] Deploying service $SERVICE_ID on $SERVER_IP ... DONE"
 }
 
 main
