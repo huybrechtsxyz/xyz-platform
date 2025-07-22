@@ -431,3 +431,53 @@ validate_volume_configuration() {
 
   log INFO "[+] Volume '$volname' configuration validated successfully."
 }
+
+# Function to get the service definition file path
+# Usage: get_service_file <TEMP_PATH> <SERVICE_ID>
+# Example: get_service_file /tmp/services my_service
+# This function constructs the path to the service definition file (service.json)
+# using the specified temporary path and service ID. If the file exists, it
+# returns the full path. If not, it logs an error and returns 1.
+get_service_file() {
+  local TEMP_PATH="$1"
+  local SERVICE_ID="$2"
+
+  if [[ -z "$TEMP_PATH" || -z "$SERVICE_ID" ]]; then
+    log ERROR "[!] get_service_file requires TEMP_PATH and SERVICE_ID arguments."
+    return 1
+  fi
+
+  local SERVICE_FILE="$TEMP_PATH/$SERVICE_ID/service.json"
+
+  if [[ ! -f "$SERVICE_FILE" ]]; then
+    log ERROR "[!] Service definition file not found: $SERVICE_FILE"
+    return 1
+  fi
+
+  echo "$SERVICE_FILE"
+}
+
+# Function to get the service registry file path
+# Usage: get_service_file <TEMP_PATH> <SERVICE_ID>
+# Example: get_service_file /tmp/services my_service
+# This function constructs the path to the service registry file (registry.json)
+# using the specified temporary path and service ID. If the file exists, it
+# returns the full path. If not, it logs an error and returns 1.
+get_registry_file() {
+  local TEMP_PATH="$1"
+  local SERVICE_ID="$2"
+
+  if [[ -z "$TEMP_PATH" || -z "$SERVICE_ID" ]]; then
+    log ERROR "[!] get_registry_file requires TEMP_PATH and SERVICE_ID arguments."
+    return 1
+  fi
+
+  local REG_FILE="$TEMP_PATH/$SERVICE_ID/registry.json"
+
+  if [[ ! -f "$SERVICE_FILE" ]]; then
+    log ERROR "[!] Registry definition file not found: $REG_FILE"
+    return 1
+  fi
+
+  echo "$REG_FILE"
+}

@@ -142,7 +142,7 @@ main() {
   log INFO "[*] Deploying service $SERVICE_ID on $MANAGER_IP ..."
 
   # Save the service data and server info for the service
-  echo "$VAR_SERVERINFO" > "$SERVICE_PATH/config/repository.json"
+  echo "$VAR_SERVICEDATA" > "$SERVICE_PATH/config/registry.json"
 
   # Create variable file for the service
   if ! create_environment_files; then
