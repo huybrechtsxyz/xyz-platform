@@ -5,11 +5,11 @@ HOSTNAME=$(hostname)
 : "${WORKSPACE:?Missing WORKSPACE env var}"
 : "${PATH_TEMP:?Missing PATH_TEMP env var}"
 
-# All files are either in $PATH_TEMP/src or $PATH_TEMP/deploy!
+# All files are either in $PATH_TEMP/.config or $PATH_TEMP/.deploy!
 log INFO "[*] Getting workspace and terraform files"
-WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP/src" "$WORKSPACE") || exit 1
+WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP/.config" "$WORKSPACE") || exit 1
 log INFO "[*] Getting workspace and terraform files $WORKSPACE_FILE"
-TERRAFORM_FILE=$(get_terraform_file "$PATH_TEMP/src") || exit 1
+TERRAFORM_FILE=$(get_terraform_file "$PATH_TEMP/.config") || exit 1
 log INFO "[*] Getting workspace and terraform files $TERRAFORM_FILE"
 
 # Determine my server id
@@ -199,7 +199,7 @@ create-fs-cluster() {
 # It reads the workspace file to get the paths and mount points for each server
 # It then creates the directories on each server via SSH
 # It then creates the GlusterFS volumes based on the paths
-# It then creates environment variables for the paths > /PATH_TEMP/src/variables.env
+# It then creates environment variables for the paths > /PATH_TEMP/.config/variables.env
 # At the end, it starts the volumes
 # ------------------------------------------------------------------------------
 # NOTE: This function uses 'force' when creating GlusterFS volumes.
@@ -279,7 +279,7 @@ create-fs-volumes() {
       commands+=("$fullpath")
 
       # Add to environment variables file
-      echo "PATH_${server^^}_${mounttype^^}=$fullpath" >> "$PATH_TEMP/src/variables.env"
+      echo "PATH_${server^^}_${mounttype^^}=$fullpath" >> "$PATH_TEMP/.config/variables.env"
 
       # Add to bricks array for GlusterFS volume creation
       # Use workspace prefix in the volume name
@@ -369,7 +369,7 @@ main_manager() {
   create_docker_network "lan-test"
   create_docker_network "lan-staging"
   create_docker_network "lan-production"
-  load_docker_secrets "$PATH_TEMP/src/secrets.env"
+  load_docker_secrets "$PATH_TEMP/.config/secrets.env"
   create_docker_labels || {
     log ERROR "[!] Failed to create node labels."
     return 1
@@ -417,7 +417,7 @@ main() {
 
   log INFO "[*] Remote server cleanup..."
   chmod 755 "$PATH_CONFIG"/*
-  rm -f "$PATH_CONFIG"/develop.env
+  rm -f "$PATH_CONFIG"/variables.env
   rm -f "$PATH_CONFIG"/secrets.env
   rm -rf "/tmp/app/"*
 

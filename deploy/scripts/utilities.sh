@@ -59,6 +59,59 @@ generate_env_file() {
   log INFO "[+] Environment file generated at '$output_file'"
 }
 
+# Merge two environment files
+# Usage: merge_env_file <FILE1> <FILE2> [OUTPUT_FILE]
+# Example: merge_env_file base.env override.env # prints to stdout
+# Example: merge_env_file base.env override.env base.env # overwrites base.env
+# Values from the first file are preserved.
+# Duplicate keys in the second file are ignored.
+# If OUTPUT_FILE is provided (even same as FILE1), merged result is written to it.
+merge_env_file() {
+  local FILE1="$1"
+  local FILE2="$2"
+  local OUTPUT_FILE="$3"
+
+  if [[ -z "$FILE1" || -z "$FILE2" || ! -f "$FILE1" || ! -f "$FILE2" ]]; then
+    echo "Usage: merge_env_file <FILE1> <FILE2> [OUTPUT_FILE]"
+    return 1
+  fi
+
+  local TMP_OUTPUT
+  TMP_OUTPUT=$(mktemp)
+
+  declare -A env_map
+
+  # Load first file — values from here are preserved
+  while IFS='=' read -r key value; do
+    [[ -z "$key" || "$key" =~ ^# ]] && continue
+    key=$(echo "$key" | xargs)
+    env_map["$key"]="$value"
+  done < "$FILE1"
+
+  # Load second file — skip keys that already exist
+  while IFS='=' read -r key value; do
+    [[ -z "$key" || "$key" =~ ^# ]] && continue
+    key=$(echo "$key" | xargs)
+    if [[ -z "${env_map[$key]+_}" ]]; then
+      env_map["$key"]="$value"
+    fi
+  done < "$FILE2"
+
+  # Write to temporary file first
+  for key in "${!env_map[@]}"; do
+    echo "$key=${env_map[$key]}"
+  done | sort > "$TMP_OUTPUT"
+
+  # Move temp file to output (or FILE1 if output not specified)
+  if [[ -n "$OUTPUT_FILE" ]]; then
+    mv "$TMP_OUTPUT" "$OUTPUT_FILE"
+  else
+    cat "$TMP_OUTPUT"
+    rm "$TMP_OUTPUT"
+  fi
+}
+
+
 # Function to create a Docker network if it doesn't exist
 # Usage: create_docker_network <network_name>
 # Example: create_docker_network my_overlay_network

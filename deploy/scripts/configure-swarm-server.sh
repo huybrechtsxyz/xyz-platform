@@ -27,9 +27,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
 # Creates secrets.env
 # Creates terraform.json file with the provided MATRIX
 create_secret_file() {
-  generate_env_file "VAR_" "./src/variables.env"
-  generate_env_file "SECRET_" "./src/secrets.env"
-  echo "$MATRIX" > "./src/terraform.json"
+  generate_env_file "VAR_" "./deploy/variables.env"
+  generate_env_file "SECRET_" "./deploy/secrets.env"
+  echo "$MATRIX" > "./deploy/terraform.json"
 }
 
 # Initializes the remote server by creating necessary directories
@@ -38,7 +38,7 @@ create_secret_file() {
 init_copy_files() {
 log INFO "[*] Initializing REMOTE configuration..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-mkdir -p "$VAR_PATH_TEMP" "$VAR_PATH_TEMP"/deploy "$VAR_PATH_TEMP"/src
+mkdir -p "$VAR_PATH_TEMP" "$VAR_PATH_TEMP/.deploy" "$VAR_PATH_TEMP/.config"
 echo "[*] Initializing REMOTE server...DONE"
 EOF
 then
@@ -57,16 +57,16 @@ copy_config_files() {
   log INFO "[*] Copying environment files to remote server...Deploy"
   scp -o StrictHostKeyChecking=no \
     ./deploy/scripts/*.* \
-    root@"$REMOTE_IP":"$VAR_PATH_TEMP"/deploy || {
+    root@"$REMOTE_IP":"$VAR_PATH_TEMP/.deploy" || {
       log ERROR "[x] Failed to transfer configuration scripts to remote server"
       exit 1
     }
   log INFO "[*] Copying environment files to remote server...Sources"
   scp -o StrictHostKeyChecking=no \
     ./deploy/workspaces/*.* \
+    ./deploy/*.* \
     ./scripts/*.sh \
-    ./src/*.* \
-    root@"$REMOTE_IP":"$VAR_PATH_TEMP"/src || {
+    root@"$REMOTE_IP":"$VAR_PATH_TEMP/.config" || {
       log ERROR "[x] Failed to transfer configuration scripts to remote server"
       exit 1
     }
@@ -85,12 +85,12 @@ echo "[*] Executing on REMOTE server..."
 echo "[*] Using temporary path: $VAR_PATH_TEMP"
 shopt -s nullglob
 set -a
-source "$VAR_PATH_TEMP/src/variables.env"
-source "$VAR_PATH_TEMP/src/secrets.env"
-source "$VAR_PATH_TEMP/deploy/utilities.sh"
+source "$VAR_PATH_TEMP/.config/variables.env"
+source "$VAR_PATH_TEMP/.config/secrets.env"
+source "$VAR_PATH_TEMP/.deploy/utilities.sh"
 set +a
-chmod +x "$VAR_PATH_TEMP/deploy/configure-remote-server.sh"
-"$VAR_PATH_TEMP/deploy/configure-remote-server.sh"
+chmod +x "$VAR_PATH_TEMP/.deploy/configure-remote-server.sh"
+"$VAR_PATH_TEMP/.deploy/configure-remote-server.sh"
 echo "[*] Executing on REMOTE server...DONE"
 EOF
 then

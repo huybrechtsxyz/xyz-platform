@@ -28,8 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     outputs:
-      server: ${{ steps.manager.outputs.serverinfo }}
-      matrix: ${{ steps.services.outputs.matrix }}
+      terraform: ${{ steps.terraform.outputs.terraform }}
+      manager: ${{ steps.servers.outputs.manager }}
+      services: ${{ steps.services.outputs.services }}
     steps:
       # Check out the platform repo
       - name: Check Out
@@ -44,15 +45,21 @@ jobs:
           VAR_PATH_TEMP: ${{ env.VAR_PATH_TEMP }}
           TERRAFORM_API_TOKEN: ${{ secrets.TERRAFORM_API_TOKEN }}
 
-      # Parse Terraform Output to find Manager Servers
-      - name: Parse Swarm Servers
-        id: manager
+      # Parse Terraform Output
+      - name: Parse Terraform Output
+        id: terraform
         run: |
-          # Read raw JSON
+          # Parse Terraform Output
           matrix=$(jq -c '.' "${{ env.VAR_PATH_TEMP }}/tf_output.json")
           echo "================"
           echo "$matrix"
           echo "================"
+          echo "terraform=$matrix" >> "$GITHUB_OUTPUT"
+
+      # Parse Terraform Output to find Manager Servers
+      - name: Parse Swarm Servers
+        id: servers
+        run: |
           # Load helper functions
           source "./deploy/scripts/utilities.sh"
           # Determine workspace file
@@ -63,32 +70,21 @@ jobs:
           echo "Using manager label: $MANAGER_ID"
           # Extract only the manager node
           MANAGER_DATA=$(jq -c --arg label "$MANAGER_ID" '.include[] | select(.label == $label)' "${{ env.VAR_PATH_TEMP }}/tf_output.json")
-          echo "================"
-          echo "Filtered manager data: $MANAGER_DATA"
-          echo "================"
+          echo "Using manager data: $MANAGER_DATA"
           # Export to GitHub Actions output
-          echo "serverinfo=$MANAGER_DATA" >> "$GITHUB_OUTPUT"
+          echo "manager=$MANAGER_DATA" >> "$GITHUB_OUTPUT"
 
-      # This step filters service definitions from the registry
-      # based on a list of requested service IDs (passed in as `inputs.services`).
+      # This step filters service definitions from the registry based on a list of requested service IDs (passed in as `inputs.services`).
+      # The script reads `registry/*.json`, each containing a `.service.id` field, and constructs a GitHub Actions matrix output including only the matched services.
       # Example: inputs.services: "traefik,site"
-      # The script reads `registry/*.json`, each containing a `.service.id` field,
-      # and constructs a GitHub Actions matrix output including only the matched services.
-      # Output format:
-      # {
-      #   "include": [
-      #     { "id": "traefik" },
-      #     { "id": "site" }
-      #   ]
-      # }
-      - name: Parse service matrix
+      # Output format: { "include": [ { "id": "traefik" }, { "id": "site" } ] }
+      - name: Parse Registry Services
         id: services
         run: |
           # inputs.services is a comma-separated list or JSON array of service IDs
           SERVICES_JSON=$(jq -R '[split(",")[]]' <<< "${{ inputs.services }}")
-
           echo "Filtering for services: $SERVICES_JSON"
-          
+          # Check for an empty registry
           FIRST=true
           shopt -s nullglob
           FILES=(registry/*.json)
@@ -97,20 +93,16 @@ jobs:
             echo 'matrix={"include": [{ "id": "", "name": "" }]}' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
+          # Loop registry
           MATRIX='{ "include": ['
-
           for file in "${FILES[@]}"; do
             ID=$(jq -r '.service.id' "$file")
-
             # Include everything if SERVICES=* or match against SERVICES_JSON
             if [[ "${{ inputs.services }}" == "*" ]] || jq -e --arg id "$ID" 'index($id)' <<< "$SERVICES_JSON" >/dev/null; then
               SERVICE_JSON=$(jq -c '.service' "$file")
-
               # Optional: enrich or customize structure here
               #ENTRY=$(jq -n --argjson svc "$SERVICE_JSON" '{ id: $svc.id, name: $svc.name }')
               ENTRY=$(jq -n --argjson svc "$SERVICE_JSON" '{ id: $svc.id }')
-
               if [ "$FIRST" = true ]; then
                 MATRIX+="$ENTRY"
                 FIRST=false
@@ -119,11 +111,11 @@ jobs:
               fi
             fi
           done
-
           MATRIX+='] }'
+          # Prepare output
           COMPACT_MATRIX=$(jq -c '.' <<< "$MATRIX")
           echo "Generated matrix: $COMPACT_MATRIX"
-          echo "matrix=$COMPACT_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "services=$COMPACT_MATRIX" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: Deploy Services
@@ -132,7 +124,7 @@ jobs:
     environment: ${{ inputs.environment }}
     if: ${{ always() && !contains(needs.*.result, 'failure') }}
     strategy:
-      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.setup.outputs.services) }}
     steps:
       # Do we need to run?
       - name: Skip Deployment
@@ -146,10 +138,7 @@ jobs:
         if: matrix.id != ''
 
       # Load service metadata from registry
-      # Outputs
-      # - repository
-      # - ref
-      # - servicedata
+      # Outputs - repository - ref - servicedata
       - name: Load Service Metadata
         id: load
         if: matrix.id != ''
@@ -162,7 +151,7 @@ jobs:
           SERVICE_REF=$(jq -r '.service.ref // "main"' <<< "$SERVICE_DATA")
           echo "repository=$SERVICE_REPO" >> "$GITHUB_OUTPUT"
           echo "ref=$SERVICE_REF" >> "$GITHUB_OUTPUT"
-          echo "service=$SERVICE_DATA" >> "$GITHUB_OUTPUT"
+          echo "serviceinfo=$SERVICE_DATA" >> "$GITHUB_OUTPUT"
 
       # Debug Service Info
       - name: Debug Service Info
@@ -170,7 +159,7 @@ jobs:
         run: |
           echo Service ${{ matrix.id }}
           echo Service ${{ steps.load.outputs.service }}
-          echo Server Info ${{ needs.setup.outputs.server }}
+          echo Server Info ${{ needs.setup.outputs.manager }}
           echo Repo ${{ steps.load.outputs.repository }}
           echo Ref ${{ steps.load.outputs.ref }}
 
@@ -184,7 +173,7 @@ jobs:
           path: service/${{ matrix.id }}
 
       # Fetch Bitwarden Secrets
-      - name: Fetch Bitwarden CLI
+      - name: Setup Bitwarden CLI
         uses: ./.github/actions/get-bitwarden
         if: matrix.id != ''
         with:
@@ -196,8 +185,10 @@ jobs:
         env:
           VAR_WORKSPACE: ${{ inputs.workspace }}
           VAR_ENVIRONMENT: ${{ inputs.environment }}
-          VAR_SERVICEDATA: ${{ steps.load.outputs.service }}
-          VAR_SERVERINFO: ${{ needs.setup.outputs.server }}
+          VAR_SERVICEDATA: ${{ steps.load.outputs.serviceinfo }}
+          VAR_SERVERINFO: ${{ needs.setup.outputs.manager }}
+          VAR_TERRAFORM: ${{ needs.setup.outputs.terraform }}
+          VAR_PATH_TEMP: ${{ env.VAR_PATH_TEMP }}
         run: |
           echo "[*] Deploying service ${{ matrix.ip }} ..."
           chmod +x deploy/scripts/deploy-swarm-services.sh
