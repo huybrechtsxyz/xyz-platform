@@ -15,6 +15,16 @@ MANAGER_IP=$(jq -r '.ip' <<< "$VAR_SERVERINFO")
 SERVICE_ID=$(jq -r '.service.id' <<< "$VAR_SERVICEDATA")
 SERVICE_PATH="./service/$SERVICE_ID/"
 
+if [[ -z "$MANAGER_IP" ]]; then
+  echo "Error: MANAGER_IP is null or missing"
+  exit 1
+fi
+
+if [[ -z "$SERVICE_ID" ]]; then
+  echo "Error: SERVICE_ID is null or missing"
+  exit 1
+fi
+
 # Replaces the environment.secrets.env file with real values from bitwarden
 # Creates or updates the environment file with required values
 # Get the VAR_ variables in a file and merge the appropriate service vars
@@ -50,8 +60,12 @@ create_environment_files() {
   log INFO "Fetching variables for service ..."
   generate_env_file "VAR_" "$SERVICE_PATH/config/variables.env"
   generate_env_file "SECRET_" "$SERVICE_PATH/config/secrets.env"
+
+  log INFO "Merging variables for service ..."
   merge_env_file "$SERVICE_PATH/config/variables.env" "$SERVICE_PATH/config/$VAR_ENVIRONMENT.secrets.env" "$SERVICE_PATH/config/variables.env"
   merge_env_file "$SERVICE_PATH/config/secrets.env" "$SERVICE_PATH/config/$VAR_ENVIRONMENT.secrets.tmp" "$SERVICE_PATH/config/secrets.env"
+
+  log INFO "Removing temporary secrets ..."
   rm "$SERVICE_PATH/config/$VAR_ENVIRONMENT.secrets.tmp"
   log INFO "Fetching variables for service ...DONE"
 }
@@ -62,7 +76,7 @@ create_environment_files() {
 init_copy_files() {
 log INFO "[*] Initializing REMOTE configuration..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-mkdir -p "$VAR_PATH_TEMP" "$VAR_PATH_TEMP/$SERVICE_ID"
+mkdir -p "$VAR_PATH_TEMP" "$VAR_PATH_TEMP/.deploy" "$VAR_PATH_TEMP/$SERVICE_ID"
 echo "[*] Initializing REMOTE server...DONE"
 EOF
 then
@@ -78,12 +92,18 @@ fi
 copy_service_files() {
   log INFO "[*] Copying service files to remote server..."
   shopt -s nullglob
+  log INFO "[*] Copying service files to remote server...Deploy"
+  scp -o StrictHostKeyChecking=no \
+    ./deploy/scripts/* \
+    root@"$MANAGER_IP":"$VAR_PATH_TEMP/.deploy/" || {
+      log ERROR "[x] Failed to transfer configuration scripts to remote server"
+      exit 1
+    }
+  log INFO "[*] Copying service files to remote server...Service"
+  shopt -s nullglob
   scp -o StrictHostKeyChecking=no \
     $SERVICE_PATH/config/*.* \
     $SERVICE_PATH/scripts/*.sh \
-    ./deploy/scripts/deploy-remote-services.sh \
-    ./deploy/scripts/libutils.sh \
-    ./deploy/scripts/utilities.sh \
     root@"$MANAGER_IP":"$VAR_PATH_TEMP/$SERVICE_ID/" || {
       log ERROR "[x] Failed to transfer configuration scripts to remote server"
       exit 1
@@ -105,10 +125,10 @@ shopt -s nullglob
 set -a
 source "$VAR_PATH_TEMP/$SERVICE_ID/variables.env"
 source "$VAR_PATH_TEMP/$SERVICE_ID/secrets.env"
-source "$VAR_PATH_TEMP/$SERVICE_ID/utilities.env"
+source "$VAR_PATH_TEMP/.deploy/utilities.env"
 set +a
-chmod +x "$VAR_PATH_TEMP/.deploy/configure-remote-server.sh"
-"$VAR_PATH_TEMP/.deploy/configure-remote-server.sh"
+chmod +x "$VAR_PATH_TEMP/.deploy/deploy-remote-services.sh"
+"$VAR_PATH_TEMP/.deploy/deploy-remote-services.sh"
 echo "[*] Executing on REMOTE server...DONE"
 EOF
 then
@@ -146,6 +166,9 @@ main() {
     log ERROR "[x] Failed to configure remote service."
     exit 1
   fi
+
+  # Cleanup
+  rm -rf "$VAR_PATH_TEMP/$SERVICE_ID"/*
 
   log INFO "[*] Deploying servicse $SERVICE_ID on $MANAGER_IP ... DONE"
 }
