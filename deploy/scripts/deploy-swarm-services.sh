@@ -12,6 +12,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/utilities.sh"
 
 log INFO "Reading service and information"
 MANAGER_IP=$(jq -r '.ip' <<< "$VAR_SERVERINFO")
+MANAGER_LABEL=$(jq -r '.label' <<< "$VAR_SERVERINFO")
 SERVICE_ID=$(jq -r '.service.id' <<< "$VAR_SERVICEDATA")
 SERVICE_PATH="./service/$SERVICE_ID/"
 
@@ -128,7 +129,7 @@ source "$VAR_PATH_TEMP/$SERVICE_ID/secrets.env"
 source "$VAR_PATH_TEMP/.deploy/utilities.env"
 set +a
 chmod +x "$VAR_PATH_TEMP/.deploy/deploy-remote-services.sh"
-"$VAR_PATH_TEMP/.deploy/deploy-remote-services.sh"
+"$VAR_PATH_TEMP/.deploy/deploy-remote-services.sh" "$SERVICE_ID" "$MANAGER_LABEL" 
 echo "[*] Executing on REMOTE server...DONE"
 EOF
 then
