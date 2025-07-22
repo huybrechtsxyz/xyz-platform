@@ -357,7 +357,27 @@ create-fs-volumes() {
     fi
   done
 
+  # Automatically export all variables that follow
+  set -a
+  source "$PATH_TEMP/.config/variables.env"
+  set +a
+
   log INFO "[+] GlusterFS volumes created successfully."
+}
+
+# Prepare the required workspace for service deployment
+create_workspace() {
+  # Ensure the workspace definition file exists
+  log INFO "[*] Starting workspace setup: $WORKSPACE on host $HOSTNAME"
+  
+  log INFO "[*] ... Copying global configuration files..."
+  if ! cp -f "$PATH_TEMP"/.config/*.* "$PATH_CONFIG/"; then
+    log ERROR "[x] Failed to copy configuration files to $PATH_CONFIG"
+    return 1
+  fi
+
+   # Ensure the workspace definition file exists
+  log INFO "[*] Workspace $WORKSPACE setup COMPLETE on host $HOSTNAME"
 }
 
 # Main function to configure the remote server based on its role
@@ -382,6 +402,11 @@ main_manager() {
 
   create-fs-volumes || {
     log ERROR "[!] Failed to create GlusterFS volumes."
+    return 1
+  }
+
+  create_workspace || {
+    log ERROR "[!] Failed to create workspace."
     return 1
   }
 
@@ -416,10 +441,9 @@ main() {
   fi
 
   log INFO "[*] Remote server cleanup..."
-  chmod 755 "$PATH_CONFIG"/*
-  rm -f "$PATH_CONFIG"/variables.env
-  rm -f "$PATH_CONFIG"/secrets.env
-  rm -rf "/tmp/app/"*
+  chmod 755 "$PATH_CONFIG"/*       # Set configuration path
+  rm -f "$PATH_CONFIG"/secrets.env # remove secrets !
+  rm -rf "/tmp/app/"*              # PATH_TEMP !!
 
   log INFO "[+] Configuring Swarm Node: $HOSTNAME...DONE"
 }
