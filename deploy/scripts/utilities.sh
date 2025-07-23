@@ -14,6 +14,28 @@ log() {
   esac
 }
 
+# Function to check if the actual disk size matches the expected size within a tolerance
+disk_size_matches() {
+  local actual_gb="$1"        # e.g. 39
+  local expected_gb="$2"      # e.g. 40
+  local tolerance_mb="${3:-20}"  # Optional, default to 20 MiB
+
+  local BYTES_PER_GB=1073741824
+  local BYTES_PER_MB=1048576
+
+  local expected_bytes=$(( expected_gb * BYTES_PER_GB ))
+  local actual_bytes=$(( actual_gb * BYTES_PER_GB ))
+  local diff_bytes=$(( actual_bytes - expected_bytes ))
+  local diff_mb=$(( diff_bytes / BYTES_PER_MB ))
+  local abs_diff_mb=${diff_mb#-}
+
+  if (( abs_diff_mb <= tolerance_mb )); then
+    return 0  # Match within tolerance
+  else
+    return 1  # Too far off
+  fi
+}
+
 # Generate an environment file only taking env vars with specific prefix
 # Usage: generate_env_file <PREFIX> <OUTPUT_FILE>
 # Example: generate_env_file MYAPP_ /path/to/output.env
@@ -60,11 +82,7 @@ generate_env_file() {
 }
 
 # Merge two environment files
-# Usage: merge_env_file <FILE1> <FILE2> [OUTPUT_FILE]
-# Example: merge_env_file base.env override.env # prints to stdout
-# Example: merge_env_file base.env override.env base.env # overwrites base.env
-# Values from the first file are preserved.
-# Duplicate keys in the second file are ignored.
+# This function preserves the values from the first file, duplicate keys in the second file are ignored.
 # If OUTPUT_FILE is provided (even same as FILE1), merged result is written to it.
 merge_env_file() {
   local FILE1="$1"
@@ -110,7 +128,6 @@ merge_env_file() {
     rm "$TMP_OUTPUT"
   fi
 }
-
 
 # Function to create a Docker network if it doesn't exist
 # Usage: create_docker_network <network_name>
