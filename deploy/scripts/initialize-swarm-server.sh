@@ -22,6 +22,8 @@ if [[ -z "$VAR_REMOTE_IP" || -z "$VAR_PRIVATE_IP" || -z "$VAR_MANAGER_IP" ]]; th
 fi
 
 # Create a temporary directory for the initialization scripts
+# Output files
+# |- ./deploy/scripts/variables.env
 create_env_file() {
   generate_env_file "VAR_" "./deploy/scripts/variables.env"
 }
@@ -56,6 +58,10 @@ EOF
 # This function connects to the remote server via SSH,
 # sources the environment variables, and runs the initialization script.
 # It also ensures that the script is executable and handles any errors during execution.
+# Available directories and files in $VAR_PATH_TEMP
+# |- ./deploy/scripts/variables.env
+# |- ./deploy/scripts/*
+# |- ./deploy/workspaces/*
 execute_initialization() {
 log INFO "[*] Executing REMOTE server initialization..."
 if ! ssh -o StrictHostKeyChecking=no root@"$VAR_REMOTE_IP" << EOF

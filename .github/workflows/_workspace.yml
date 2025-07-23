@@ -180,12 +180,7 @@ jobs:
 
   # Initialize the Swarm Cluster
   # This job will run if the cache is not hit or if the initialize input is set to true
-  # Initializes the Swarm cluster by
-  # - copying the private key to the remote server
-  # - running the firewall script on the remote server
-  # - installing docker and initializing the Swarm cluster
-  # - mounting the necessary disks
-  # - installing glusterfs
+  # Initializes the Swarm cluster by setting up keys, firewalls, disks, docker, gluster
   initialization:
     name: Initialize Cluster
     needs: [restore]

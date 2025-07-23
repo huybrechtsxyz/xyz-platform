@@ -23,9 +23,10 @@ fi
 source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
 
 # Create secret and variable files based on expected prefixes
-# Creates variable.env 
-# Creates secrets.env
-# Creates terraform.json file with the provided MATRIX
+# Output files
+# |- ./deploy/variables.env
+# |- ./deploy/secrets.env
+# |- ./deploy/terraform.json
 create_secret_file() {
   generate_env_file "VAR_" "./deploy/variables.env"
   generate_env_file "SECRET_" "./deploy/secrets.env"
@@ -51,6 +52,14 @@ fi
 # This function copies the necessary scripts and configuration files to the remote server
 # It ensures that the remote server has the required files to run the configuration script
 # The files are copied to the temporary application path created earlier
+# Directory copied to "$VAR_PATH_TEMP/.deploy"
+# |- ./deploy/scripts/* 
+# Directory copied to "$VAR_PATH_TEMP/.config"
+# |- ./deploy/workspaces/*
+# |- ./deploy/variables.env
+# |- ./deploy/secrets.env
+# |- ./deploy/terraform.json
+# |- ./scripts/*
 copy_config_files() {
   log INFO "[*] Copying environment files to remote server..."
   shopt -s nullglob
@@ -77,6 +86,14 @@ copy_config_files() {
 # This script is executed on the remote server to set up the environment
 # It sources the necessary environment files and runs the configuration script
 # The script is executed in a non-interactive SSH session
+# Available directories and files in $VAR_PATH_TEMP/.deploy
+# |- ./deploy/scripts/*
+# Available directories and files in $VAR_PATH_TEMP/.config
+# |- ./deploy/workspaces/*
+# |- ./deploy/variables.env
+# |- ./deploy/secrets.env
+# |- ./deploy/terraform.json
+# |- ./scripts/*
 configure_server() {
 log INFO "[*] Executing REMOTE configuration..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF

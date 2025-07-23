@@ -1,4 +1,10 @@
 #!/bin/bash
+
+# Available directories and files in $VAR_PATH_TEMP
+# |- ./deploy/scripts/variables.env
+# |- ./deploy/scripts/*
+# |- ./deploy/workspaces/*
+
 set -euo pipefail
 HOSTNAME=$(hostname)
 

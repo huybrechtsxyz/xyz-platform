@@ -2,6 +2,15 @@
 set -eo pipefail
 HOSTNAME=$(hostname)
 
+# Available directories and files in $VAR_PATH_TEMP/.deploy
+# |- ./deploy/scripts/*
+# Available directories and files in $VAR_PATH_TEMP/.config
+# |- ./deploy/workspaces/*
+# |- ./deploy/variables.env
+# |- ./deploy/secrets.env
+# |- ./deploy/terraform.json
+# |- ./scripts/*
+
 : "${WORKSPACE:?Missing WORKSPACE env var}"
 : "${PATH_TEMP:?Missing PATH_TEMP env var}"
 
