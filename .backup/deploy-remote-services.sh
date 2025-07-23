@@ -1,4 +1,20 @@
 #!/bin/bash
+
+# Available directories and files in $VAR_PATH_TEMP/.deploy
+# |- ./deploy/scripts/*
+# Available directories and files in $VAR_PATH_TEMP/$SERVICE_ID
+# |- $SERVICE_PATH/config/variables.env
+# |- $SERVICE_PATH/config/secrets.env
+# |- $SERVICE_PATH/config/*
+# |- $SERVICE_PATH/scripts/*
+# Available specific environment variables
+# - WORKSPACE (Name)
+# - ENVIRONMENT (Name)
+# - SERVICEINFO (Json with service info)
+# - SERVERINFO (Server info from terraform)
+# - TERRAFORM (Full terraform)
+# - PATH_TEMP (Temporary path)
+
 set -eo pipefail
 HOSTNAME=$(hostname)
 SERVICE_ID="$1"
@@ -14,13 +30,55 @@ if [[ -z "$MANAGER_ID" ]]; then
   exit 1
 fi
 
-# All files are either in $PATH_TEMP/.config or $PATH_TEMP/.deploy!
-log INFO "[*] Getting workspace and terraform files"
-WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP/.config" "$WORKSPACE") || exit 1
+get_configuration_path() {
+  local mountpoint=$(echo "$SERVERINFO" | jq -r '.mountpoint')
+  local mountdisk=$(echo "$SERVERINFO" | jq '.mounts[] | select(.type == "config") | .disk')
+  local configpath=$(echo "$SERVERINFO" | jq '.paths[] | select(.type == "config") | .path')
+  local fullpath="${mountpoint//\$\{disk\}/$mountdisk}/${configpath}"
+  echo "$fullpath"
+}
+
+CONFIG_PATH=$(get_configuration_path)
+if [[ -z "$CONFIG_PATH" ]]; then
+  echo "Error: CONFIG_PATH is null or missing"
+  exit 1
+fi
+
+log INFO "[*] Getting configuration files"
+WORKSPACE_FILE=$(get_workspace_file "$CONFIG_PATH" "$WORKSPACE") || exit 1
 log INFO "[*] Getting workspace and terraform files $WORKSPACE_FILE"
 
 TERRAFORM_FILE=$(get_terraform_file "$PATH_TEMP/.config") || exit 1
 log INFO "[*] Getting workspace and terraform files $TERRAFORM_FILE"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# All files are either in $PATH_TEMP/.config or $PATH_TEMP/.deploy!
+
+
+
 
 SERVICE_FILE=$(get_service_file "$PATH_TEMP/.config" "$SERVICE_ID") || exit 1
 log INFO "[*] Getting service definition files $SERVICE_FILE"

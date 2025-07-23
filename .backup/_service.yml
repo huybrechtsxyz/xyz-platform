@@ -46,6 +46,7 @@ jobs:
           TERRAFORM_API_TOKEN: ${{ secrets.TERRAFORM_API_TOKEN }}
 
       # Parse Terraform Output
+      # Outputs the terraform server matrix
       - name: Parse Terraform Output
         id: terraform
         run: |
@@ -57,6 +58,7 @@ jobs:
           echo "terraform=$matrix" >> "$GITHUB_OUTPUT"
 
       # Parse Terraform Output to find Manager Servers
+      # Output the manager server
       - name: Parse Swarm Servers
         id: servers
         run: |
@@ -77,7 +79,7 @@ jobs:
       # This step filters service definitions from the registry based on a list of requested service IDs (passed in as `inputs.services`).
       # The script reads `registry/*.json`, each containing a `.service.id` field, and constructs a GitHub Actions matrix output including only the matched services.
       # Example: inputs.services: "traefik,site"
-      # Output format: { "include": [ { "id": "traefik" }, { "id": "site" } ] }
+      # Outputs the services matrix format: { "include": [ { "id": "traefik" }, { "id": "site" } ] }
       - name: Parse Registry Services
         id: services
         run: |
@@ -138,7 +140,7 @@ jobs:
         if: matrix.id != ''
 
       # Load service metadata from registry
-      # Outputs - repository - ref - servicedata
+      # Outputs - repository - ref - serviceinfo
       - name: Load Service Metadata
         id: load
         if: matrix.id != ''
@@ -157,13 +159,14 @@ jobs:
       - name: Debug Service Info
         if: matrix.id != ''
         run: |
-          echo Service ${{ matrix.id }}
-          echo Service ${{ steps.load.outputs.service }}
-          echo Server Info ${{ needs.setup.outputs.manager }}
-          echo Repo ${{ steps.load.outputs.repository }}
-          echo Ref ${{ steps.load.outputs.ref }}
+          echo Service ID: ${{ matrix.id }}
+          echo Service Info: ${{ steps.load.outputs.service }}
+          echo Server Info: ${{ needs.setup.outputs.manager }}
+          echo Git Repo: ${{ steps.load.outputs.repository }}
+          echo Git Ref: ${{ steps.load.outputs.ref }}
 
       # Clone the service repository
+      # Outputs the service files to service/{serviceid}
       - name: Clone Service Repo
         uses: actions/checkout@v4
         if: matrix.id != ''
@@ -185,7 +188,7 @@ jobs:
         env:
           VAR_WORKSPACE: ${{ inputs.workspace }}
           VAR_ENVIRONMENT: ${{ inputs.environment }}
-          VAR_SERVICEDATA: ${{ steps.load.outputs.serviceinfo }}
+          VAR_SERVICEINFO: ${{ steps.load.outputs.serviceinfo }}
           VAR_SERVERINFO: ${{ needs.setup.outputs.manager }}
           VAR_TERRAFORM: ${{ needs.setup.outputs.terraform }}
           VAR_PATH_TEMP: ${{ env.VAR_PATH_TEMP }}

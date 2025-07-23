@@ -1,9 +1,17 @@
 #!/bin/bash
+
+# Available directories and files in $PATH_CONFIG/.config
+# |- ./deploy/workspaces/*
+# |- ./deploy/variables.env
+# |- ./deploy/secrets.env
+# |- ./deploy/terraform.json
+# |- ./scripts/*
+
 set -euo pipefail
 
 : "${VAR_WORKSPACE:?Missing WORKSPACE env var}"
 : "${VAR_ENVIRONMENT:?Missing ENVIRONMENT env var}"
-: "${VAR_SERVICEDATA:?Missing SERVICEDATA env var}"
+: "${VAR_SERVICEINFO:?Missing SERVICEDATA env var}"
 : "${VAR_SERVERINFO:?Missing SERVERINFO env var}"
 : "${VAR_TERRAFORM:?Missing TERRAFORM env var}"
 : "${VAR_PATH_TEMP:?Missing PATH_TEMP env var}"
@@ -12,7 +20,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/utilities.sh"
 
 log INFO "Reading service and information"
 MANAGER_IP=$(jq -r '.ip' <<< "$VAR_SERVERINFO")
-MANAGER_LABEL=$(jq -r '.label' <<< "$VAR_SERVERINFO")
+MANAGER=$(jq -r '.label' <<< "$VAR_SERVERINFO")
 SERVICE_ID=$(jq -r '.service.id' <<< "$VAR_SERVICEDATA")
 SERVICE_PATH="./service/$SERVICE_ID/"
 
@@ -30,6 +38,9 @@ fi
 # Creates or updates the environment file with required values
 # Get the VAR_ variables in a file and merge the appropriate service vars
 # Get the SECRET_ variables in a afile and merge the created secret file
+# Output files
+# |- "$SERVICE_PATH/config/variables.env"
+# |- "$SERVICE_PATH/config/secrets.env"
 create_environment_files() {
   log INFO "Fetching secrets for service: $SERVICE_ID ($VAR_ENVIRONMENT)..."
   INPUT_FILE="$SERVICE_PATH/config/$VAR_ENVIRONMENT.secrets.env"
@@ -90,6 +101,13 @@ fi
 # This function copies the necessary scripts and configuration files to the remote server
 # It ensures that the remote server has the required files to run the configuration script
 # The files are copied to the temporary application path created earlier
+# Directory copied to "$VAR_PATH_TEMP/.deploy"
+# |- ./deploy/scripts/* 
+# Directory copied to "$VAR_PATH_TEMP/$SERVICE_ID"
+# |- $SERVICE_PATH/config/variables.env
+# |- $SERVICE_PATH/config/secrets.env
+# |- $SERVICE_PATH/config/*
+# |- $SERVICE_PATH/scripts/*
 copy_service_files() {
   log INFO "[*] Copying service files to remote server..."
   shopt -s nullglob
@@ -116,6 +134,13 @@ copy_service_files() {
 # This script is executed on the remote server to set up the service
 # It sources the necessary environment files and runs the configuration script
 # The script is executed in a non-interactive SSH session
+# Available directories and files in $VAR_PATH_TEMP/.deploy
+# |- ./deploy/scripts/*
+# Available directories and files in $VAR_PATH_TEMP/$SERVICE_ID
+# |- $SERVICE_PATH/config/variables.env
+# |- $SERVICE_PATH/config/secrets.env
+# |- $SERVICE_PATH/config/*
+# |- $SERVICE_PATH/scripts/*
 configure_service() {
 log INFO "[*] Executing REMOTE deployment..."
 if ! ssh -o StrictHostKeyChecking=no root@"$MANAGER_IP" << EOF
@@ -129,7 +154,7 @@ source "$VAR_PATH_TEMP/$SERVICE_ID/secrets.env"
 source "$VAR_PATH_TEMP/.deploy/utilities.env"
 set +a
 chmod +x "$VAR_PATH_TEMP/.deploy/deploy-remote-services.sh"
-"$VAR_PATH_TEMP/.deploy/deploy-remote-services.sh" "$SERVICE_ID" "$MANAGER_LABEL" 
+"$VAR_PATH_TEMP/.deploy/deploy-remote-services.sh" "$SERVICE_ID" "$MANAGER" 
 echo "[*] Executing on REMOTE server...DONE"
 EOF
 then
