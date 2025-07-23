@@ -2,42 +2,43 @@ name: Fetch Terraform Output
 description: Restore Terraform output from cache or pull from HCP
 
 inputs:
-  workspace:
+  WORKSPACE:
+    description: Workspace
     required: true
-    type: string
-  environment:
+  ENVIRONMENT:
+    description: Environment
     required: true
-    type: string
-  VAR_PATH_TEMP:
+  TEMPPATH:
+    description: Temporary path
     required: true
-    type: string
-  TERRAFORM_API_TOKEN:
+  API_TOKEN:
+    description: Terraform API Token
     required: true
 
 runs:
   using: "composite"
   steps:
-    # Set environment path
-    - name: Set environment path
+    # Set ENVIRONMENT path
+    - name: Set ENVIRONMENT path
       shell: bash
       run: |
-        mkdir -p ${{ inputs.VAR_PATH_TEMP }}
-        echo "VAR_PATH_TEMP=${{ inputs.VAR_PATH_TEMP }}" >> "$GITHUB_ENV"
+        mkdir -p ${{ inputs.TEMPPATH }}
+        echo "TEMPPATH=${{ inputs.TEMPPATH }}" >> "$GITHUB_ENV"
 
     # Restore Terraform Cache
     - name: Restore Terraform Cache
       id: restore-cache
       uses: actions/cache/restore@v4
       with:
-        path: ${{ env.VAR_PATH_TEMP }}/tf_output.json
-        key: terraform-output-${{ inputs.workspace }}
+        path: ${{ env.TEMPPATH }}/tf_output.json
+        key: terraform-output-${{ inputs.WORKSPACE }}
 
     # Check for Restored Terraform Output
     - name: Check for Restored Terraform Output
       id: check-cache
       shell: bash
       run: |
-        if [ -f "${VAR_PATH_TEMP}/tf_output.json" ]; then
+        if [ -f "${TEMPPATH}/tf_output.json" ]; then
           echo "found=true" >> "$GITHUB_OUTPUT"
         else
           echo "found=false" >> "$GITHUB_OUTPUT"
@@ -55,14 +56,14 @@ runs:
       if: steps.check-cache.outputs.found == 'false'
       shell: bash
       env:
-        TF_TOKEN_app_terraform_io: ${{ inputs.TERRAFORM_API_TOKEN }}
+        TF_TOKEN_app_terraform_io: ${{ inputs.API_TOKEN }}
       run: |
         terraform login -no-color || true
-        terraform pull -workspace="${{ inputs.workspace }}" > "${VAR_PATH_TEMP}/tfstate.tfstate"
-        terraform show -json "${VAR_PATH_TEMP}/tfstate.tfstate" | jq '.values.outputs' > "${VAR_PATH_TEMP}/tf_output.json"
+        terraform pull -WORKSPACE="${{ inputs.WORKSPACE }}" > "${TEMPPATH}/tfstate.tfstate"
+        terraform show -json "${TEMPPATH}/tfstate.tfstate" | jq '.values.outputs' > "${TEMPPATH}/tf_output.json"
 
     # Debug output
     - name: View Debug Output
       shell: bash
       run: |
-        jq '.' ${VAR_PATH_TEMP}/tf_output.json | head -n 20
+        jq '.' ${TEMPPATH}/tf_output.json | head -n 20
