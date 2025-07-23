@@ -1,4 +1,12 @@
 #!/bin/bash
+#===============================================================================
+# Script Name   : utilities.sh
+# Description   : Different modular and reusable functions
+# Usage         : n.a.
+# Author        : Vincent Huybrechts
+# Created       : 2025-07-23
+# Last Modified : 2025-07-23
+#===============================================================================
 
 # Logging function
 log() {
@@ -13,6 +21,18 @@ log() {
     *)       echo -e "[UNKNOWN] - $msg" ;;
   esac
 }
+
+# Save force removal function
+# As a safety precaution, check that the path you're about to wipe isn't / or empty
+safe_rm_rf() {
+  local path="$1"
+  if [[ -n "$path" && "$path" != "/" && -d "$path" ]]; then
+    rm -rf "$path"/*
+  else
+    log WARN "Skipped unsafe or non-existent path: $path"
+  fi
+}
+
 
 # Function to check if the actual disk size matches the expected size within a tolerance
 disk_size_matches() {
@@ -33,99 +53,6 @@ disk_size_matches() {
     return 0  # Match within tolerance
   else
     return 1  # Too far off
-  fi
-}
-
-# Generate an environment file only taking env vars with specific prefix
-# Usage: generate_env_file <PREFIX> <OUTPUT_FILE>
-# Example: generate_env_file MYAPP_ /path/to/output.env
-# This function will create an environment file with all variables starting with the given prefix.
-# It will strip the prefix from the variable names in the output file.
-# It will also ensure that all variables are non-empty before writing to the file.
-generate_env_file() {
-  local prefix="$1"
-  local output_file="$2"
-
-  if [[ -z "$prefix" || -z "$output_file" ]]; then
-    echo "[!] Usage: generate_env_file <PREFIX> <OUTPUT_FILE>" >&2
-    return 1
-  fi
-
-  log INFO "[*] Generating environment file for variables with prefix '$prefix'..."
-
-  # Get all variables starting with the prefix
-  mapfile -t vars < <(compgen -v | grep "^${prefix}")
-
-  if [[ "${#vars[@]}" -eq 0 ]]; then
-    echo "[!] Error: No environment variables found with prefix '$prefix'" >&2
-    return 1
-  fi
-
-  # Validate all are non-empty
-  for var in "${vars[@]}"; do
-    [[ -z "${!var}" ]] && { echo "[!] Error: Missing required variable '$var'" >&2; return 1; }
-  done
-
-  # Ensure output directory exists
-  mkdir -p "$(dirname "$output_file")"
-
-  # Generate the env file with the prefix stripped
-  {
-    echo "# Auto-generated environment file (prefix '$prefix' stripped)"
-    for var in "${vars[@]}"; do
-      short_var="${var#$prefix}"
-      printf '%s=%q\n' "$short_var" "${!var}"
-    done
-  } > "$output_file"
-
-  log INFO "[+] Environment file generated at '$output_file'"
-}
-
-# Merge two environment files
-# This function preserves the values from the first file, duplicate keys in the second file are ignored.
-# If OUTPUT_FILE is provided (even same as FILE1), merged result is written to it.
-merge_env_file() {
-  local FILE1="$1"
-  local FILE2="$2"
-  local OUTPUT_FILE="$3"
-
-  if [[ -z "$FILE1" || -z "$FILE2" || ! -f "$FILE1" || ! -f "$FILE2" ]]; then
-    echo "Usage: merge_env_file <FILE1> <FILE2> [OUTPUT_FILE]"
-    return 1
-  fi
-
-  local TMP_OUTPUT
-  TMP_OUTPUT=$(mktemp)
-
-  declare -A env_map
-
-  # Load first file — values from here are preserved
-  while IFS='=' read -r key value; do
-    [[ -z "$key" || "$key" =~ ^# ]] && continue
-    key=$(echo "$key" | xargs)
-    env_map["$key"]="$value"
-  done < "$FILE1"
-
-  # Load second file — skip keys that already exist
-  while IFS='=' read -r key value; do
-    [[ -z "$key" || "$key" =~ ^# ]] && continue
-    key=$(echo "$key" | xargs)
-    if [[ -z "${env_map[$key]+_}" ]]; then
-      env_map["$key"]="$value"
-    fi
-  done < "$FILE2"
-
-  # Write to temporary file first
-  for key in "${!env_map[@]}"; do
-    echo "$key=${env_map[$key]}"
-  done | sort > "$TMP_OUTPUT"
-
-  # Move temp file to output (or FILE1 if output not specified)
-  if [[ -n "$OUTPUT_FILE" ]]; then
-    mv "$TMP_OUTPUT" "$OUTPUT_FILE"
-  else
-    cat "$TMP_OUTPUT"
-    rm "$TMP_OUTPUT"
   fi
 }
 
@@ -270,6 +197,99 @@ load_docker_secrets() {
   done < "$secrets_file"
 
   echo "[+] Finished loading secrets."
+}
+
+# Generate an environment file only taking env vars with specific prefix
+# Usage: generate_env_file <PREFIX> <OUTPUT_FILE>
+# Example: generate_env_file MYAPP_ /path/to/output.env
+# This function will create an environment file with all variables starting with the given prefix.
+# It will strip the prefix from the variable names in the output file.
+# It will also ensure that all variables are non-empty before writing to the file.
+generate_env_file() {
+  local prefix="$1"
+  local output_file="$2"
+
+  if [[ -z "$prefix" || -z "$output_file" ]]; then
+    echo "[!] Usage: generate_env_file <PREFIX> <OUTPUT_FILE>" >&2
+    return 1
+  fi
+
+  log INFO "[*] Generating environment file for variables with prefix '$prefix'..."
+
+  # Get all variables starting with the prefix
+  mapfile -t vars < <(compgen -v | grep "^${prefix}")
+
+  if [[ "${#vars[@]}" -eq 0 ]]; then
+    echo "[!] Error: No environment variables found with prefix '$prefix'" >&2
+    return 1
+  fi
+
+  # Validate all are non-empty
+  for var in "${vars[@]}"; do
+    [[ -z "${!var}" ]] && { echo "[!] Error: Missing required variable '$var'" >&2; return 1; }
+  done
+
+  # Ensure output directory exists
+  mkdir -p "$(dirname "$output_file")"
+
+  # Generate the env file with the prefix stripped
+  {
+    echo "# Auto-generated environment file (prefix '$prefix' stripped)"
+    for var in "${vars[@]}"; do
+      short_var="${var#$prefix}"
+      printf '%s=%q\n' "$short_var" "${!var}"
+    done
+  } > "$output_file"
+
+  log INFO "[+] Environment file generated at '$output_file'"
+}
+
+# Merge two environment files
+# This function preserves the values from the first file, duplicate keys in the second file are ignored.
+# If OUTPUT_FILE is provided (even same as FILE1), merged result is written to it.
+merge_env_file() {
+  local FILE1="$1"
+  local FILE2="$2"
+  local OUTPUT_FILE="$3"
+
+  if [[ -z "$FILE1" || -z "$FILE2" || ! -f "$FILE1" || ! -f "$FILE2" ]]; then
+    echo "Usage: merge_env_file <FILE1> <FILE2> [OUTPUT_FILE]"
+    return 1
+  fi
+
+  local TMP_OUTPUT
+  TMP_OUTPUT=$(mktemp)
+
+  declare -A env_map
+
+  # Load first file — values from here are preserved
+  while IFS='=' read -r key value; do
+    [[ -z "$key" || "$key" =~ ^# ]] && continue
+    key=$(echo "$key" | xargs)
+    env_map["$key"]="$value"
+  done < "$FILE1"
+
+  # Load second file — skip keys that already exist
+  while IFS='=' read -r key value; do
+    [[ -z "$key" || "$key" =~ ^# ]] && continue
+    key=$(echo "$key" | xargs)
+    if [[ -z "${env_map[$key]+_}" ]]; then
+      env_map["$key"]="$value"
+    fi
+  done < "$FILE2"
+
+  # Write to temporary file first
+  for key in "${!env_map[@]}"; do
+    echo "$key=${env_map[$key]}"
+  done | sort > "$TMP_OUTPUT"
+
+  # Move temp file to output (or FILE1 if output not specified)
+  if [[ -n "$OUTPUT_FILE" ]]; then
+    mv "$TMP_OUTPUT" "$OUTPUT_FILE"
+  else
+    cat "$TMP_OUTPUT"
+    rm "$TMP_OUTPUT"
+  fi
 }
 
 # Function to get the Terraform output file path
@@ -447,54 +467,4 @@ validate_volume_configuration() {
   fi
 
   log INFO "[+] Volume '$volname' configuration validated successfully."
-}
-
-# Function to get the service definition file path
-# Usage: get_service_file <TEMP_PATH> <SERVICE_ID>
-# Example: get_service_file /tmp/services my_service
-# This function constructs the path to the service definition file (service.json)
-# using the specified temporary path and service ID. If the file exists, it
-# returns the full path. If not, it logs an error and returns 1.
-get_service_file() {
-  local TEMP_PATH="$1"
-  local SERVICE_ID="$2"
-
-  if [[ -z "$TEMP_PATH" || -z "$SERVICE_ID" ]]; then
-    log ERROR "[!] get_service_file requires TEMP_PATH and SERVICE_ID arguments."
-    return 1
-  fi
-
-  local SERVICE_FILE="$TEMP_PATH/$SERVICE_ID/service.json"
-
-  if [[ ! -f "$SERVICE_FILE" ]]; then
-    log ERROR "[!] Service definition file not found: $SERVICE_FILE"
-    return 1
-  fi
-
-  echo "$SERVICE_FILE"
-}
-
-# Function to get the service registry file path
-# Usage: get_service_file <TEMP_PATH> <SERVICE_ID>
-# Example: get_service_file /tmp/services my_service
-# This function constructs the path to the service registry file (registry.json)
-# using the specified temporary path and service ID. If the file exists, it
-# returns the full path. If not, it logs an error and returns 1.
-get_registry_file() {
-  local TEMP_PATH="$1"
-  local SERVICE_ID="$2"
-
-  if [[ -z "$TEMP_PATH" || -z "$SERVICE_ID" ]]; then
-    log ERROR "[!] get_registry_file requires TEMP_PATH and SERVICE_ID arguments."
-    return 1
-  fi
-
-  local REG_FILE="$TEMP_PATH/$SERVICE_ID/registry.json"
-
-  if [[ ! -f "$SERVICE_FILE" ]]; then
-    log ERROR "[!] Registry definition file not found: $REG_FILE"
-    return 1
-  fi
-
-  echo "$REG_FILE"
 }

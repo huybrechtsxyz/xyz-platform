@@ -1,7 +1,12 @@
 #!/bin/bash
-set -eo pipefail
-HOSTNAME=$(hostname)
-
+#===============================================================================
+# Script Name   : configure-renote-server.sh
+# Description   : Pipeline code to call remote configuration code
+# Usage         : ./configure-remote-server.sh <VAR_PATH_TEMP>
+# Author        : Vincent Huybrechts
+# Created       : 2025-07-23
+# Last Modified : 2025-07-23
+#===============================================================================
 # Available directories and files in $VAR_PATH_TEMP/.deploy
 # |- ./deploy/scripts/*
 # Available directories and files in $VAR_PATH_TEMP/.config
@@ -10,34 +15,39 @@ HOSTNAME=$(hostname)
 # |- ./deploy/secrets.env
 # |- ./deploy/terraform.json
 # |- ./scripts/*
+#===============================================================================
+set -eo pipefail
+trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 
-: "${WORKSPACE:?Missing WORKSPACE env var}"
-: "${PATH_TEMP:?Missing PATH_TEMP env var}"
+PATH_TEMP="$1"
+HOSTNAME=$(hostname)
 
-# All files are either in $PATH_TEMP/.config or $PATH_TEMP/.deploy!
-log INFO "[*] Getting workspace and terraform files"
-WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP/.config" "$WORKSPACE") || exit 1
-log INFO "[*] Getting workspace and terraform files $WORKSPACE_FILE"
-TERRAFORM_FILE=$(get_terraform_file "$PATH_TEMP/.config") || exit 1
-log INFO "[*] Getting workspace and terraform files $TERRAFORM_FILE"
+: "${PATH_TEMP:="/tmp/app"}"
+: "${WORKSPACE:?Missing WORKSPACE}"
 
-# Determine my server id
-log INFO "[*] Getting server information: server id"
+PATH_DEPLOY="$PATH_TEMP/.deploy"
+PATH_CONFIG="$PATH_TEMP/.config"
+
+source "$PATH_CONFIG/variables.env"
+source "$PATH_CONFIG/secrets.env"
+source "$PATH_DEPLOY/utilities.sh"
+
+WORKSPACE_FILE=$(get_workspace_file "$PATH_CONFIG" "$WORKSPACE") || exit 1
+log INFO "[*] Getting workspace file: $WORKSPACE_FILE"
+
+TERRAFORM_FILE=$(get_terraform_file "$PATH_CONFIG") || exit 1
+log INFO "[*] Getting terraform file $TERRAFORM_FILE"
+
+MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
+log INFO "[*] Getting manager label: $MANAGER_ID"
+
 SERVER_ID=$(get_server_id "$WORKSPACE_FILE" "$HOSTNAME") || exit 1
-log INFO "[*] Getting server information: manager label"
-MANAGER_LABEL=$(get_manager_id "$WORKSPACE_FILE") || exit 1
-log INFO "[*] Getting server information: manager ip"
+log INFO "[*] Getting workspace server id: $SERVER_ID"
+
 MANAGER_IP=$(get_terraform_data "$TERRAFORM_FILE" "$SERVER_ID" "manager_ip") || exit 1
+log INFO "[*] Getting private management IP for server: $MANAGER_IP"
 
-# Load private IPs from terraform.json (as an array)
-readarray -t PRIVATE_IPS < <(jq -r '.include[].private_ip' "$TERRAFORM_FILE")
-
-log INFO "[*] CURRENT SERVER: $SERVER_ID"
-log INFO "[*] MANAGER LABEL: $MANAGER_LABEL"
-log INFO "[*] MANAGER NODE: $MANAGER_IP"
-log INFO "[*] CLUSTER NODES: ${PRIVATE_IPS[*]}"
-
-# Fucntion that creates docker labels for each node based on its hostname
+# Function that creates docker labels for each node based on its hostname
 # The labels are:
 # - role: the role of the node (e.g. manager, worker)
 # - server: the server name (e.g. manager-1, worker-2)
@@ -208,7 +218,7 @@ create-fs-cluster() {
 # It reads the workspace file to get the paths and mount points for each server
 # It then creates the directories on each server via SSH
 # It then creates the GlusterFS volumes based on the paths
-# It then creates environment variables for the paths > /PATH_TEMP/.config/variables.env
+# It then creates environment variables for the paths > /PATH_CONFIG/workspace.env
 # At the end, it starts the volumes
 # ------------------------------------------------------------------------------
 # NOTE: This function uses 'force' when creating GlusterFS volumes.
@@ -231,11 +241,12 @@ create-fs-volumes() {
   declare -A bricks_map
   declare -A volume_map
 
-  # Read all servers for debugging
+  # Read all workspace servers for debugging
   mapfile -t servers < <(jq -c '.servers[]' "$WORKSPACE_FILE")
   server_count=${#servers[@]}
   log INFO "[*] Workspace data loaded: $server_count servers found: $(jq -r '.servers[].id' "$WORKSPACE_FILE" | paste -sd "," -)"
 
+  # Read terraform servers for debugging
   mapfile -t tservers < <(jq -c '.include[]' "$TERRAFORM_FILE")
   tserver_count=${#tservers[@]}
   log INFO "[*] Terraform data loaded: $tserver_count servers found: $(jq -r '.include[].label' "$TERRAFORM_FILE" | paste -sd ',')"
@@ -288,7 +299,7 @@ create-fs-volumes() {
       commands+=("$fullpath")
 
       # Add to environment variables file
-      echo "PATH_${server^^}_${mounttype^^}=$fullpath" >> "$PATH_TEMP/.config/variables.env"
+      echo "SRV_${server^^}_PATH_${mounttype^^}=$fullpath" >> "$PATH_CONFIG/$WORKSPACE.env"
 
       # Add to bricks array for GlusterFS volume creation
       # Use workspace prefix in the volume name
@@ -368,7 +379,7 @@ create-fs-volumes() {
 
   # Automatically export all variables that follow
   set -a
-  source "$PATH_TEMP/.config/variables.env"
+  source "$PATH_CONFIG/$WORKSPACE.env"
   set +a
 
   log INFO "[+] GlusterFS volumes created successfully."
@@ -376,16 +387,21 @@ create-fs-volumes() {
 
 # Prepare the required workspace for service deployment
 create_workspace() {
-  # Ensure the workspace definition file exists
   log INFO "[*] Starting workspace setup: $WORKSPACE on host $HOSTNAME"
-  
-  log INFO "[*] ... Copying global configuration files..."
-  if ! cp -f "$PATH_TEMP"/.config/*.* "$PATH_CONFIG/"; then
-    log ERROR "[x] Failed to copy configuration files to $PATH_CONFIG"
+
+  # Build the path based on {PATH_LABEL_TYPE}
+  local configpathname="SRV_${SERVER_ID}_CONFIG"
+  local configpath="${!configpathname}"
+  log INFO "[*] ... Copying global configuration files to: $configpath"
+
+  # Copy the base configuration files and scripts
+  # E.g. /mnt/data1/etc/app/
+  if ! cp -f "$PATH_CONFIG"/* "$configpath/"; then
+    log ERROR "[x] Failed to copy configuration files to $configpath"
     return 1
   fi
 
-   # Ensure the workspace definition file exists
+  # Ensure the workspace definition file exists
   log INFO "[*] Workspace $WORKSPACE setup COMPLETE on host $HOSTNAME"
 }
 
@@ -393,39 +409,45 @@ create_workspace() {
 main_manager() {
   log INFO "[*] Configuring Manager Node: $HOSTNAME..."
 
+  # Create docker networks
   create_docker_network "wan-$WORKSPACE"
   create_docker_network "lan-$WORKSPACE"
-  create_docker_network "lan-test"
-  create_docker_network "lan-staging"
-  create_docker_network "lan-production"
-  load_docker_secrets "$PATH_TEMP/.config/secrets.env"
+
+  # Create docker secrets and remove file
+  load_docker_secrets "$PATH_CONFIG/secrets.env"
+  safe_rm_rf "$PATH_CONFIG/secrets.env"
+
+  # Create the required swarm labels
   create_docker_labels || {
-    log ERROR "[!] Failed to create node labels."
+    log ERROR "[X] Failed to create node labels."
     return 1
   }
 
+  # Create the glusterfs cluster
   create-fs-cluster || {
-    log ERROR "[!] Failed to create GlusterFS cluster."
+    log ERROR "[X] Failed to create GlusterFS cluster."
     return 1
   }
 
+  # Create the directories/volumes
   create-fs-volumes || {
-    log ERROR "[!] Failed to create GlusterFS volumes."
+    log ERROR "[X] Failed to create GlusterFS volumes."
     return 1
   }
 
+  # Create the workspace
   create_workspace || {
-    log ERROR "[!] Failed to create workspace."
+    log ERROR "[X] Failed to create workspace."
     return 1
   }
 
-  log INFO "[*] Configuring Manager Node: $HOSTNAME...DONE"
+  log INFO "[+] Configuring Manager Node: $HOSTNAME...DONE"
 }
 
 # Main function to configure the worker node
 main_worker() {
   log INFO "[*] Configuring Worker Node: $HOSTNAME..."
-  log INFO "[*] Configuring Worker Node: $HOSTNAME...DONE"
+  log INFO "[+] Configuring Worker Node: $HOSTNAME...DONE"
 }
 
 # Main function to configure the remote server
@@ -437,7 +459,7 @@ main() {
     exit 1
   }
 
-  if [[ "$HOSTNAME" == *"$MANAGER_LABEL"* ]]; then
+  if [[ "$HOSTNAME" == *"$MANAGER_ID"* ]]; then
     main_manager || {
       log ERROR "[!] Failed to configure manager node."
       exit 1
@@ -450,9 +472,10 @@ main() {
   fi
 
   log INFO "[*] Remote server cleanup..."
-  chmod 755 "$PATH_CONFIG"/*       # Set configuration path
-  rm -f "$PATH_CONFIG"/secrets.env # remove secrets !
-  rm -rf "/tmp/app/"*              # PATH_TEMP !!
+  # Set configuration path
+  chmod 755 "$PATH_CONFIG"/*
+  # PATH_TEMP
+  safe_rm_rf /tmp/app/*
 
   log INFO "[+] Configuring Swarm Node: $HOSTNAME...DONE"
 }

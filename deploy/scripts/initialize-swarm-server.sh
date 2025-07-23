@@ -1,7 +1,14 @@
 #!/bin/bash
+#===============================================================================
+# Script Name   : initialize-swarm-server.sh
+# Description   : Pipeline code to call remote initialization code
+# Usage         : ./initialize-swarm-server.sh <VAR_REMOTE_IP> <VAR_PRIVATE_IP> <VAR_MANAGER_IP>
+# Author        : Vincent Huybrechts
+# Created       : 2025-07-23
+# Last Modified : 2025-07-23
+#===============================================================================
 set -euo pipefail
-
-# Load utility functions and environment variables
+trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
 
 # Check if the required arguments are provided
@@ -12,19 +19,12 @@ fi
 
 # Assign command line arguments to variables
 : "${VAR_PATH_TEMP:="/tmp/app"}"
+PATH_DEPLOY="$VAR_PATH_TEMP"
 
 # Validate the input parameters
-VAR_REMOTE_IP="$1"
-VAR_PRIVATE_IP="$2"
-VAR_MANAGER_IP="$3"
-
-if [[ -z "$VAR_REMOTE_IP" || -z "$VAR_PRIVATE_IP" || -z "$VAR_MANAGER_IP" ]]; then
-  log ERROR "One or more required arguments are empty. Please provide valid IP addresses."
-  exit 1
-fi
-
-# Have a deployment path for this app
-PATH_DEPLOY="$VAR_PATH_TEMP"
+VAR_REMOTE_IP="${1:?Missing remote IP}"
+VAR_PRIVATE_IP="${2:?Missing private IP}"
+VAR_MANAGER_IP="${3:?Missing manager IP}"
 
 # Create a temporary directory for the initialization scripts
 # Output files
@@ -32,7 +32,6 @@ PATH_DEPLOY="$VAR_PATH_TEMP"
 create_env_file() {
   generate_env_file "VAR_" "./deploy/variables.env"
 }
-
 
 # Function to copy configuration files to the remote server
 # This function creates a temporary directory on the remote server,
@@ -51,7 +50,7 @@ scp -o StrictHostKeyChecking=no \
   ./deploy/scripts/* \
   ./deploy/workspaces/* \
   root@"$VAR_REMOTE_IP":"$PATH_DEPLOY"/ || {
-    echo "[x] Failed to transfer initialization scripts to remote server"
+    log ERROR "[X] Failed to transfer initialization scripts to remote server"
     exit 1
   }
 
@@ -65,18 +64,15 @@ EOF
 # This function connects to the remote server via SSH,
 # sources the environment variables, and runs the initialization script.
 # It also ensures that the script is executable and handles any errors during execution.
-# Available directories and files in $VAR_PATH_TEMP
-# |- ./deploy/scripts/variables.env
-# |- ./deploy/scripts/*
-# |- ./deploy/workspaces/*
 execute_initialization() {
 log INFO "[*] Executing REMOTE server initialization..."
+
 if ! ssh -o StrictHostKeyChecking=no root@"$VAR_REMOTE_IP" << EOF
   chmod +x "$PATH_DEPLOY/initialize-remote-server.sh"
   "$PATH_DEPLOY/initialize-remote-server.sh" "$PATH_DEPLOY"
 EOF
 then
-  log ERROR "[!] Remote initialization failed on $VAR_REMOTE_IP"
+  log ERROR "[X] Remote initialization failed on $VAR_REMOTE_IP"
   exit 1
 fi
 log INFO "[*] Executing REMOTE server initialization...DONE"
@@ -87,17 +83,17 @@ main() {
   log INFO "[*] Initializing swarm cluster ..."
 
   if ! create_env_file; then
-    log ERROR "[x] Failed to create environment file."
+    log ERROR "[X] Failed to create environment file."
     exit 1
   fi
 
   if ! copy_initialization_files; then
-    log ERROR "[x] Failed to copy configuration files to remote server."
+    log ERROR "[X] Failed to copy configuration files to remote server."
     exit 1
   fi
 
   if ! execute_initialization; then
-    log ERROR "[x] Remote initialization failed."
+    log ERROR "[X] Remote initialization failed."
     exit 1
   fi
 
@@ -105,4 +101,3 @@ main() {
 }
 
 main
-

@@ -1,38 +1,51 @@
 #!/bin/bash
+#===============================================================================
+# Script Name   : initialize-remote-server.sh
+# Description   : Server initialization script
+# Usage         : ./initialize-remote-server.sh <PATH_DEPLOY>"
+# Author        : Vincent Huybrechts
+# Created       : 2025-07-23
+# Last Modified : 2025-07-23
+#===============================================================================
+# Available directories and files in $PATH_DEPLOY (/tmp/app/.deploy)
+# |- ./deploy/scripts/variables.env
+# |- ./deploy/scripts/*
+# |- ./deploy/workspaces/*
+#===============================================================================
 set -euo pipefail
-HOSTNAME=$(hostname)
-PATH_DEPLOY=$1
+trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 
+PATH_DEPLOY="$1"
 : "${PATH_DEPLOY:?Missing PATH_DEPLOY}"
 if [[ ! -d "$PATH_DEPLOY" ]]; then
   echo "Temporary path $PATH_DEPLOY does not exist. Please create it or set a different path."
   exit 1
 fi
 
-# Available directories and files in $PATH_DEPLOY
-# |- ./deploy/scripts/variables.env
-# |- ./deploy/scripts/*
-# |- ./deploy/workspaces/*
-
 source "$PATH_DEPLOY/variables.env"
 source "$PATH_DEPLOY/utilities.sh"
+HOSTNAME=$(hostname)
 
 # Validate that the variables are set
 : "${WORKSPACE:?Missing WORKSPACE}"
 : "${MANAGER_IP:?Missing MANAGER_IP}"
 : "${PRIVATE_IP:?Missing PRIVATE_IP}"
 
+export PRIVATE_IP="$PRIVATE_IP"
+export MANAGER_IP="$MANAGER_IP"
+
 log INFO "[*] PATH_DEPLOY: $PATH_DEPLOY"
 log INFO "[*] WORKSPACE: $WORKSPACE"
 log INFO "[*] MANAGER_IP: $MANAGER_IP"
 log INFO "[*] PRIVATE_IP: $PRIVATE_IP"
 
-log INFO "[*] Finding workspace and manager information"
+log INFO "[*] Finding workspace file and manager label"
 WORKSPACE_FILE=$(get_WORKSPACE_FILE "$PATH_DEPLOY" "$WORKSPACE") || exit 1
 MANAGER_LABEL=$(get_manager_id "$WORKSPACE_FILE") || exit 1
-
-export PRIVATE_IP="$PRIVATE_IP"
-export MANAGER_IP="$MANAGER_IP"
+if [[ ! -f "$WORKSPACE_FILE" ]]; then
+  log ERROR "[X] Workspace file not found: $WORKSPACE_FILE"
+  exit 1
+fi
 
 # Function to log messages with a timestamp
 install_private_key() {
@@ -105,7 +118,7 @@ configure_firewall() {
   ufw allow proto tcp from 10.0.0.0/23 to any port 6379 comment 'Redis IN'
   ufw allow out proto tcp to 10.0.0.0/23 port 6379 comment 'Redis OUT'
 
-  # Gluser traeffic between nodes
+  # Gluster traffic between nodes
   ufw allow proto tcp from 10.0.0.0/23 to any port 24007:24008 comment 'GlusterFS Management IN'
   ufw allow proto tcp from 10.0.0.0/23 to any port 49152:49251 comment 'GlusterFS Bricks IN'
   ufw allow out proto tcp to 10.0.0.0/23 port 24007:24008 comment 'GlusterFS Management OUT'
@@ -154,15 +167,18 @@ mount_disks() {
     grep -v "^$os_disk_base$" | \
     grep -E '^sd[b-z]' | \
     sort -k2,2n -k1,1)
+
   # Insert OS disk as the first element
   os_size=$(lsblk -bn -o SIZE -d "/dev/$os_disk_base")
   disks=("$os_disk_base $os_size" "${disks[@]}")
+
   # Create disk name array
   declare -a disk_names
   for line in "${disks[@]}"; do
     disk_names+=("$(echo "$line" | awk '{print $1}')")
   done
 
+  # Getting workspace disks
   local disk_count=$(jq -r --arg id "$server_id" '.servers[] | select(.id == $id) | .disks | length' "$WORKSPACE_FILE")
   log INFO "[*] ... Found $disk_count disks for $HOSTNAME (including OS disk)"
   if (( ${#disk_names[@]} < disk_count )); then
@@ -170,8 +186,10 @@ mount_disks() {
     return 1
   fi
 
+  # Get mouting template for server
   local mount_template=$(jq -r --arg id "$server_id" '.servers[] | select(.id == $id) | .mountpoint' "$WORKSPACE_FILE")
 
+  # Loop all disks found
   log INFO "[*] Looping over all disks"
   for i in $(seq 0 $((disk_count - 1))); do
     log INFO "[*] Mounting disk $i for $HOSTNAME"
@@ -408,66 +426,48 @@ install_gluster() {
 
 # Main function to initialize the remote server
 main() {
-    echo "[*] Initializing remote server..."
-    cd /
+  echo "[*] Initializing remote server..."
+  cd /
 
-    install_private_key || {
-      log ERROR "[X] Failed to install private key."
-      exit 1
-    }
+  install_private_key || {
+    log ERROR "[X] Failed to install private key."
+    exit 1
+  }
 
-    configure_firewall || {
-      log ERROR "[X] Failed to configure firewall."
-      exit 1
-    }
+  configure_firewall || {
+    log ERROR "[X] Failed to configure firewall."
+    exit 1
+  }
 
-    mount_disks || {
-      log ERROR "[X] Failed to mount disks."
-      exit 1
-    }
+  mount_disks || {
+    log ERROR "[X] Failed to mount disks."
+    exit 1
+  }
 
-    install_docker_if_needed || {
-      log ERROR "[X] Failed to install Docker."
-      exit 1
-    }
+  install_docker_if_needed || {
+    log ERROR "[X] Failed to install Docker."
+    exit 1
+  }
 
-    configure_swarm || {
-      log ERROR "[X] Failed to configure Docker Swarm."
-      exit 1
-    }
+  configure_swarm || {
+    log ERROR "[X] Failed to configure Docker Swarm."
+    exit 1
+  }
 
-    enable_docker_service || {
-      log ERROR "[X] Failed to enable Docker service."
-      exit 1
-    }
+  enable_docker_service || {
+    log ERROR "[X] Failed to enable Docker service."
+    exit 1
+  }
 
-    install_gluster || {
-      log ERROR "[X] Failed to install GlusterFS."
-      exit 1
-    }
-    
-    echo "[*] Remote server cleanup..."
-    rm -rf /tmp/app/*   # : "${PATH_TEMP:="/tmp/app"}"
-    echo "[+] Remote server initialization completed."
-    echo "[*] Cleaning up swarm cluster..."
-  rm -rf "$VAR_PATH_TEMP/*"
+  install_gluster || {
+    log ERROR "[X] Failed to install GlusterFS."
+    exit 1
+  }
+  
+  echo "[*] Cleaning up swarm cluster..."
+  # : "${PATH_TEMP:="/tmp/app"}"
+  safe_rm_rf /tmp/app/*
+  echo "[+] Remote server initialization completed."
 }
 
 main
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

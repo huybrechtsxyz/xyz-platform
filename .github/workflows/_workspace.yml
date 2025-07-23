@@ -279,5 +279,5 @@ jobs:
         run: |
           echo "[*] Configuring swarm server ${{ matrix.ip }} ..."
           chmod +x deploy/scripts/configure-swarm-server.sh
-          ./deploy/scripts/configure-swarm-server.sh "${{ matrix.ip }}" "$VAR_MATRIX"
+          ./deploy/scripts/configure-swarm-server.sh "${{ matrix.ip }}"
           echo "[*] Configuring swarm server ${{ matrix.ip }} ...DONE"

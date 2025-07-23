@@ -1,9 +1,17 @@
 #!/bin/bash
+#===============================================================================
+# Script Name   : terraform-apply.sh
+# Description   : Initialize, plan, and apply the terraform code
+# Usage         : ./terraform-apply.sh
+# Author        : Vincent Huybrechts
+# Created       : 2025-07-23
+# Last Modified : 2025-07-23
+#===============================================================================
 set -euo pipefail
-#cd "$(dirname "$0")/../deploy/terraform"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 
 # Generate the workspace.tfvars file base on the current workspace
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "[*] ...Generating ${WORKSPACE}.tfvars file"
 SERVERS_JSON="$SCRIPT_DIR/../workspaces/${WORKSPACE}.ws.json"
 OUTPUT_FILE="$SCRIPT_DIR/../terraform/workspace.tfvars"
@@ -71,4 +79,4 @@ terraform apply -auto-approve -var-file="workspace.tfvars" -input=false
 echo "[*] ...Reading Terraform output..."
 terraform output -json serverdata | jq -c '.' | tee $VAR_PATH_TEMP/tf_output.json
 
-echo "[*] ...Terraform output saved to tf_output.json and $VAR_PATH_TEMP/tf_output.json"
+echo "[+] ...Terraform output saved to tf_output.json and $VAR_PATH_TEMP/tf_output.json"
