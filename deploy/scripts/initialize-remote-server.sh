@@ -464,7 +464,7 @@ main() {
     }
     
     echo "[*] Remote server cleanup..."
-    rm -rf /tmp/app/*
+    rm -rf /tmp/app/*   # : "${PATH_TEMP:="/tmp/app"}"
     echo "[+] Remote server initialization completed."
 }
 
