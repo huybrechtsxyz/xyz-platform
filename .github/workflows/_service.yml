@@ -208,6 +208,6 @@ jobs:
           VAR_PATH_TEMP: ${{ env.VAR_PATH_TEMP }}
         run: |
           echo "[*] Deploying service ${{ matrix.ip }} ..."
-          chmod +x ./deploy/scripts/deploy-swarm-services.sh
-          ./deploy/scripts/deploy-swarm-services.sh
+          chmod +x ./deploy/scripts/deploy-swarm-service.sh
+          ./deploy/scripts/deploy-swarm-service.sh
           echo "[*] Deploying service ${{ matrix.ip }} ... DONE"
