@@ -1,5 +1,5 @@
 # This workflow deploys all services to the shared environment
-name: Deploy All Services
+name: Services - All
 
 on:
   workflow_dispatch:

@@ -88,7 +88,74 @@ if [[ "$SERVER_NAME" != "$HOSTNAME" ]]; then
 fi
 
 # Create the service by copying the correct files and creating the correct directories
+# We are running on the manager-1 (the first server defined in the workspace file)
 create_service() {
+  log INFO "[*] Starting service setup: $WORKSPACE on host $hostname..."
+
+  # Read all workspace servers for debugging
+  mapfile -t servers < <(jq -c '.servers[]' "$WORKSPACE_FILE")
+  server_count=${#servers[@]}
+  log INFO "[*] ... Workspace data loaded: $server_count servers found: $(jq -r '.servers[].id' "$WORKSPACE_FILE" | paste -sd "," -)"
+
+  first=true
+  for serverdata in "${servers[@]}"; do
+    local serverid=$(echo "$serverdata" | jq -r '.id')
+    local mountpoint=$(echo "$serverdata" | jq -r '.mountpoint')
+    
+    
+
+
+    first=false
+  done
+
+  log INFO "[*] Starting service setup: $WORKSPACE on host $hostname...DONE"
+}
+
+main() {
+  log INFO "[*] Deploying service: $SERVICE_ID..."
+
+  # Load docker secrets for service
+  load_docker_secrets "$PATH_DEPLOY/secrets.env" || {
+    log ERROR "[X] Error loading docker secrets for $SERVICE_ID"
+    exit 1
+  }
+  safe_rm_rf "$PATH_DEPLOY/secrets.env"
+
+  # Create the service workspace
+  create_service || {
+    log ERROR "[X] Error creating workspace for $SERVICE_ID"
+    exit 1
+  }
+
+  log INFO "[*] Deploying service: $SERVICE_ID...DONE"
+}
+
+main
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Create the service by copying the correct files and creating the correct directories
+create_service3() {
   log INFO "[*] Starting service setup: $WORKSPACE on host $hostname"
 
   # Calculate the configuration path on the server
@@ -119,10 +186,10 @@ create_service() {
   # Then we only copy to manager configpath
   if [[ "$managervolume" != "local" ]]; then
     # Create the service configuration path and copy files
-    create_service_volume $configpath
+    
   else
     # Otherwise we need to do this on each server
-    create_service_remote
+    
   fi
 
   log INFO "[+] Completed service setup: $WORKSPACE on host $hostname"
@@ -162,30 +229,3 @@ create_service_volume() {
 
   log INFO "[+] ... Deploying the service locally...DONE"
 }
-
-create_service_remote(){
-  log INFO "[*] ... Deploying the service on remote servers..."
-  echo "olala"
-  log INFO "[*] ... Deploying the service on remote servers...DONE"
-}
-
-main() {
-  log INFO "[*] Deploying service: $SERVICE_ID..."
-
-  # Load docker secrets for service
-  load_docker_secrets "$PATH_DEPLOY/secrets.env" || {
-    log ERROR "[X] Error loading docker secrets for $SERVICE_ID"
-    exit 1
-  }
-  safe_rm_rf "$PATH_DEPLOY/secrets.env"
-
-  # Create the service workspace
-  create_service || {
-    log ERROR "[X] Error creating workspace for $SERVICE_ID"
-    exit 1
-  }
-
-  log INFO "[*] Deploying service: $SERVICE_ID...DONE"
-}
-
-main
