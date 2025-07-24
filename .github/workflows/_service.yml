@@ -109,7 +109,7 @@ jobs:
           echo "selection=$COMPACT_MATRIX" >> "$GITHUB_OUTPUT"
 
   deploy:
-    name: Deploy Services
+    name: Deploy Service
     needs: [setup]
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
@@ -195,7 +195,7 @@ jobs:
         if: matrix.id != ''
         run: |
           echo "Debugging service contents"
-          ls -laR service/${{ matrix.id }}
+          ls -la service/${{ matrix.id }}
 
       # Configure Service
       - name: Configure Service
