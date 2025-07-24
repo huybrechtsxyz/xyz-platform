@@ -1,5 +1,5 @@
 # This workflow deploys all infrastructure to the shared environment
-name: Deploy Platform
+name: Workspace - Platform
 
 on:
   workflow_dispatch:
