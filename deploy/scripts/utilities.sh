@@ -33,6 +33,17 @@ get_server_variable_name() {
   echo "PATH_${varserver}_${varmount}"
 }
 
+get_service_variable_name() {
+  local service="$1"
+  local mount="$2"
+
+  # Sanitize: uppercase, then replace non-alphanum with _
+  local varservice=$(echo "$service" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
+  local varmount=$(echo "$mount" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
+
+  echo "${varservice}_PATH_${varmount}"
+}
+
 # Save force removal function
 # As a safety precaution, check that the path you're about to wipe isn't / or empty
 safe_rm_rf() {
