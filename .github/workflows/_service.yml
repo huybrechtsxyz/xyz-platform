@@ -207,7 +207,7 @@ jobs:
           VAR_TERRAFORM: ${{ needs.setup.outputs.terraform }}
           VAR_PATH_TEMP: ${{ env.VAR_PATH_TEMP }}
         run: |
-          echo "[*] Deploying service ${{ matrix.ip }} ..."
+          echo "[*] Deploying service ${{ matrix.id }} ..."
           chmod +x ./deploy/scripts/deploy-swarm-service.sh
           ./deploy/scripts/deploy-swarm-service.sh
-          echo "[*] Deploying service ${{ matrix.ip }} ... DONE"
+          echo "[*] Deploying service ${{ matrix.id }} ... DONE"
