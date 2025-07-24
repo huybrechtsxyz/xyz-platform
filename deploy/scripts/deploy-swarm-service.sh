@@ -76,8 +76,8 @@ create_environment_files() {
 # Copy configuration files to the remote server by creating necessary directories
 # Creates the temporary application path and subdirectories on the remote server
 copy_configuration_files() {
-  log INFO "[*] Copying service files to $REMOTE_IP..."
-  shopt -s nullglob
+log INFO "[*] Copying service files to $REMOTE_IP..."
+shopt -s nullglob
 
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
 set -e
@@ -100,7 +100,8 @@ scp -o StrictHostKeyChecking=no \
 
 log INFO "[*] Copying configuration files to remote server...Service"
 scp -o StrictHostKeyChecking=no \
-  $SERVICE_PATH/* \
+  $SERVICE_PATH/config/* \
+  $SERVICE_PATH/scripts/* \
   root@"$REMOTE_IP":"$PATH_CONFIG"/ || {
     log ERROR "[x] Failed to transfer service files to remote server"
     exit 1
@@ -112,7 +113,7 @@ ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
   ls -la "$PATH_CONFIG"
 EOF
 
-  log INFO "[*] Copying service files to $REMOTE_IP...DONE"
+log INFO "[*] Copying service files to $REMOTE_IP...DONE"
 }
 
 # Deploys the remote service by executing the script
