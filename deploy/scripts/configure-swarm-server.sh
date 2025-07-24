@@ -55,30 +55,30 @@ if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
 mkdir -p "$VAR_PATH_TEMP" "$PATH_DEPLOY" "$PATH_CONFIG"
 EOF
 then
-log ERROR "[!] Copying configuration failed to $REMOTE_IP"
+log ERROR "[X] Copying configuration failed to $REMOTE_IP"
 exit 1
 fi
 
-  log INFO "[*] Copying deployment scripts to remote server...Deploy"
-  scp -o StrictHostKeyChecking=no \
-    ./deploy/scripts/*.* \
-    root@"$REMOTE_IP":"$PATH_DEPLOY"/ || {
-      log ERROR "[x] Failed to transfer deployment scripts to remote server"
-      exit 1
-    }
+log INFO "[*] Copying deployment scripts to remote server...Deploy"
+scp -o StrictHostKeyChecking=no \
+  ./deploy/scripts/*.* \
+  root@"$REMOTE_IP":"$PATH_DEPLOY"/ || {
+    log ERROR "[x] Failed to transfer deployment scripts to remote server"
+    exit 1
+  }
 
-  log INFO "[*] Copying configuration files to remote server...Sources"
-  scp -o StrictHostKeyChecking=no \
-    ./deploy/workspaces/*.* \
-    ./deploy/*.* \
-    ./scripts/*.sh \
-    root@"$REMOTE_IP":"$PATH_CONFIG"/ || {
-      log ERROR "[x] Failed to transfer configuration files to remote server"
-      exit 1
-    }
+log INFO "[*] Copying configuration files to remote server...Sources"
+scp -o StrictHostKeyChecking=no \
+  ./deploy/workspaces/*.* \
+  ./deploy/*.* \
+  ./scripts/*.sh \
+  root@"$REMOTE_IP":"$PATH_CONFIG"/ || {
+    log ERROR "[x] Failed to transfer configuration files to remote server"
+    exit 1
+  }
 
 log INFO "[*] Debugging deployment path of remote server..."
-ssh -o StrictHostKeyChecking=no root@$VAR_REMOTE_IP << EOF
+ssh -o StrictHostKeyChecking=no root@$REMOTE_IP << EOF
   ls -la "$PATH_DEPLOY"
   ls -la "$PATH_CONFIG"
 EOF
@@ -97,7 +97,7 @@ chmod +x "$PATH_DEPLOY/configure-remote-server.sh"
 "$PATH_DEPLOY/configure-remote-server.sh" "$VAR_PATH_TEMP"
 EOF
 then
-log ERROR "[!] Remote configuration failed on $REMOTE_IP"
+log ERROR "[X] Remote configuration failed on $REMOTE_IP"
 exit 1
 fi
 log INFO "[*] Executing on REMOTE server...DONE"
@@ -107,17 +107,17 @@ main() {
   log INFO "[*] Configuring remote server at $REMOTE_IP..."
 
   if ! create_environment_files; then
-    log ERROR "[x] Failed to create environment files."
+    log ERROR "[X] Failed to create environment files."
     exit 1
   fi
 
   if ! copy_configuration_files; then
-    log ERROR "[x] Failed to copy configuration files to remote server"
+    log ERROR "[X] Failed to copy configuration files to remote server"
     exit 1
   fi
 
   if ! configure_server; then
-    log ERROR "[x] Failed to configure remote server"
+    log ERROR "[X] Failed to configure remote server"
     exit 1
   fi
 

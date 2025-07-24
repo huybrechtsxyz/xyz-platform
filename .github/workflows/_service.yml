@@ -29,7 +29,7 @@ jobs:
     environment: ${{ inputs.environment }}
     outputs:
       terraform: ${{ steps.terraform.outputs.tfoutput }}
-      registries: ${{ steps.services.outputs.registries }}
+      services: ${{ steps.services.outputs.selection }}
     steps:
       # Check out the platform repo
       - name: Check Out
@@ -51,7 +51,7 @@ jobs:
           WORKSPACE: ${{ inputs.workspace }}
           ENVIRONMENT: ${{ inputs.environment }}
           TEMPPATH: ${{ env.VAR_PATH_TEMP }}
-          API_TOKEN: ${{ secrets.TERRAFORM_API_TOKEN }}
+          API_TOKEN: ${{ steps.get-secrets.outputs.TERRAFORM_API_TOKEN }}
 
       # Parse Terraform Output
       # Outputs the terraform server matrix
@@ -69,7 +69,7 @@ jobs:
       # The script reads `registry/*.json`, each containing a `.service.id` field, and constructs a GitHub Actions matrix output including only the matched services.
       # Example: inputs.services: "traefik,site"
       # Outputs the services matrix format: { "include": [ { "id": "traefik" }, { "id": "site" } ] }
-      - name: Parse Registry Services
+      - name: Select Services
         id: services
         run: |
           # inputs.services is a comma-separated list or JSON array of service IDs
@@ -81,7 +81,7 @@ jobs:
           FILES=(registry/*.json)
           if [ ${#FILES[@]} -eq 0 ]; then
             echo "No JSON files found in registry/"
-            echo 'registries={"include": [{ "id": "", "name": "" }]}' >> "$GITHUB_OUTPUT"
+            echo 'selection={"include": [{ "id": "", "name": "" }]}' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # Loop registry
@@ -106,7 +106,7 @@ jobs:
           # Prepare output
           COMPACT_MATRIX=$(jq -c '.' <<< "$MATRIX")
           echo "Generated matrix: $COMPACT_MATRIX"
-          echo "registries=$COMPACT_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "selection=$COMPACT_MATRIX" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: Deploy Services
@@ -115,7 +115,7 @@ jobs:
     environment: ${{ inputs.environment }}
     if: ${{ always() && !contains(needs.*.result, 'failure') }}
     strategy:
-      matrix: ${{ fromJson(needs.setup.outputs.registries) }}
+      matrix: ${{ fromJson(needs.setup.outputs.services) }}
     steps:
       # Do we need to run?
       - name: Skip Deployment

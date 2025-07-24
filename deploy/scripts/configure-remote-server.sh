@@ -29,7 +29,7 @@ PATH_DEPLOY="$PATH_TEMP/.deploy"
 PATH_CONFIG="$PATH_TEMP/.config"
 
 source "$PATH_CONFIG/variables.env"
-source "$PATH_CONFIG/secrets.env"
+#source "$PATH_CONFIG/secrets.env"
 source "$PATH_DEPLOY/utilities.sh"
 
 WORKSPACE_FILE=$(get_workspace_file "$PATH_CONFIG" "$WORKSPACE") || exit 1
@@ -299,7 +299,9 @@ create-fs-volumes() {
       commands+=("$fullpath")
 
       # Add to environment variables file
-      echo "SRV_${server^^}_PATH_${mounttype^^}=$fullpath" >> "$PATH_CONFIG/$WORKSPACE.env"
+      varserver=$(echo "$server" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
+      varmount=$(echo "$mounttype" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
+      echo "PATH_${varserver^^}_${varmount^^}=$fullpath" >> "$PATH_CONFIG/$WORKSPACE.env"
 
       # Add to bricks array for GlusterFS volume creation
       # Use workspace prefix in the volume name
@@ -401,6 +403,9 @@ create_workspace() {
     return 1
   fi
 
+  # Set configuration path as executable
+  chmod 755 "$configpath"/*.sh
+
   # Ensure the workspace definition file exists
   log INFO "[*] Workspace $WORKSPACE setup COMPLETE on host $HOSTNAME"
 }
@@ -472,9 +477,7 @@ main() {
   fi
 
   log INFO "[*] Remote server cleanup..."
-  # Set configuration path
-  chmod 755 "$PATH_CONFIG"/*
-  # PATH_TEMP
+  # PATH_TEMP PATH_CONFIG PATH_DEPLOY
   safe_rm_rf /tmp/app/*
 
   log INFO "[+] Configuring Swarm Node: $HOSTNAME...DONE"
