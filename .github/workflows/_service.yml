@@ -132,7 +132,7 @@ jobs:
       - name: Get General Secrets
         uses: bitwarden/sm-action@v2
         id: get-secrets
-        if: matrix.id == ''
+        if: matrix.id != ''
         with:
           access_token: ${{ secrets.BITWARDEN_TOKEN }}
           secrets: |
@@ -147,7 +147,7 @@ jobs:
 
       # Set up SSH connection
       - name: Set up SSH connection
-        if: matrix.id == ''
+        if: matrix.id != ''
         env:
           KAMATERA_PRIVATE_KEY: ${{ steps.get-secrets.outputs.KAMATERA_PRIVATE_KEY }}
         run: |
@@ -190,6 +190,13 @@ jobs:
           ref: ${{ steps.load.outputs.ref }}
           path: service/${{ matrix.id }}
 
+      # Debug Service Contents
+      - name: Debug Service Contents
+        if: matrix.id != ''
+        run: |
+          echo "Debugging service contents"
+          ls -laR service/${{ matrix.id }}
+
       # Configure Service
       - name: Configure Service
         if: matrix.id != ''
@@ -201,6 +208,6 @@ jobs:
           VAR_PATH_TEMP: ${{ env.VAR_PATH_TEMP }}
         run: |
           echo "[*] Deploying service ${{ matrix.ip }} ..."
-          chmod +x deploy/scripts/deploy-swarm-services.sh
+          chmod +x ./deploy/scripts/deploy-swarm-services.sh
           ./deploy/scripts/deploy-swarm-services.sh
           echo "[*] Deploying service ${{ matrix.ip }} ... DONE"
