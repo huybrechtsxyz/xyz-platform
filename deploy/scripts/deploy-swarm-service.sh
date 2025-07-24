@@ -26,7 +26,7 @@ if [[ -z "$SERVICE_ID" ]]; then
 fi
 
 # Get the remote IP
-WORKSPACE_FILE=$(get_workspace_file "./deploy/workspaces" "$WORKSPACE") || exit 1
+WORKSPACE_FILE=$(get_workspace_file "./deploy/workspaces" "$VAR_WORKSPACE") || exit 1
 log INFO "[*] Getting workspace file: $WORKSPACE_FILE"
 
 MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
