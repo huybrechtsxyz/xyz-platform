@@ -100,9 +100,12 @@ create_service() {
   local managervolume=$(echo "$managerinfo" | jq --arg type "config" -r '.paths[] | select(.type == $type) | .volume')
   local configpath="${managermount//\$\{disk\}/$managerdisk}${managerpath}"
 
+  log INFO "[*] ... Service path configuration: $configpath"
+
   # Volume can be local, replicated, distributed
   case "$managervolume" in
     local|replicated|distributed)
+       log INFO "[*] ... Service volume configuration: $managervolume"
       ;;  # valid
     *)
       log ERROR "[X] Invalid volume type: $managervolume"
@@ -114,42 +117,7 @@ create_service() {
   # Then we only copy to manager configpath
   if [[ "$managervolume" != "local" ]]; then
     # Create the service configuration path and copy files
-    service_path="$configpath/$SERVICE_ID"
-    mkdir -p "$service_path"
-    cp "$PATH_CONFIG" "$service_path"
-    
   fi
-
-
-
-
-
-
-
-
-  # Get the servers from the terraform output
-  mapfile -t servers < <(jq -c '.include[]' "$TERRAFORM_FILE")
-  server_count=${#servers[@]}
-  log INFO "[*] Terraform data loaded: $server_count servers found"
-
-  # Get the paths from the workspace
-  mapfile -t paths < <(jq -c '.service.paths[]' "$WORKSPACE_FILE")
-  path_count=${#paths[@]}
-  log INFO "[*] Workspace data loaded: $paths_count paths found"
-  
-  
-  
-  # For each server (private-ip)
-  
-  first=true
-  for serverinfo in "${servers[@]}"; do
-    # Get server information
-    local server_id=$(echo "$serverinfo" | jq -r '.label')
-    local private_ip=$(echo "$serverinfo" | jq -r '.private_ip')
-
-   
-    first=false
-  done
 
   log INFO "[+] Completed service setup: $WORKSPACE on host $hostname"
 }

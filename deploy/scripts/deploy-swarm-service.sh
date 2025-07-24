@@ -122,9 +122,8 @@ log INFO "[*] Copying service files to $REMOTE_IP...DONE"
 configure_service() {
 log INFO "[*] Executing REMOTE deployment..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-#chmod +x "$PATH_DEPLOY/deploy-remote-service.sh"
-#"$PATH_DEPLOY/deploy-remote-service.sh" "$PATH_CONFIG"
-echo "on the server"
+chmod +x "$PATH_DEPLOY/deploy-remote-service.sh"
+"$PATH_DEPLOY/deploy-remote-service.sh" "$PATH_CONFIG"
 EOF
 then
 log ERROR "[X] Remote deployment failed on $REMOTE_IP"
