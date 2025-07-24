@@ -269,12 +269,12 @@ create-fs-volumes() {
   # Read all workspace servers for debugging
   mapfile -t servers < <(jq -c '.servers[]' "$WORKSPACE_FILE")
   server_count=${#servers[@]}
-  log INFO "[*] Workspace data loaded: $server_count servers found: $(jq -r '.servers[].id' "$WORKSPACE_FILE" | paste -sd "," -)"
+  log INFO "[*] ... Workspace data loaded: $server_count servers found: $(jq -r '.servers[].id' "$WORKSPACE_FILE" | paste -sd "," -)"
 
   # Read terraform servers for debugging
   mapfile -t tservers < <(jq -c '.include[]' "$TERRAFORM_FILE")
   tserver_count=${#tservers[@]}
-  log INFO "[*] Terraform data loaded: $tserver_count servers found: $(jq -r '.include[].label' "$TERRAFORM_FILE" | paste -sd ',')"
+  log INFO "[*] ... Terraform data loaded: $tserver_count servers found: $(jq -r '.include[].label' "$TERRAFORM_FILE" | paste -sd ',')"
 
   # First pass: Create directories and collect all bricks
   # Loop over all servers in the workspace file
@@ -291,7 +291,7 @@ create-fs-volumes() {
 
     commands=()
 
-    log INFO "[*] Processing server '$server' mounts with mountpoint '$mountpoint' for ip '$private_ip'"
+    log INFO "[*] ... Processing server '$server' mounts with mountpoint '$mountpoint' for ip '$private_ip'"
 
     # Read mounts into an array
     mapfile -t mounts < <(jq -c '.mounts[]' <<< "$serverdata")
@@ -318,15 +318,14 @@ create-fs-volumes() {
       fi
 
       # Resolve the full path
-      log INFO "[*] Creating directory on $mountdisk with type $mounttype on server '$server': $fullpath"
+      log INFO "[*] ...... Creating directory on $mountdisk with type $mounttype on server '$server': $fullpath"
 
       # Add the path to the creation command
       commands+=("$fullpath")
 
       # Add to environment variables file
-      varserver=$(echo "$server" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
-      varmount=$(echo "$mounttype" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
-      echo "PATH_${varserver^^}_${varmount^^}=$fullpath" >> "$PATH_CONFIG/$WORKSPACE.env"
+      varserver=$(get_varname "$server" "$mounttype")
+      echo "$varserver=$fullpath" >> "$PATH_CONFIG/$WORKSPACE.env"
 
       # Add to bricks array for GlusterFS volume creation
       # Use workspace prefix in the volume name
@@ -334,14 +333,14 @@ create-fs-volumes() {
       # Distributed volumes will have a single brick
       # Local volumes will be skipped as they are not managed by GlusterFS
       if [[ $volume == "local" ]]; then
-        log INFO "[*] Skipping local storage volume '$mounttype' for server '$server'."
+        log INFO "[*] ...... Skipping local storage volume '$mounttype' for server '$server'."
       else
-        log INFO "[*] Adding GlusterFS volume '$mounttype' for server '$server'."
+        log INFO "[*] ...... Adding GlusterFS volume '$mounttype' for server '$server'."
         volumename="${WORKSPACE}_${mounttype}"
         brick="${private_ip}:${fullpath}"
         volume_map["$mounttype"]="$volume"
         bricks_map["$volumename"]+="$brick "
-        log INFO "[*] Adding brick '$brick' to volume '$volumename'"
+        log INFO "[*] ...... Adding brick '$brick' to volume '$volumename'"
       fi
 
     done
@@ -350,25 +349,25 @@ create-fs-volumes() {
     # GlusterFS requires the directories to exist before creating volumes
     if [[ ${#commands[@]} -gt 0 ]]; then
       if [[ "$server" == "$SERVER_ID" ]]; then
-        log INFO "[*] Creating directories on local server '$server'..."
+        log INFO "[*] ...... Creating directories on local server '$server'..."
         mkdir -p "${commands[@]}"
-        log INFO "[*] Creating directories on local server '$server'...DONE"
+        log INFO "[*] ...... Creating directories on local server '$server'...DONE"
       else
-        log INFO "[*] Creating directories on server '$server' via SSH..."
+        log INFO "[*] ...... Creating directories on server '$server' via SSH..."
         if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "root@$private_ip" mkdir -p "${commands[@]}"; then
           log ERROR "[!] Failed to create directories on server '$server'."
           return 1
         fi
-        log INFO "[*] Directories created successfully on server '$server'."
+        log INFO "[*] ...... Directories created successfully on server '$server'."
       fi
     else
-      log WARN "[!] No directories to create on server '$server'. Skipping."
+      log WARN "[!] ... No directories to create on server '$server'. Skipping."
     fi
   done
 
   # Create and start volumes
   # Iterate over the bricks_map to create volumes
-  log INFO "[*] Creating GlusterFS volumes ..."
+  log INFO "[*] ... Creating GlusterFS volumes ..."
   for volumename in "${!bricks_map[@]}"; do
     # Extract the mount_type back from the volname
     bricks=(${bricks_map[$volumename]})
@@ -376,7 +375,7 @@ create-fs-volumes() {
     volumetype=${volume_map[$mounttype]}
 
     if [[ ${#bricks[@]} -eq 0 ]]; then
-      log WARN "No bricks defined for volume '$volumename', skipping."
+      log WARN "[!] ...... No bricks defined for volume '$volumename', skipping."
       continue
     fi
 
@@ -384,23 +383,23 @@ create-fs-volumes() {
 
     # Check if volume already exists
     if gluster volume info "$volumename" &>/dev/null; then
-      log INFO "[*] Volume '$volumename' already exists, skipping creation."
+      log INFO "[*] ...... Volume '$volumename' already exists, skipping creation."
     else
-      log INFO "[*] Creating volume '$volumename' of type '$volumetype' with bricks: ${bricks[*]}"
+      log INFO "[*] ...... Creating volume '$volumename' of type '$volumetype' with bricks: ${bricks[*]}"
 
       if [[ "$volumetype" == "replicated" ]]; then
         replica_count=${#bricks[@]}
-        log INFO "[*] Executing: gluster volume create $volumename with $replica_count replicas..."
+        log INFO "[*] ... Executing: gluster volume create $volumename with $replica_count replicas..."
         gluster volume create "$volumename" replica "$replica_count" "${bricks[@]}" force
       elif [[ "$volumetype" == "distributed" ]]; then
         gluster volume create "$volumename" "${bricks[@]}" force
       else
-        log WARN "[!] Unknown volume type '$volumetype' for volume '$volumename', skipping."
+        log WARN "[!] ...... Unknown volume type '$volumetype' for volume '$volumename', skipping."
         continue
       fi
 
       gluster volume start "$volumename"
-      log INFO "[*] Volume '$volumename' created and started."
+      log INFO "[*] ...... Volume '$volumename' created and started."
     fi
   done
 
@@ -416,8 +415,8 @@ create-fs-volumes() {
 create_workspace() {
   log INFO "[*] Starting workspace setup: $WORKSPACE on host $HOSTNAME"
 
-  # Build the path based on {PATH_LABEL_TYPE}
-  local configpathname="SRV_${SERVER_ID}_CONFIG"
+  # Build the path based on {PATH_SERVER_TYPE}
+  local configpathname=$(get_varname "$SERVER_ID" "CONFIG")
   local configpath="${!configpathname}"
   log INFO "[*] ... Copying global configuration files to: $configpath"
 

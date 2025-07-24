@@ -22,6 +22,17 @@ log() {
   esac
 }
 
+get_server_variable_name() {
+  local server="$1"
+  local mounttype="$2"
+
+  # Sanitize: uppercase, then replace non-alphanum with _
+  local varserver=$(echo "$server" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
+  local varmount=$(echo "$mounttype" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
+
+  echo "PATH_${varserver}_${varmount}"
+}
+
 # Save force removal function
 # As a safety precaution, check that the path you're about to wipe isn't / or empty
 safe_rm_rf() {
