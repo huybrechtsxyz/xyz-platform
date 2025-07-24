@@ -41,10 +41,10 @@ else
   exit 1
 fi
 
-if [[ -f "$PATH_DEPLOY/utilities.env" ]]; then
-  source "$PATH_DEPLOY/utilities.env"
+if [[ -f "$PATH_DEPLOY/utilities.sh" ]]; then
+  source "$PATH_DEPLOY/utilities.sh"
 else
-  log ERROR "[X] Missing utilities.env at $PATH_DEPLOY"
+  log ERROR "[X] Missing utilities.sh at $PATH_DEPLOY"
   exit 1
 fi
 

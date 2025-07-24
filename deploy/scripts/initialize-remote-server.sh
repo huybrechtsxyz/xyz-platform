@@ -22,8 +22,20 @@ if [[ ! -d "$PATH_DEPLOY" ]]; then
   exit 1
 fi
 
-source "$PATH_DEPLOY/variables.env"
-source "$PATH_DEPLOY/utilities.sh"
+if [[ -f "$PATH_DEPLOY/variables.env" ]]; then
+  source "$PATH_DEPLOY/variables.env"
+else
+  log ERROR "[X] Missing variables.env at $PATH_DEPLOY"
+  exit 1
+fi
+
+if [[ -f "$PATH_DEPLOY/utilities.sh" ]]; then
+  source "$PATH_DEPLOY/utilities.sh"
+else
+  log ERROR "[X] Missing utilities.sh at $PATH_DEPLOY"
+  exit 1
+fi
+
 HOSTNAME=$(hostname)
 
 # Validate that the variables are set
@@ -40,7 +52,7 @@ log INFO "[*] MANAGER_IP: $MANAGER_IP"
 log INFO "[*] PRIVATE_IP: $PRIVATE_IP"
 
 log INFO "[*] Finding workspace file and manager label"
-WORKSPACE_FILE=$(get_WORKSPACE_FILE "$PATH_DEPLOY" "$WORKSPACE") || exit 1
+WORKSPACE_FILE=$(get_workspace_file "$PATH_DEPLOY" "$WORKSPACE") || exit 1
 MANAGER_LABEL=$(get_manager_id "$WORKSPACE_FILE") || exit 1
 if [[ ! -f "$WORKSPACE_FILE" ]]; then
   log ERROR "[X] Workspace file not found: $WORKSPACE_FILE"
