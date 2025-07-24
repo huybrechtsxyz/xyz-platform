@@ -29,6 +29,7 @@ fi
 
 PATH_DEPLOY="$VAR_PATH_TEMP/.deploy"
 PATH_CONFIG="$VAR_PATH_TEMP/.config"
+PATH_DOCS="$VAR_PATH_TEMP/.docs"
 
 # Source the utilities script for logging and environment variable handling
 source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
@@ -52,7 +53,7 @@ copy_configuration_files() {
   shopt -s nullglob
 
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-mkdir -p "$VAR_PATH_TEMP" "$PATH_DEPLOY" "$PATH_CONFIG"
+mkdir -p "$VAR_PATH_TEMP" "$PATH_DEPLOY" "$PATH_CONFIG" "$PATH_DOCS"
 EOF
 then
 log ERROR "[X] Copying configuration failed to $REMOTE_IP"
@@ -77,10 +78,19 @@ scp -o StrictHostKeyChecking=no \
     exit 1
   }
 
+log INFO "[*] Copying documentation files to remote server...Docs"
+scp -r -o StrictHostKeyChecking=no \
+  ./docs/ \
+  root@"$REMOTE_IP":"$PATH_DOCS"/ || {
+    log ERROR "[x] Failed to transfer documentation files to remote server"
+    exit 1
+  }
+
 log INFO "[*] Debugging deployment path of remote server..."
 ssh -o StrictHostKeyChecking=no root@$REMOTE_IP << EOF
   ls -la "$PATH_DEPLOY"
   ls -la "$PATH_CONFIG"
+  ls -la "$PATH_DOCS"
 EOF
 
   log INFO "[*] Copying configuration files to $REMOTE_IP...DONE"

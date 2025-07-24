@@ -38,6 +38,12 @@ if [[ ! -d "$PATH_CONFIG" ]]; then
   exit 1
 fi
 
+PATH_DOCS="$PATH_TEMP/.docs"
+if [[ ! -d "$PATH_DOCS" ]]; then
+  echo "Temporary path $PATH_DOCS does not exist."
+  exit 1
+fi
+
 # Sourcing variables and scripts
 if [[ -f "$PATH_CONFIG/variables.env" ]]; then
   source "$PATH_CONFIG/variables.env"
