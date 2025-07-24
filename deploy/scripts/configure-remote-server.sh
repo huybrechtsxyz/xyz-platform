@@ -20,17 +20,42 @@ set -eo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 
 PATH_TEMP="$1"
-HOSTNAME=$(hostname)
-
-: "${PATH_TEMP:="/tmp/app"}"
-: "${WORKSPACE:?Missing WORKSPACE}"
+: "${PATH_TEMP:?Missing PATH_TEMP}"
+if [[ ! -d "$PATH_TEMP" ]]; then
+  echo "Temporary path $PATH_TEMP does not exist."
+  exit 1
+fi
 
 PATH_DEPLOY="$PATH_TEMP/.deploy"
-PATH_CONFIG="$PATH_TEMP/.config"
+if [[ ! -d "$PATH_DEPLOY" ]]; then
+  echo "Temporary path $PATH_DEPLOY does not exist."
+  exit 1
+fi
 
-source "$PATH_CONFIG/variables.env"
-#source "$PATH_CONFIG/secrets.env"
-source "$PATH_DEPLOY/utilities.sh"
+PATH_CONFIG="$PATH_TEMP/.config"
+if [[ ! -d "$PATH_CONFIG" ]]; then
+  echo "Temporary path $PATH_CONFIG does not exist."
+  exit 1
+fi
+
+# Sourcing variables and scripts
+if [[ -f "$PATH_CONFIG/variables.env" ]]; then
+  source "$PATH_CONFIG/variables.env"
+else
+  log ERROR "[X] Missing variables.env at $PATH_CONFIG"
+  exit 1
+fi
+
+if [[ -f "$PATH_DEPLOY/utilities.sh" ]]; then
+  source "$PATH_DEPLOY/utilities.sh"
+else
+  log ERROR "[X] Missing utilities.sh at $PATH_DEPLOY"
+  exit 1
+fi
+
+# Workspace and hostname
+: "${WORKSPACE:?Missing WORKSPACE}"
+HOSTNAME=$(hostname)
 
 WORKSPACE_FILE=$(get_workspace_file "$PATH_CONFIG" "$WORKSPACE") || exit 1
 log INFO "[*] Getting workspace file: $WORKSPACE_FILE"
