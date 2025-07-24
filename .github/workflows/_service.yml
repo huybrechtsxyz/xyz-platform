@@ -123,6 +123,11 @@ jobs:
         run: |
           echo "No services to deploy — skipping empty matrix list."
 
+      # Check out the repo
+      - name: Check Out Platform
+        uses: actions/checkout@v4
+        if: matrix.id != ''
+
       # Set up GitHub Secrets
       - name: Get General Secrets
         uses: bitwarden/sm-action@v2
@@ -149,12 +154,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "$KAMATERA_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-
-      # Check out the repo
-      - name: Check Out Platform
-        uses: actions/checkout@v4
-        if: matrix.id != ''
-
+     
       # Load service metadata from registry
       # Outputs - repository - ref - registryinfo
       - name: Load Service Metadata
