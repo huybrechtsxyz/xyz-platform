@@ -26,13 +26,33 @@ log() {
 # As a safety precaution, check that the path you're about to wipe isn't / or empty
 safe_rm_rf() {
   local path="$1"
-  if [[ -n "$path" && "$path" != "/" && -d "$path" ]]; then
-    rm -rf "$path"/*
+
+  if [[ -z "$path" || "$path" == "/" ]]; then
+    log WARN "[!] ... Skipped unsafe or empty path: '$path'"
+    return
+  fi
+
+  # Resolve real path to protect against symlinks to /
+  local real_path
+  real_path=$(realpath -m "$path")  # -m handles non-existent paths
+
+  if [[ "$real_path" == "/" ]]; then
+    log ERROR "[X] ... Refusing to remove root directory"
+    return
+  fi
+
+  if [[ -f "$real_path" ]]; then
+    log INFO "[*] ... Removing file: $real_path"
+    rm -f "$real_path"
+  elif [[ -d "$real_path" ]]; then
+    log INFO "[*] ... Removing directory contents: $real_path"
+    shopt -s nullglob dotglob
+    rm -rf "$real_path"/*
+    shopt -u nullglob dotglob
   else
-    log WARN "Skipped unsafe or non-existent path: $path"
+    log WARN "[!] ... Skipped non-existent path: $real_path"
   fi
 }
-
 
 # Function to check if the actual disk size matches the expected size within a tolerance
 disk_size_matches() {
