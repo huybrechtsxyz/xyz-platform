@@ -76,6 +76,18 @@ safe_rm_rf() {
   fi
 }
 
+# The function runs the validation script on the given JSON file.
+# Usage: validate_workspace <SCRIPT_PATH> <WORKSPACE_FILE>
+validate_workspace() {
+  local path="$1"
+  local workspace_file="$2"
+  "$path/validate-workspace.sh" "$workspace_file"
+  if [[ $? -ne 0 ]]; then
+    echo "Validation failed. Exiting."
+    exit 1
+  fi
+}
+
 # Function to check if the actual disk size matches the expected size within a tolerance
 disk_size_matches() {
   local actual_gb="$1"        # e.g. 39

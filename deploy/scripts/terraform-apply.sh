@@ -16,6 +16,10 @@ echo "[*] ...Generating ${WORKSPACE}.tfvars file"
 SERVERS_JSON="$SCRIPT_DIR/../workspaces/${WORKSPACE}.ws.json"
 OUTPUT_FILE="$SCRIPT_DIR/../terraform/workspace.tfvars"
 
+# Validate the workspace definition
+echo "[*] ...Validating workspace definition $SERVERS_JSON"
+validate_workspace "$SCRIPT_DIR/../scripts" "$SERVERS_JSON"
+
 # Extract unique roles
 roles=$(jq -r '.servers[].role' "$SERVERS_JSON" | sort | uniq)
 if [ -z "$roles" ]; then

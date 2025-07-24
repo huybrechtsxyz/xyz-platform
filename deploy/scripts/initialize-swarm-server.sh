@@ -28,7 +28,7 @@ VAR_MANAGER_IP="${3:?Missing manager IP}"
 
 # Create a temporary directory for the initialization scripts
 # Output files
-# |- ./deploy/workspaces/variables.env
+# |- ./deploy/variables.env
 create_env_file() {
   generate_env_file "VAR_" "./deploy/variables.env"
 }

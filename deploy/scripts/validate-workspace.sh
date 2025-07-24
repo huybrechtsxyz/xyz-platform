@@ -25,7 +25,7 @@ log() {
 
 WORKSPACE_FILE="${1:-}"
 if [[ -z "$WORKSPACE_FILE" || ! -f "$WORKSPACE_FILE" ]]; then
-  log ERROR "[X] Missing or invalid workspace file"
+  log-val- ERROR "[X] Missing or invalid workspace file"
   exit 1
 fi
 

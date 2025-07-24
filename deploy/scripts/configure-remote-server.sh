@@ -66,6 +66,10 @@ HOSTNAME=$(hostname)
 WORKSPACE_FILE=$(get_workspace_file "$PATH_CONFIG" "$WORKSPACE") || exit 1
 log INFO "[*] Getting workspace file: $WORKSPACE_FILE"
 
+# Validate the workspace definition
+log INFO "[*] Validating workspace file: $WORKSPACE_FILE"
+validate_workspace "$PATH_DEPLOY" "$WORKSPACE_FILE"
+
 TERRAFORM_FILE=$(get_terraform_file "$PATH_CONFIG") || exit 1
 log INFO "[*] Getting terraform file $TERRAFORM_FILE"
 
