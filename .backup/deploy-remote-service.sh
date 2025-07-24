@@ -113,13 +113,60 @@ create_service() {
       ;;
   esac
 
+  
+
   # On local copy to all servers BUT standard is replicated
   # Then we only copy to manager configpath
   if [[ "$managervolume" != "local" ]]; then
     # Create the service configuration path and copy files
+    create_service_volume $configpath
+  else
+    # Otherwise we need to do this on each server
+    create_service_remote
   fi
 
   log INFO "[+] Completed service setup: $WORKSPACE on host $hostname"
+}
+
+create_service_volume() {
+  local configpath="$1"
+
+  if [[ ! -d "$configpath" ]]; then
+    echo "ERROR: Server config path $configpath does not exist."
+    exit 1
+  fi
+
+  log INFO "[*] ... Deploying the service locally on $configpath..."
+
+  # Create service installation directory
+  local servicepath="$configpath/$SERVICE_ID"
+  mkdir -p "$servicepath"
+
+  # Copy config installation files to servicepath
+  shopt -s dotglob nullglob
+  cp "$PATH_CONFIG"/* "$servicepath/"
+  shopt -u dotglob nullglob
+
+  # Create paths
+
+
+  # Custom configuration of the service
+  log INFO "[*] ...... Custom configuration of the service..."
+  local serviceconfig="$servicepath/configure.sh"
+  if [[ -x "$serviceconfig" ]]; then
+    "$serviceconfig"
+    log INFO "[*] ...... Custom configuration of the service...DONE"
+  else
+    log WARN "[!] No executable configure.sh found at $serviceconfig"
+  fi
+
+  log INFO "[+] ... Deploying the service locally...DONE"
+}
+
+create_service_remote(){
+  log INFO "[*] ... Deploying the service on remote servers..."
+  echo "olala"
+  log INFO "[*] ... Deploying the service on remote servers...DONE"
 }
 
 main() {
