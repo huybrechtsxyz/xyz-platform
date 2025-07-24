@@ -1,11 +1,9 @@
 {
   "deploy": {
+    "id": "platform",
     "name": "Platform Workspace on Kamatera",
     "version": "1.0.0",
-    "description": "Workspace deployment configuration for the shared Kamatera Platform.",
-    "paths": [
-      { "type": "config", "description": "This path ... " }
-    ]
+    "description": "Workspace deployment configuration for the shared Kamatera Platform."
   },
   "roles": {
     "manager": {
