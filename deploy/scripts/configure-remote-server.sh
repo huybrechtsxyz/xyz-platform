@@ -324,7 +324,7 @@ create-fs-volumes() {
       commands+=("$fullpath")
 
       # Add to environment variables file
-      varserver=$(get_varname "$server" "$mounttype")
+      varserver=$(get_server_variable_name "$server" "$mounttype")
       echo "$varserver=$fullpath" >> "$PATH_CONFIG/$WORKSPACE.env"
 
       # Add to bricks array for GlusterFS volume creation
@@ -416,7 +416,7 @@ create_workspace() {
   log INFO "[*] Starting workspace setup: $WORKSPACE on host $HOSTNAME"
 
   # Build the path based on {PATH_SERVER_TYPE}
-  local configpathname=$(get_varname "$SERVER_ID" "CONFIG")
+  local configpathname=$(get_server_variable_name "$SERVER_ID" "CONFIG")
   local configpath="${!configpathname}"
   log INFO "[*] ... Copying global configuration files to: $configpath"
 
