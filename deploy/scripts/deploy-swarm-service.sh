@@ -37,6 +37,18 @@ log INFO "[*] Getting workspace file: $WORKSPACE_FILE"
 MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
 log INFO "[*] Getting manager label: $MANAGER_ID"
 
+REMOTE_IP=$(echo "$VAR_TERRAFORM" | \
+  jq -r \
+  --arg label "$MANAGER_ID" \
+  '.include[] | select(.label == $label) | .ip') || exit 1
+
+log INFO "[*] Getting management IP for server: $REMOTE_IP"
+
+if [[ ! "$REMOTE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  log ERROR "[X] Invalid IP address format: $REMOTE_IP"
+  exit 1
+fi
+
 # Determine the deploy path for scripts and service
 PATH_DEPLOY="$VAR_PATH_TEMP/.deploy"
 log INFO "[*] Deployment path: $PATH_DEPLOY"
@@ -52,19 +64,24 @@ log INFO "[*] Service path: $SERVICE_PATH"
 
 enable_service() {
   log INFO "[*] Disabling service $SERVICE_ID..."
-  # Add logic to stop or disable the service here
+  # Add logic to deploy and start the service here
+  # Create all the required paths on the machines
   log INFO "[*] Disabling service $SERVICE_ID...DONE"
 }
 
 disable_service() {
   log INFO "[*] Disabling service $SERVICE_ID..."
   # Add logic to stop or disable the service here
+  # Check if the service is running? Yes? Stop service.
+  # Copy the new registry info file over.
   log INFO "[*] Disabling service $SERVICE_ID...DONE"
 }
 
 remove_service() {
   log INFO "[*] Removing service $SERVICE_ID..."
   # Add logic to clean up/remove service artifacts here
+  # Check if service is disabled on the remote machine
+  # Remove all data from each path
   log INFO "[*] Removing service $SERVICE_ID...DONE"
 }
 
@@ -73,15 +90,12 @@ main() {
 
   case "$SERVICE_STATE" in
     enabled)
-      log INFO "[*] Service state is: $SERVICE_STATE"
       enable_service
       ;;
     disabled)
-      log INFO "[*] Service state is: $SERVICE_STATE"
       disable_service
       ;;
     removed)
-      log INFO "[*] Service state is: $SERVICE_STATE"
       remove_service
       ;;
     *)
