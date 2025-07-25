@@ -11,7 +11,7 @@
 # |- ./deploy/scripts/*
 # Available directories and files in $VAR_PATH_TEMP/.config
 # |- ./deploy/workspaces/*
-# |- ./deploy/variables.env
+# |- ./deploy/configuration.env
 # |- ./deploy/secrets.env
 # |- ./deploy/terraform.json
 # |- ./scripts/*
@@ -45,10 +45,10 @@ if [[ ! -d "$PATH_DOCS" ]]; then
 fi
 
 # Sourcing variables and scripts
-if [[ -f "$PATH_CONFIG/variables.env" ]]; then
-  source "$PATH_CONFIG/variables.env"
+if [[ -f "$PATH_CONFIG/configuration.env" ]]; then
+  source "$PATH_CONFIG/configuration.env"
 else
-  log ERROR "[X] Missing variables.env at $PATH_CONFIG"
+  log ERROR "[X] Missing configuration.env at $PATH_CONFIG"
   exit 1
 fi
 

@@ -36,13 +36,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
 
 # Create secret and variable files based on expected prefixes
 # Output files added to deploy folder
-# |- ./deploy/variables.env   (VAR_)
+# |- ./deploy/configuration.env   (VAR_)
 # |- ./deploy/secrets.env     (SECRET_)
 # |- ./deploy/terraform.json  (TFOUTPUT)
 create_environment_files() {
   echo "$VAR_MATRIX" > "./deploy/terraform.json"
   unset "$VAR_MATRIX"
-  generate_env_file "VAR_" "./deploy/variables.env"
+  generate_env_file "VAR_" "./deploy/configuration.env"
   generate_env_file "SECRET_" "./deploy/secrets.env"
 }
 
