@@ -5,9 +5,6 @@ inputs:
   WORKSPACE:
     description: Workspace
     required: true
-  ENVIRONMENT:
-    description: Environment
-    required: true
   TEMPPATH:
     description: Temporary path
     required: true

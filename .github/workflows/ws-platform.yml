@@ -10,7 +10,6 @@ jobs:
     uses: ./.github/workflows/_workspace.yml
     with:
       workspace: platform
-      environment: platform
       infrastructure: true
     secrets:
       BITWARDEN_TOKEN: ${{ secrets.BITWARDEN_TOKEN }}

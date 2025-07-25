@@ -5,7 +5,6 @@ export
 export TF_VAR_api_key := $(KAMATERA_API_KEY)
 export TF_VAR_api_secret := $(KAMATERA_API_SECRET)
 export TF_VAR_workspace := $(WORKSPACE)
-export TF_VAR_environment := $(ENVIRONMENT)
 export TF_VAR_password := $(KAMATERA_ROOT_PASSWORD)
 export TF_TOKEN_app_terraform_io := $(TF_API_SECRET)
 
