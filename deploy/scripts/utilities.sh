@@ -522,3 +522,51 @@ validate_volume_configuration() {
 
   log INFO "[+] Volume '$volname' configuration validated successfully."
 }
+
+# Function to get the service file path
+# Usage: get_service_file <PATH_SERVICE>
+# Example: get_service_file /tmp/myservice
+# This function checks if the service file exists in the specified path.
+# If it does, it returns the full path to the service file.
+# If the file does not exist, it logs an error and returns 1.
+get_service_file() {
+  local SVC_PATH="$1"
+
+  if [[ -z "$SVC_PATH" ]]; then
+    log ERROR "[!] get_service_file requires SERVICE_PATH arguments."
+    return 1
+  fi
+
+  local SERVICE_FILE="$SVC_PATH/service.json"
+
+  if [[ ! -f "$SERVICE_FILE" ]]; then
+    log ERROR "[!] Service definition file not found: $SERVICE_FILE"
+    return 1
+  fi
+
+  echo "$SERVICE_FILE"
+}
+
+# Function to get the registry file path
+# Usage: get_registry_file <PATH_REGISTRY>
+# Example: get_registry_file /tmp/myregistry
+# This function checks if the registry file exists in the specified path.
+# If it does, it returns the full path to the registry file.
+# If the file does not exist, it logs an error and returns 1.
+get_registry_file() {
+  local SVC_PATH="$1"
+
+  if [[ -z "$SVC_PATH" ]]; then
+    log ERROR "[!] get_registry_file requires REGISTRY_PATH arguments."
+    return 1
+  fi
+
+  local REGISTRY_FILE="$SVC_PATH/registry.json"
+
+  if [[ ! -f "$REGISTRY_FILE" ]]; then
+    log ERROR "[!] Registry definition file not found: $REGISTRY_FILE"
+    return 1
+  fi
+
+  echo "$REGISTRY_FILE"
+}

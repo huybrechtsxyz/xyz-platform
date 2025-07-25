@@ -68,7 +68,7 @@ jobs:
       # This step filters service definitions from the registry based on a list of requested service IDs (passed in as `inputs.services`).
       # The script reads `registry/*.json`, each containing a `.service.id` field, and constructs a GitHub Actions matrix output including only the matched services.
       # Example: inputs.services: "traefik,site"
-      # Outputs the services matrix format: { "include": [ { "id": "traefik" }, { "id": "site" } ] }
+      # Outputs the services matrix format: selection: { "include": [ { "id": "traefik" }, { "id": "site" } ] }
       - name: Select Services
         id: services
         run: |
@@ -197,8 +197,8 @@ jobs:
           echo "Debugging service contents"
           ls -la service/${{ matrix.id }}
 
-      # Configure Service
-      - name: Configure Service
+      # Deploy Service
+      - name: Deploy Service
         if: matrix.id != ''
         env:
           VAR_WORKSPACE: ${{ inputs.workspace }}

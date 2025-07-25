@@ -89,6 +89,10 @@ fi
 
 # Create the service by copying the correct files and creating the correct directories
 # We are running on the manager-1 (the first server defined in the workspace file)
+#
+# Create the folders for the service
+# Service root + all its paths
+#
 create_service() {
   log INFO "[*] Starting service setup: $WORKSPACE on host $hostname..."
 

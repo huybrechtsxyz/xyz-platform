@@ -4,7 +4,7 @@
     "id": "traefik",
     "repo": "huybrechtsxyz/xyz-traefik",
     "ref": "main",
-    "path": "src/service.json",
+    "path": "config/service.json",
     "state": "enabled"
   }
 }
