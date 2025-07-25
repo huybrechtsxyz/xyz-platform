@@ -602,6 +602,41 @@ create_workspace_serverpaths(){
   ' "$workspace_file"
 }
 
-create_service_paths() {
+# Generates resolved service paths by combining mountpoints with workspace-defined subpaths.
+create_service_serverpaths() {
+  local workspace_file="$1"
+  local service_file="$2"
 
+  jq --argjson workspace "$(jq '.' "$workspace_file")" \
+     --argjson service "$(jq '.' "$service_file")" '
+    [
+      # For each server in workspace.servers
+      ($workspace.servers[]) as $server
+      |
+      # For each mount in service.mounts
+      ($service.service.mounts[]) as $smount
+      |
+      # Find global path info matching the mount type in workspace.paths
+      ($workspace.paths[] | select(.type == $smount.type)) as $gpath
+      |
+      {
+        serverid: $server.id,
+        serverrole: $server.role
+        type: $smount.type,
+        chmod: $smount.chmod,
+        name: ( ($smount.path // $smount.type) | if . == "" then $smount.type else . end ),
+        path:
+          (
+            # Compose the base mountpoint of the server, replace ${disk} with disk 1 by default
+            ($server.mountpoint // "") | gsub("\\$\\{disk\\}"; "1")
+            + "/" +
+            # Append the path from service mount (if empty use type), else fallback to global path
+            (
+              ($smount.path // "") 
+              | if . == "" then $gpath.path else . end
+            )
+          )
+      }
+    ]
+  ' 
 }
