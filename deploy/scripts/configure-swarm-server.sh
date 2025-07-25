@@ -40,8 +40,17 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
 # |- ./deploy/secrets.env     (SECRET_)
 # |- ./deploy/terraform.json  (TFOUTPUT)
 create_environment_files() {
+  # Save the TFOUPTUT as terraform.json
   echo "$VAR_MATRIX" > "./deploy/terraform.json"
   unset "$VAR_MATRIX"
+  
+  # Add the serverpaths to the workspace file
+  WORKSPACE_FILE=$(get_workspace_file "./deploy/workspaces" "$VAR_WORKSPACE")
+  create_workspace_serverpaths "$WORKSPACE_FILE" > "./deploy/workspace.json"
+  cp -f "./deploy/workspace.json" "$WORKSPACE_FILE"
+  rm -f "./deploy/workspace.json"
+
+  # Generate environment and secrets file
   generate_env_file "VAR_" "./deploy/configuration.env"
   generate_env_file "SECRET_" "./deploy/secrets.env"
 }

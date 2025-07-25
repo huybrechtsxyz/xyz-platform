@@ -22,6 +22,7 @@ log() {
   esac
 }
 
+# Build PATH_SERVERID_MOUNT
 get_server_variable_name() {
   local server="$1"
   local mounttype="$2"
@@ -33,6 +34,7 @@ get_server_variable_name() {
   echo "PATH_${varserver}_${varmount}"
 }
 
+# Build SERVICE_PATH_MOUNT
 get_service_variable_name() {
   local service="$1"
   local mount="$2"
@@ -569,4 +571,37 @@ get_registry_file() {
   fi
 
   echo "$REGISTRY_FILE"
+}
+
+# Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
+create_workspace_serverpaths(){
+  local workspace_file="$1"
+
+  jq --argjson workspace "$(jq '.' "$workspace_file")" '
+    .servers |= map(
+      . + {
+        paths: (
+          .mounts
+          | map(
+              .type as $type
+              | .disk as $disk
+              | {
+                  type: $type,
+                  path: (
+                    # Replace ${disk} placeholder in mountpoint with the disk number
+                    (.mountpoint // "") 
+                    | gsub("\\$\\{disk\\}"; ($disk|tostring))
+                    # Append the path from workspace.paths for this type, fallback to just $type if missing
+                    + ("/" + (($workspace.paths[] | select(.type == $type) | .path) // $type))
+                  )
+              }
+          )
+        )
+      }
+    )
+  ' "$workspace_file"
+}
+
+create_service_paths() {
+
 }

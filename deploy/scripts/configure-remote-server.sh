@@ -15,6 +15,8 @@
 # |- ./deploy/secrets.env
 # |- ./deploy/terraform.json
 # |- ./scripts/*
+# The workspace file already contains the server paths
+# |- servers[ { id=manager1, paths[ { type=config, path=/mnt/data1/etc/config } ] } ]
 #===============================================================================
 set -eo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
@@ -291,7 +293,6 @@ create-fs-volumes() {
   #while read -r serverdata; do
   for serverdata in "${servers[@]}"; do
     local server=$(echo "$serverdata" | jq -r '.id')
-    local mountpoint=$(echo "$serverdata" | jq -r '.mountpoint')
     local private_ip=$(get_terraform_data "$TERRAFORM_FILE" "$server" "private_ip") || exit 1
 
     if [[ -z "$private_ip" ]]; then
@@ -301,41 +302,36 @@ create-fs-volumes() {
 
     commands=()
 
-    log INFO "[*] ... Processing server '$server' mounts with mountpoint '$mountpoint' for ip '$private_ip'"
+    log INFO "[*] ... Processing server '$server' paths for ip '$private_ip'"
 
     # Read mounts into an array
-    mapfile -t mounts < <(jq -c '.mounts[]' <<< "$serverdata")
+    mapfile -t paths < <(jq -c '.paths[]' <<< "$serverdata")
 
     #while read -r mount; do
-    for mount in "${mounts[@]}"; do
-      # Extract mount type and disk from the mount object
+    for path in "${paths[@]}"; do
+
       # Get the path information for this mount type
-      local mounttype=$(echo "$mount" | jq -r '.type')
-      local mountdisk=$(echo "$mount" | jq -r '.disk')
-      local pathinfo=$(jq -r --arg type "$mounttype" '.paths[] | select(.type==$type)' "$WORKSPACE_FILE")
+      local mounttype=$(echo "$path" | jq -r '.type')
+      local fullpath=$(echo "$path" | jq -r '.path')
+
+      # Find matching workspace path info to get volume type
+      pathinfo=$(jq -r --arg type "$mounttype" '.paths[] | select(.type==$type)' "$WORKSPACE_FILE")
       local volume=$(echo "$pathinfo" | jq -r '.volume')
-      local mountpath=$(echo "$pathinfo" | jq -r '.path')
-      local fullpath="${mountpoint//\$\{disk\}/$mountdisk}${mountpath}"
 
-      if [[ -z "$pathinfo" ]]; then
-        log ERROR "[!] No path information found for mount type '$mounttype'. Skipping."
+      if [[ -z "$pathinfo" || -z "$volume" || -z "$fullpath" ]]; then
+        log ERROR "[X] Missing path or volume for type '$mounttype' on server '$server'. Skipping."
         continue
       fi
 
-      if [[ -z "$volume" || -z "$mountpath" ]]; then
-        log ERROR "[!] Missing volume or mount path for mount type '$mounttype'. Skipping."
-        continue
-      fi
-
-      # Resolve the full path
-      log INFO "[*] ...... Creating directory on $mountdisk with type $mounttype on server '$server': $fullpath"
+      # Resolve the full path (already in workspace file)
+      log INFO "[*] ...... Creating directory for type $mounttype on server '$server': $fullpath"
 
       # Add the path to the creation command
       commands+=("$fullpath")
 
       # Add to environment variables file
       varserver=$(get_server_variable_name "$server" "$mounttype")
-      echo "$varserver=$fullpath" >> "$PATH_CONFIG/$WORKSPACE.env"
+      echo "$varserver=$fullpath" >> "$PATH_CONFIG/$WORKSPACE.ws.env"
 
       # Add to bricks array for GlusterFS volume creation
       # Use workspace prefix in the volume name
@@ -415,7 +411,7 @@ create-fs-volumes() {
 
   # Automatically export all variables that follow
   set -a
-  source "$PATH_CONFIG/$WORKSPACE.env"
+  source "$PATH_CONFIG/$WORKSPACE.ws.env"
   set +a
 
   log INFO "[+] GlusterFS volumes created successfully."
