@@ -90,6 +90,18 @@ validate_workspace() {
   fi
 }
 
+# The function runs the validation script on the given JSON file.
+# Usage: validate_workspace <SCRIPT_PATH> <REGISTRY_FILE>
+validate_registry() {
+  local path="$1"
+  local registry_file="$2"
+  "$path/validate-registry.sh" "$registry_file"
+  if [[ $? -ne 0 ]]; then
+    echo "Validation failed. Exiting."
+    exit 1
+  fi
+}
+
 # Function to check if the actual disk size matches the expected size within a tolerance
 disk_size_matches() {
   local actual_gb="$1"        # e.g. 39
