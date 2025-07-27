@@ -1,0 +1,39 @@
+{
+  "service": {
+    "id": "traefik",
+    "name": "Traefik",
+    "description": "Reverse proxy and load balancer for microservices",
+    "mounts": [
+      { "type": "config", "chmod": 755, "path":"",    "source":"src" },
+      { "type": "config", "chmod": 755, "path":"etc", "source":"" },
+      { "type": "docs",   "chmod": 755, "path":"",    "source":"docs" },
+      { "type": "data",   "chmod": 600, "path":"",    "source":"" },
+      { "type": "logs",   "chmod": 777, "path":"",    "source":"" }
+    ],
+    "deploy": {
+      "priority": 1,
+      "groups": ["infra"],
+      "serverrole": "manager",
+      "endpoint": "http://traefik.${DOMAIN_DEV}/dashboard/"
+    },
+    "addresses": [
+      {
+        "address": "traefik",
+        "port": 8080
+      }
+    ],
+    "checks": [
+      {
+        "id": "traefik-http-check",
+        "name": "Traefik HTTP Health Check",
+        "http": "http://traefik:8080/ping",
+        "interval": "60s",
+        "timeout": "15s"
+      }
+    ],
+    "meta": {
+      "traefik_path": "/ping"
+    },
+    "tags":[ "traefik","proxy","docker-swarm","system" ]
+  }
+}
