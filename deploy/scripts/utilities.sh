@@ -605,9 +605,10 @@ create_workspace_serverpaths(){
                     | gsub("\\$\\{disk\\}"; ($disk|tostring))
                     # Append the path from workspace.paths for this type, fallback to just $type if missing
                     + ("/" + (($workspace.paths[] | select(.type == $type) | .path) // $type))
-                  )
-              }
-          )
+                  ),
+                  volume: ($workspace.paths[] | select(.type == $type) | .volume // "local")
+                }
+            )
         )
       }
     )

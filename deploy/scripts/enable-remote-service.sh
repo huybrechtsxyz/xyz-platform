@@ -46,6 +46,9 @@ fi
 # Capture the server's hostname
 HOSTNAME=$(hostname)
 
+# Should be in variables.env
+# PATH_CONFIG
+# PATH_DOCS
 log INFO "[*] Deployment path : $PATH_DEPLOY"
 log INFO "[*] Service path    : $PATH_CONFIG"
 log INFO "[*] Docs path       : $PATH_DOCS"
@@ -54,10 +57,8 @@ log INFO "[*] Running on host : $HOSTNAME"
 # Get the registry and service file
 REGISTRY_FILE="$PATH_CONFIG/registry.json"
 SERVICE_FILE="$PATH_CONFIG/service.json"
-
 REGISTRY_ID=$(jq -r '.service.id' "$REGISTRY_FILE")
 SERVICE_ID=$(jq -r '.service.id' "$SERVICE_FILE")
-
 if [[ "$REGISTRY_ID" != "$SERVICE_ID" ]]; then
   log ERROR "[X] Service ID and Registry ID do not match: $SERVICE_ID vs $REGISTRY_ID"
   exit 1
@@ -83,46 +84,38 @@ if [[ "$SERVER_NAME" != "$HOSTNAME" ]]; then
   exit 1
 fi
 
-# Create the required service paths
-create_remote_service_paths() {
+# Create the required service paths and copy the files
+create_service_paths() {
   log INFO "[*] Creating remote service paths for: $SERVICE_ID"
 
-  jq -c '.servers[]' "$WORKSPACE_FILE" | while read -r server; do
-    local server_id=$(jq -r '.id' <<< "$server")
-    local server_label="$server_id"
-    local private_ip=$(jq -r --arg label "$server_label" '
-      .include[] | select(.label == $label) | .private_ip
-    ' "$TERRAFORM_FILE")
+  mapfile -t servers < <(jq -c '.servers[]' "$WORKSPACE_FILE")
+
+  for serverdata in "${servers[@]}"; do
+    server_id=$(jq -r '.id' <<< "$serverdata")
+    private_ip=$(jq -r --arg label "$server_id" '.include[] | select(.label == $label) | .private_ip' "$TERRAFORM_FILE")
 
     if [[ -z "$private_ip" ]]; then
-      log ERROR "[X] Could not find private IP for server label: $server_label"
+      log ERROR "[X] Could not find private IP for server label: $server_id"
       exit 1
     fi
 
-    # Get the list of service paths for this server
-    local path_list=$(jq -r --arg id "$server_id" '
-      .servers[] | select(.id == $id) | .paths[]?.path
-    ' "$WORKSPACE_FILE")
-
-    if [[ -z "$path_list" ]]; then
+    # Get full path metadata once
+    mapfile -t serverpaths < <(jq -c --arg id "$server_id" '.servers[] | select(.id == $id) | .paths[]' "$WORKSPACE_FILE")
+    if (( ${#serverpaths[@]} == 0 )); then
       log WARN "[!] No service paths found for server: $server_id"
       continue
     fi
 
-    # Build all mkdir commands into a single SSH execution
-    log INFO "[*] Connecting to $private_ip to create paths..."
+    # Build mkdir commands
     commands=()
+    for pathdata in "${serverpaths[@]}"; do
+      path_target=$(jq -r '.path' <<< "$pathdata")
+      [[ -n "$path_target" ]] && commands+=("mkdir -p '$path_target'")
+    done
 
-    while read -r path; do
-      if [[ -n "$path" ]]; then
-        commands+=("mkdir -p '$path'")
-      fi
-    done <<< "$path_list"
-
-
+    # Create the directories
     if [[ "${#commands[@]}" -gt 0 ]]; then
       if [[ "$server_id" == "$MANAGER_ID" ]]; then
-        # Run locally
         log INFO "[*] Executing locally (manager: $MANAGER_ID)..."
         for cmd in "${commands[@]}"; do
           eval "$cmd" || {
@@ -132,7 +125,6 @@ create_remote_service_paths() {
           log INFO "[✓] Executed: $cmd"
         done
       else
-        # Run remotely over SSH
         log INFO "[*] Connecting to $private_ip for remote execution..."
         ssh -o StrictHostKeyChecking=no root@"$private_ip" "${commands[*]}" || {
           log ERROR "[X] Failed to create paths on server '$server_id' ($private_ip)"
@@ -140,19 +132,47 @@ create_remote_service_paths() {
         }
         log INFO "[✓] Created paths remotely on $server_id"
       fi
-    else
-      log WARN "[!] No paths to create for $server_id"
     fi
+
+    # Copy files to server based on volume type
+    for pathdata in "${serverpaths[@]}"; do
+      path_type=$(jq -r '.type' <<< "$pathdata")
+      path_target=$(jq -r '.path' <<< "$pathdata")
+      path_volume=$(jq -r '.volume' <<< "$pathdata")
+      [[ -z "$path_target" || -z "$path_type" ]] && continue
+
+      case "$path_type" in
+        config) source_path="$PATH_CONFIG" ;;
+        docs)   source_path="$PATH_DOCS" ;;
+        *)      continue ;;
+      esac
+
+      # Skip if replicated/distributed and not manager
+      if [[ "$path_volume" != "local" && "$server_id" != "$MANAGER_ID" ]]; then
+        log INFO "[~] Skipping $path_type copy to $server_id (volume: $path_volume)"
+        continue
+      fi
+
+      if [[ -d "$source_path" ]]; then
+        if [[ "$server_id" != "$MANAGER_ID" ]]; then
+          log INFO "[*] Copying $path_type files to $server_id:$path_target"
+          scp -r -o StrictHostKeyChecking=no "$source_path/" root@"$private_ip":"$path_target"/ || {
+            log ERROR "[X] Failed to copy $path_type to $server_id"
+            exit 1
+          }
+        else
+          log INFO "[*] Copying $path_type files locally to $path_target"
+          cp -rf "$source_path/" "$path_target"/ || {
+            log ERROR "[X] Local copy to $path_target failed"
+            exit 1
+          }
+        fi
+        log INFO "[✓] Copied $path_type files to $server_id"
+      else
+        log WARN "[!] Source path '$source_path' for $path_type does not exist, skipping"
+      fi
+    done
   done
-}
-
-create_service() {
-
-  # Create the required service paths
-  create_remote_service_paths
-
-
-
 }
 
 main() {
@@ -165,9 +185,9 @@ main() {
   }
   safe_rm_rf "$PATH_DEPLOY/secrets.env"
 
-  # Create the service workspace
-  create_service || {
-    log ERROR "[X] Error creating workspace for $SERVICE_ID"
+  # Create the required service paths and copy files
+  create_service_paths || {
+    log ERROR "[X] Error creating service paths for $SERVICE_ID"
     exit 1
   }
 
