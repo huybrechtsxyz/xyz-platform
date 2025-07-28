@@ -76,7 +76,6 @@ jobs:
           SERVICES_JSON=$(jq -R '[split(",")[]]' <<< "${{ inputs.services }}")
           echo "Filtering for services: $SERVICES_JSON"
           # Check for an empty registry
-          FIRST=true
           shopt -s nullglob
           FILES=(registry/*.json)
           if [ ${#FILES[@]} -eq 0 ]; then
@@ -85,6 +84,7 @@ jobs:
             exit 0
           fi
           # Loop registry
+          FIRST=true
           MATRIX='{ "include": ['
           for file in "${FILES[@]}"; do
             ID=$(jq -r '.service.id' "$file")
@@ -161,15 +161,15 @@ jobs:
         id: load
         if: matrix.id != ''
         run: |
-          SERVICE_FILE="registry/${{ matrix.id }}.json"
-          echo "Reading $SERVICE_FILE"
-          SERVICE_DATA=$(jq -c . "$SERVICE_FILE")
+          REGISTRY_FILE="registry/${{ matrix.id }}.json"
+          echo "Reading $REGISTRY_FILE"
+          REGISTRY_DATA=$(jq -c . "$REGISTRY_FILE")
           echo "Reading Repository and Ref"
-          SERVICE_REPO=$(jq -r '.service.repo' <<< "$SERVICE_DATA")
-          SERVICE_REF=$(jq -r '.service.ref // "main"' <<< "$SERVICE_DATA")
+          SERVICE_REPO=$(jq -r '.service.repo' <<< "$REGISTRY_DATA")
+          SERVICE_REF=$(jq -r '.service.ref // "main"' <<< "$REGISTRY_DATA")
           echo "repository=$SERVICE_REPO" >> "$GITHUB_OUTPUT"
           echo "ref=$SERVICE_REF" >> "$GITHUB_OUTPUT"
-          echo "registryinfo=$SERVICE_DATA" >> "$GITHUB_OUTPUT"
+          echo "registryinfo=$REGISTRY_DATA" >> "$GITHUB_OUTPUT"
 
       # Debug Service Info
       - name: Debug Service Info
@@ -195,7 +195,9 @@ jobs:
         if: matrix.id != ''
         run: |
           echo "Debugging service contents"
-          ls -la service/${{ matrix.id }}
+          path=$(jq -r '.service.path' <<< "$REGISTRY_DATA")
+          ls -la "service/${{ matrix.id }}"
+          ls -la "service/${{ matrix.id }}/$path"
 
       # Deploy Service
       - name: Deploy Service

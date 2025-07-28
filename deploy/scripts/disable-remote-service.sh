@@ -8,48 +8,59 @@
 # Last Modified : 2025-07-23
 #===============================================================================
 # Available directories and files
-# |- $PATH_DEPLOY/variables.env (Contains PATH_CONFIG|DOCS)
-# |- $PATH_DEPLOY/secrets.env
-# |- $PATH_DEPLOY/terraform.json
-# |- $PATH_DEPLOY/workspace.json
-# |- $PATH_CONFIG/registry.json
-# |- $PATH_CONFIG/service.json (includes paths[] )
+# |- $PATH_WORKSPACE/variables.env (Contains PATH_CONFIG|DOCS)
+# |- $PATH_WORKSPACE/secrets.env
+# |- $PATH_WORKSPACE/terraform.json
+# |- $PATH_WORKSPACE/workspace.json
+# |- $PATH_DEPLOY/registry.json
+# |- $PATH_DEPLOY/service.json (includes paths[] )
 #===============================================================================
 set -eo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 
 # Resolve absolute path to the directory of this script
-PATH_DEPLOY="${1:-}"
-: "${PATH_DEPLOY:?Missing PATH_DEPLOY}"
-if [[ ! -d "$PATH_DEPLOY" ]]; then
-  echo "ERROR: Deployment path $PATH_DEPLOY does not exist."
+PATH_WORKSPACE="${1:-}"
+: "${PATH_WORKSPACE:?Missing PATH_WORKSPACE}"
+if [[ ! -d "$PATH_WORKSPACE" ]]; then
+  echo "ERROR: Deployment path $PATH_WORKSPACE does not exist."
   exit 1
 fi
 
 # Sourcing variables and scripts
-if [[ -f "$PATH_DEPLOY/variables.env" ]]; then
+if [[ -f "$PATH_WORKSPACE/variables.env" ]]; then
   set -a
-  source "$PATH_DEPLOY/variables.env"
+  source "$PATH_WORKSPACE/variables.env"
   set +a
 else
-  log ERROR "[X] Missing variables.env at $PATH_DEPLOY"
+  log ERROR "[X] Missing variables.env at $PATH_WORKSPACE"
   exit 1
 fi
 
+if [[ -f "$PATH_WORKSPACE/utilities.sh" ]]; then
+  source "$PATH_WORKSPACE/utilities.sh"
+else
+  log ERROR "[X] Missing utilities.sh at $PATH_WORKSPACE"
+  exit 1
+fi
+
+# PATH_SERVICE -> service temp dir in variables.env
+# PATH_DEPLOY  -> service deploy dir in variables.env
 # Capture the server's hostname
 HOSTNAME=$(hostname)
 
 # Should be in variables.env
-# PATH_CONFIG
-# PATH_DOCS
-log INFO "[*] Deployment path : $PATH_DEPLOY"
-log INFO "[*] Service path    : $PATH_CONFIG"
-log INFO "[*] Docs path       : $PATH_DOCS"
+# VAR_PATH_SERVICE
+
+log INFO "[*] Workspace path  : $PATH_WORKSPACE"
+log INFO "[*] Service path    : $PATH_SERVICE"
+log INFO "[*] Registry path   : $PATH_DEPLOY"
 log INFO "[*] Running on host : $HOSTNAME"
 
 # Get the registry and service file
-REGISTRY_FILE="$PATH_CONFIG/registry.json"
-SERVICE_FILE="$PATH_CONFIG/service.json"
+REGISTRY_FILE=$(get_registry_file "$PATH_DEPLOY")
+SERVICE_FILE=$(get_service_file "$PATH_DEPLOY")
+
+# Validate if registry and service id match
 REGISTRY_ID=$(jq -r '.service.id' "$REGISTRY_FILE")
 SERVICE_ID=$(jq -r '.service.id' "$SERVICE_FILE")
 if [[ "$REGISTRY_ID" != "$SERVICE_ID" ]]; then
@@ -59,11 +70,11 @@ fi
 
 # Get the workspace file
 : "${WORKSPACE:?Missing WORKSPACE env var}"
-WORKSPACE_FILE=$(get_workspace_file "$PATH_DEPLOY" "$WORKSPACE") || exit 1
+WORKSPACE_FILE=$(get_workspace_file "$PATH_WORKSPACE" "$WORKSPACE") || exit 1
 log INFO "[*] Getting workspace $WORKSPACE file: $WORKSPACE_FILE"
 
 # Get the terraform file
-TERRAFORM_FILE=$(get_terraform_file "$PATH_DEPLOY") || exit 1
+TERRAFORM_FILE=$(get_terraform_file "$PATH_WORKSPACE") || exit 1
 log INFO "[*] Getting terraform file $TERRAFORM_FILE"
 
 # Get the server id

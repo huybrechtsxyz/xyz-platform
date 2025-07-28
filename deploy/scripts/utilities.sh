@@ -102,6 +102,18 @@ validate_registry() {
   fi
 }
 
+# The function runs the validation script on the given JSON file.
+# Usage: validate_service <SCRIPT_PATH> <SERVICE_FILE>
+validate_service() {
+  local path="$1"
+  local service_file="$2"
+  "$path/validate-service.sh" "$service_file"
+  if [[ $? -ne 0 ]]; then
+    echo "Validation failed. Exiting."
+    exit 1
+  fi
+}
+
 # Function to check if the actual disk size matches the expected size within a tolerance
 disk_size_matches() {
   local actual_gb="$1"        # e.g. 39
@@ -616,6 +628,7 @@ create_workspace_serverpaths(){
 }
 
 # Generates resolved service paths by combining mountpoints with workspace-defined subpaths.
+# target: (if ($smount.path // "") == "" then $smount.type else $smount.path end),
 create_service_serverpaths() {
   local workspace_file="$1"
   local service_file="$2"
@@ -639,7 +652,6 @@ create_service_serverpaths() {
                 type: $smount.type,
                 chmod: $smount.chmod,
                 source: $smount.source,
-                target: (if ($smount.path // "") == "" then $smount.type else $smount.path end),
                 path: (
                   ($server.mountpoint | gsub("\\$\\{disk\\}"; "1")) + "/" +
                   (if $smount.path == "" then $wpath.path else $smount.path end)
