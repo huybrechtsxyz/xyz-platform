@@ -12,25 +12,26 @@ trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 
 # Generate the workspace.tfvars file base on the current workspace
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "$SCRIPT_DIR/../scripts/utilities.sh" ]]; then
-  source "$SCRIPT_DIR/../scripts/utilities.sh"
+if [[ -f "$SCRIPT_DIR/utilities.sh" ]]; then
+  log INFO "[*] ...Loading $SCRIPT_DIR/utilities.sh"
+  source "$SCRIPT_DIR/utilities.sh"
 else
-  log ERROR "[X] Missing utilities.sh at $SCRIPT_DIR/../scripts"
+  log ERROR "[X] Missing utilities.sh at $SCRIPT_DIR"
   exit 1
 fi
 
 log INFO "[*] ...Generating ${WORKSPACE}.tfvars file"
-SERVERS_JSON="$SCRIPT_DIR/../workspaces/${WORKSPACE}.ws.json"
+WORKSPACE_FILE="$SCRIPT_DIR/../workspaces/${WORKSPACE}.ws.json"
 OUTPUT_FILE="$SCRIPT_DIR/../terraform/workspace.tfvars"
 
 # Validate the workspace definition
-log INFO "[*] ...Validating workspace definition $SERVERS_JSON"
-validate_workspace "$SCRIPT_DIR/../scripts" "$SERVERS_JSON"
+log INFO "[*] ...Validating workspace definition $WORKSPACE_FILE"
+validate_workspace "$SCRIPT_DIR" "$WORKSPACE_FILE"
 
 # Extract unique roles
-roles=$(jq -r '.servers[].role' "$SERVERS_JSON" | sort | uniq)
+roles=$(jq -r '.servers[].role' "$WORKSPACE_FILE" | sort | uniq)
 if [ -z "$roles" ]; then
-  log ERROR "[!] No server roles found in $SERVERS_JSON"
+  log ERROR "[!] No server roles found in $WORKSPACE_FILE"
   exit 1
 fi
 
@@ -40,14 +41,14 @@ log INFO "[*] ...Processing server roles and generating tfvars"
 echo "server_roles = {" > "$OUTPUT_FILE"
 for role in $roles; do
   # Count servers of this role
-  count=$(jq --arg role "$role" '[.servers[] | select(.role == $role)] | length' "$SERVERS_JSON")
+  count=$(jq --arg role "$role" '[.servers[] | select(.role == $role)] | length' "$WORKSPACE_FILE")
   # Get disk sizes from the first server of this role
-  disks=$(jq --arg role "$role" '[.servers[] | select(.role == $role)][0].disks | map(.size)' "$SERVERS_JSON")
+  disks=$(jq --arg role "$role" '[.servers[] | select(.role == $role)][0].disks | map(.size)' "$WORKSPACE_FILE")
   # Get hardware profile for the role
-  cpu_type=$(jq -r --arg role "$role" '.roles[$role].cpu_type' "$SERVERS_JSON")
-  cpu_cores=$(jq -r --arg role "$role" '.roles[$role].cpu_cores' "$SERVERS_JSON")
-  ram_mb=$(jq -r --arg role "$role" '.roles[$role].ram_mb' "$SERVERS_JSON")
-  unit_cost=$(jq -r --arg role "$role" '.roles[$role].unit_cost' "$SERVERS_JSON")
+  cpu_type=$(jq -r --arg role "$role" '.roles[$role].cpu_type' "$WORKSPACE_FILE")
+  cpu_cores=$(jq -r --arg role "$role" '.roles[$role].cpu_cores' "$WORKSPACE_FILE")
+  ram_mb=$(jq -r --arg role "$role" '.roles[$role].ram_mb' "$WORKSPACE_FILE")
+  unit_cost=$(jq -r --arg role "$role" '.roles[$role].unit_cost' "$WORKSPACE_FILE")
   # Write block to tfvars
   echo "  $role = {" >> "$OUTPUT_FILE"
   echo "    count     = $count" >> "$OUTPUT_FILE"

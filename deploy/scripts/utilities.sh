@@ -91,7 +91,7 @@ validate_workspace() {
 }
 
 # The function runs the validation script on the given JSON file.
-# Usage: validate_workspace <SCRIPT_PATH> <REGISTRY_FILE>
+# Usage: validate_registry <SCRIPT_PATH> <REGISTRY_FILE>
 validate_registry() {
   local path="$1"
   local registry_file="$2"
