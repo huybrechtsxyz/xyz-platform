@@ -199,7 +199,7 @@ copy_service_files() {
 enable_service() {
 log INFO "[*] Deploying service $SERVICE_ID..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-chmod +x "$VAR_PATH_DEPLOY/enable-remote-service.sh"
+chmod +x "$VAR_PATH_DEPLOY/*.sh"
 "$VAR_PATH_DEPLOY/enable-remote-service.sh" "$VAR_PATH_WORKSPACE"
 EOF
 then
@@ -212,7 +212,7 @@ INFO "[*] Deploying service $SERVICE_ID...DONE"
 disable_service() {
 log INFO "[*] Disabling service $SERVICE_ID..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-chmod +x "$VAR_PATH_DEPLOY/disable-remote-service.sh"
+chmod +x "$VAR_PATH_DEPLOY/*.sh"
 "$VAR_PATH_DEPLOY/disable-remote-service.sh" "$VAR_PATH_WORKSPACE"
 EOF
 then
@@ -225,7 +225,7 @@ log INFO "[*] Disabling service $SERVICE_ID...DONE"
 remove_service() {
 log INFO "[*] Removing service $SERVICE_ID..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-chmod +x "$VAR_PATH_DEPLOY/remove-remote-service.sh"
+chmod +x "$VAR_PATH_DEPLOY/*.sh"
 "$VAR_PATH_DEPLOY/remove-remote-service.sh" "$VAR_PATH_WORKSPACE"
 EOF
 then
