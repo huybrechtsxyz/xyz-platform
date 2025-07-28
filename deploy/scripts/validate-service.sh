@@ -29,7 +29,8 @@ if [[ -z "$SERVICE_FILE" || ! -f "$SERVICE_FILE" ]]; then
 fi
 
 main() {
-  echo "+ Registry JSON is valid."
+  log INFO "[*] ... Validation service definition is valid."
+  log INFO "[+] ... Service definition is valid."
 }
 
 main "$@"

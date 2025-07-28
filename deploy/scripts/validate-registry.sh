@@ -29,7 +29,7 @@ if [[ -z "$REGISTRY_FILE" || ! -f "$REGISTRY_FILE" ]]; then
 fi
 
 check_top_keys() {
-  log INFO "[*] Validating top-level keys..."
+  log INFO "[*] ...... Validating top-level keys..."
 
   local required_keys=("api-version" "service")
   for key in "${required_keys[@]}"; do
@@ -47,11 +47,11 @@ check_top_keys() {
     exit 1
   fi
 
-  log INFO "[✓] api-version is valid: $version"
+  log INFO "[✓] ...... api-version is valid: $version"
 }
 
 check_service_structure() {
-  log INFO "[*] Validating service block..."
+  log INFO "[*] ...... Validating service block..."
 
   local required_service_keys=("id" "repo" "ref" "path" "state")
   for key in "${required_service_keys[@]}"; do
@@ -67,13 +67,14 @@ check_service_structure() {
     exit 1
   fi
 
-  log INFO "[✓] Service definition is valid: id=$(jq -r '.service.id' "$REGISTRY_FILE"), state=$state"
+  log INFO "[+] ...... Service definition is valid: id=$(jq -r '.service.id' "$REGISTRY_FILE"), state=$state"
 }
 
 main() {
+  log INFO "[*] ... Validating Service Registry..."
   check_top_keys
   check_service_structure
-  echo "✔ Registry JSON is valid."
+  log INFO "[+] ... Service Registry is valid."
 }
 
 main "$@"
