@@ -59,10 +59,6 @@ if [[ ! -f "$WORKSPACE_FILE" ]]; then
   exit 1
 fi
 
-# Validate the workspace definition
-log INFO "[*] Validating workspace file: $WORKSPACE_FILE"
-validate_workspace "$PATH_DEPLOY" "$WORKSPACE_FILE"
-
 # Function to log messages with a timestamp
 install_private_key() {
   log INFO "[*] Installing uploaded private key..."

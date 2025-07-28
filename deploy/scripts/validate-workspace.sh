@@ -9,20 +9,6 @@
 #===============================================================================
 set -euo pipefail
 
-# Logging function
-log() {
-  local level="$1"; shift
-  local msg="$*"
-  local timestamp
-  timestamp=$(date +"%Y-%m-%d %H:%M:%S")
-  case "$level" in
-    INFO)    echo -e "[\033[1;34mINFO\033[0m]  - $msg" ;;
-    WARN)    echo -e "[\033[1;33mWARN\033[0m]  - $msg" ;;
-    ERROR)   echo -e "[\033[1;31mERROR\033[0m] - $msg" >&2 ;;
-    *)       echo -e "[UNKNOWN] - $msg" ;;
-  esac
-}
-
 WORKSPACE_FILE="${1:-}"
 if [[ -z "$WORKSPACE_FILE" || ! -f "$WORKSPACE_FILE" ]]; then
   log-val- ERROR "[X] Missing or invalid workspace file"
