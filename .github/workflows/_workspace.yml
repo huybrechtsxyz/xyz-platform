@@ -97,7 +97,7 @@ jobs:
           export WORKSPACE=${{ inputs.workspace }}
           export VAR_PATH_TEMP=${{ env.VAR_PATH_TEMP }}
           echo "[*] Server deployment and configuration ... APPLY"
-          chmod +x ../scripts/terraform-apply.sh
+          chmod +x ../scripts/*.sh
           ../scripts/terraform-apply.sh
           echo "[+] Server deployment and configuration ... DONE"
 
