@@ -49,7 +49,6 @@ jobs:
         uses: ./.github/actions/get-terraform
         with:
           WORKSPACE: ${{ inputs.workspace }}
-          ENVIRONMENT: ${{ inputs.environment }}
           TEMPPATH: ${{ env.VAR_PATH_TEMP }}
           API_TOKEN: ${{ steps.get-secrets.outputs.TERRAFORM_API_TOKEN }}
 
@@ -210,6 +209,6 @@ jobs:
           VAR_PATH_TEMP: ${{ env.VAR_PATH_TEMP }}
         run: |
           echo "[*] Deploying service ${{ matrix.id }} ..."
-          chmod +x ./deploy/scripts/deploy-swarm-service.sh
+          chmod +x ./deploy/scripts/*.sh
           ./deploy/scripts/deploy-swarm-service.sh
           echo "[*] Deploying service ${{ matrix.id }} ... DONE"

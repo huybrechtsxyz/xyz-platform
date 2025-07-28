@@ -20,7 +20,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/utilities.sh"
 
 # Make certain the local temp path exists
 if [[ ! -d "$VAR_PATH_TEMP" ]]; then
-  echo "Temporary path $VAR_PATH_TEMP does not exist. Creating it."
+  log INFO "[*] Temporary path $VAR_PATH_TEMP does not exist. Creating it."
   mkdir -p "$VAR_PATH_TEMP"
 fi
 
