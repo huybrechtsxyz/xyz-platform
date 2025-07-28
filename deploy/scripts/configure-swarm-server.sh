@@ -116,7 +116,8 @@ EOF
 execute_configuration() {
 log INFO "[*] Executing REMOTE configuration..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-  chmod +x "$PATH_DEPLOY/configure-remote-server.sh.sh"
+  chmod +x "$PATH_DEPLOY/configure-remote-server.sh"
+  chmod +x "$PATH_DEPLOY/validate-workspace.sh"
   "$PATH_DEPLOY/configure-remote-server.sh" "$VAR_PATH_TEMP"
 EOF
 then
