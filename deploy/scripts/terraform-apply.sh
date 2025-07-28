@@ -12,24 +12,31 @@ trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 
 # Generate the workspace.tfvars file base on the current workspace
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-echo "[*] ...Generating ${WORKSPACE}.tfvars file"
+if [[ -f "$SCRIPT_DIR/../scripts/utilities.sh" ]]; then
+  source "$SCRIPT_DIR/../scripts/utilities.sh"
+else
+  log ERROR "[X] Missing utilities.sh at $SCRIPT_DIR/../scripts"
+  exit 1
+fi
+
+log INFO "[*] ...Generating ${WORKSPACE}.tfvars file"
 SERVERS_JSON="$SCRIPT_DIR/../workspaces/${WORKSPACE}.ws.json"
 OUTPUT_FILE="$SCRIPT_DIR/../terraform/workspace.tfvars"
 
 # Validate the workspace definition
-echo "[*] ...Validating workspace definition $SERVERS_JSON"
+log INFO "[*] ...Validating workspace definition $SERVERS_JSON"
 validate_workspace "$SCRIPT_DIR/../scripts" "$SERVERS_JSON"
 
 # Extract unique roles
 roles=$(jq -r '.servers[].role' "$SERVERS_JSON" | sort | uniq)
 if [ -z "$roles" ]; then
-  echo "[!] No server roles found in $SERVERS_JSON"
+  log ERROR "[!] No server roles found in $SERVERS_JSON"
   exit 1
 fi
 
 # For each role, count servers and extract hardware profile and disks
 # This will generate a block for each role in the tfvars file
-echo "[*] ...Processing server roles and generating tfvars"
+log INFO "[*] ...Processing server roles and generating tfvars"
 echo "server_roles = {" > "$OUTPUT_FILE"
 for role in $roles; do
   # Count servers of this role
@@ -50,17 +57,17 @@ for role in $roles; do
   echo "    disks_gb  = $disks" >> "$OUTPUT_FILE"
   echo "    unit_cost = $unit_cost" >> "$OUTPUT_FILE"
   echo "  }" >> "$OUTPUT_FILE"
-  echo "[+] Processed role: $role with $count servers"
+  log INFO "[+] Processed role: $role with $count servers"
 done
 echo "}" >> "$OUTPUT_FILE"
-echo "[+] Terraform tfvars file generated at $OUTPUT_FILE"
-echo "[+] Terraform tfvars file workspace.tfvars content:"
+log INFO "[+] Terraform tfvars file generated at $OUTPUT_FILE"
+log INFO "[+] Terraform tfvars file workspace.tfvars content:"
 cat "$OUTPUT_FILE"
-echo "[*] ...Generating workspace.tfvars file completed"
+log INFO "[*] ...Generating workspace.tfvars file completed"
 
 # Substitute environment variables in the main.template.tf file
 cd "$SCRIPT_DIR/../terraform"
-echo "[*] ...Generating main.tf from template"
+log INFO "[*] ...Generating main.tf from template"
 envsubst < main.template.tf > main.tf
 rm -f main.template.tf
 cat main.tf
@@ -69,18 +76,18 @@ cat main.tf
 # Error: Saving a generated plan is currently not supported
 # Terraform Cloud does not support saving the generated execution plan
 
-echo "[*] ...Running terraform...INIT"
+log INFO "[*] ...Running terraform...INIT"
 mkdir -p "$VAR_PATH_TEMP"
 terraform init
 
-echo "[*] ...Running terraform...PLAN"
+log INFO "[*] ...Running terraform...PLAN"
 terraform plan -var-file="workspace.tfvars" -input=false
 
-echo "[*] ...Running terraform...APPLY"
+log INFO "[*] ...Running terraform...APPLY"
 terraform apply -auto-approve -var-file="workspace.tfvars" -input=false
 #echo "[*] ...Running terraform...APPLY skipped for safety"
 
-echo "[*] ...Reading Terraform output..."
+log INFO "[*] ...Reading Terraform output..."
 terraform output -json serverdata | jq -c '.' | tee $VAR_PATH_TEMP/tf_output.json
 
-echo "[+] ...Terraform output saved to tf_output.json and $VAR_PATH_TEMP/tf_output.json"
+log INFO "[+] ...Terraform output saved to tf_output.json and $VAR_PATH_TEMP/tf_output.json"
