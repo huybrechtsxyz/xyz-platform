@@ -635,10 +635,11 @@ create_service_serverpaths() {
               {
                 serverid: $server.serverid,
                 serverrole: $server.serverrole,
-                name: (if ($smount.path // "") == "" then $smount.type else $smount.path end),
+                name: ($smount.type + ($smount.path // "")),
                 type: $smount.type,
                 chmod: $smount.chmod,
                 source: $smount.source,
+                target: (if ($smount.path // "") == "" then $smount.type else $smount.path end),
                 path: (
                   ($server.mountpoint | gsub("\\$\\{disk\\}"; "1")) + "/" +
                   (if $smount.path == "" then $wpath.path else $smount.path end)

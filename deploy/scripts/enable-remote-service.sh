@@ -47,16 +47,14 @@ fi
 HOSTNAME=$(hostname)
 
 # Should be in variables.env
-# PATH_CONFIG
-# PATH_DOCS
+# VAR_PATH_SERVICE
 log INFO "[*] Deployment path : $PATH_DEPLOY"
-log INFO "[*] Service path    : $PATH_CONFIG"
-log INFO "[*] Docs path       : $PATH_DOCS"
+log INFO "[*] Service path    : $PATH_SERVICE"
 log INFO "[*] Running on host : $HOSTNAME"
 
 # Get the registry and service file
-REGISTRY_FILE="$PATH_CONFIG/registry.json"
-SERVICE_FILE="$PATH_CONFIG/service.json"
+REGISTRY_FILE="$PATH_SERVICE/registry.json"
+SERVICE_FILE="$PATH_SERVICE/service.json"
 REGISTRY_ID=$(jq -r '.service.id' "$REGISTRY_FILE")
 SERVICE_ID=$(jq -r '.service.id' "$SERVICE_FILE")
 if [[ "$REGISTRY_ID" != "$SERVICE_ID" ]]; then
@@ -139,8 +137,10 @@ create_service_paths() {
       path_type=$(jq -r '.type' <<< "$pathdata")
       path_target=$(jq -r '.path' <<< "$pathdata")
       path_volume=$(jq -r '.volume' <<< "$pathdata")
-      [[ -z "$path_target" || -z "$path_type" ]] && continue
+      path_source=$(jq -r '.source' <<< "$pathdata")
+      [[ -z "$path_source" || -z "$path_target" || -z "$path_type" ]] && continue
 
+      source_path=
       case "$path_type" in
         config) source_path="$PATH_CONFIG" ;;
         docs)   source_path="$PATH_DOCS" ;;

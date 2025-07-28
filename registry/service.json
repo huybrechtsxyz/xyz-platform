@@ -4,11 +4,22 @@
     "name": "Traefik",
     "description": "Reverse proxy and load balancer for microservices",
     "mounts": [
-      { "type": "config", "chmod": 755, "path":"",    "source":"src" },
+      { "type": "config", "chmod": 755, "path":"",    "source":"config" },
       { "type": "config", "chmod": 755, "path":"etc", "source":"" },
       { "type": "docs",   "chmod": 755, "path":"",    "source":"docs" },
       { "type": "data",   "chmod": 600, "path":"",    "source":"" },
       { "type": "logs",   "chmod": 777, "path":"",    "source":"" }
+    ],
+    "paths": [
+      { 
+        "serverid": "manager-1",
+        "serverrole": "manager",
+        "name": "config | configetc | docs | data | logs",
+        "type": "config | docs | data | logs",
+        "chmod": 755,
+        "source": "config | . | docs",
+        "path": "Full path on the server /mnt/...."
+      }
     ],
     "deploy": {
       "priority": 1,
