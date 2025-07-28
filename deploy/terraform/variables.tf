@@ -34,11 +34,6 @@ variable "workspace" {
   type        = string  
 }
 
-variable "environment" {
-  description = "Environment to deploy: test, staging, production"
-  type        = string
-}
-
 variable "server_roles" {
   type = map(object({
     count     : number

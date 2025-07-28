@@ -1,32 +1,63 @@
 #!/bin/bash
+#===============================================================================
+# Script Name   : initialize-remote-server.sh
+# Description   : Server initialization script
+# Usage         : ./initialize-remote-server.sh <PATH_DEPLOY>"
+# Author        : Vincent Huybrechts
+# Created       : 2025-07-23
+# Last Modified : 2025-07-23
+#===============================================================================
+# Available directories and files in $PATH_DEPLOY (/tmp/app/.deploy)
+# |- ./deploy/scripts/variables.env
+# |- ./deploy/scripts/*
+# |- ./deploy/workspaces/*
+#===============================================================================
 set -euo pipefail
+trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
+
+PATH_DEPLOY="$1"
+: "${PATH_DEPLOY:?Missing PATH_DEPLOY}"
+if [[ ! -d "$PATH_DEPLOY" ]]; then
+  echo "Temporary path $PATH_DEPLOY does not exist. Please create it or set a different path."
+  exit 1
+fi
+
+if [[ -f "$PATH_DEPLOY/variables.env" ]]; then
+  source "$PATH_DEPLOY/variables.env"
+else
+  log ERROR "[X] Missing variables.env at $PATH_DEPLOY"
+  exit 1
+fi
+
+if [[ -f "$PATH_DEPLOY/utilities.sh" ]]; then
+  source "$PATH_DEPLOY/utilities.sh"
+else
+  log ERROR "[X] Missing utilities.sh at $PATH_DEPLOY"
+  exit 1
+fi
+
 HOSTNAME=$(hostname)
 
-# Validate that the PATH_TEMP variable is set and is a valid directory.
-: "${PATH_TEMP:="/tmp/app"}"
+# Validate that the variables are set
 : "${WORKSPACE:?Missing WORKSPACE}"
 : "${MANAGER_IP:?Missing MANAGER_IP}"
 : "${PRIVATE_IP:?Missing PRIVATE_IP}"
 
-log INFO "[*] PATH_TEMP: $PATH_TEMP"
+export PRIVATE_IP="$PRIVATE_IP"
+export MANAGER_IP="$MANAGER_IP"
+
+log INFO "[*] PATH_DEPLOY: $PATH_DEPLOY"
 log INFO "[*] WORKSPACE: $WORKSPACE"
 log INFO "[*] MANAGER_IP: $MANAGER_IP"
 log INFO "[*] PRIVATE_IP: $PRIVATE_IP"
 
-if [[ ! -d "$PATH_TEMP" ]]; then
-  echo "Temporary path $PATH_TEMP does not exist. Please create it or set a different path."
+log INFO "[*] Finding workspace file and manager label"
+WORKSPACE_FILE=$(get_workspace_file "$PATH_DEPLOY" "$WORKSPACE") || exit 1
+MANAGER_LABEL=$(get_manager_id "$WORKSPACE_FILE") || exit 1
+if [[ ! -f "$WORKSPACE_FILE" ]]; then
+  log ERROR "[X] Workspace file not found: $WORKSPACE_FILE"
   exit 1
 fi
-
-WORKSPACE_FILE=$(get_workspace_file "$PATH_TEMP" "$WORKSPACE") || exit 1
-MANAGER_LABEL=$(get_manager_id "$WORKSPACE_FILE") || exit 1
-
-# source /tmp/app/utilities.sh (set in pipeline)
-# source /tmp/app/initialize.env (set in pipeline)
-export PRIVATE_IP="$PRIVATE_IP"
-export MANAGER_IP="$MANAGER_IP"
-
-cd /
 
 # Function to log messages with a timestamp
 install_private_key() {
@@ -48,6 +79,7 @@ configure_firewall() {
     log INFO "[*] ... Installing UFW ...DONE"
   fi
 
+  log INFO "[*] ... Configuring UFW ..."
   # Deny all traffic by default
   ufw --force reset
   ufw default deny incoming
@@ -98,20 +130,25 @@ configure_firewall() {
   ufw allow proto tcp from 10.0.0.0/23 to any port 6379 comment 'Redis IN'
   ufw allow out proto tcp to 10.0.0.0/23 port 6379 comment 'Redis OUT'
 
-  # Gluser traeffic between nodes
+  # Gluster traffic between nodes
   ufw allow proto tcp from 10.0.0.0/23 to any port 24007:24008 comment 'GlusterFS Management IN'
   ufw allow proto tcp from 10.0.0.0/23 to any port 49152:49251 comment 'GlusterFS Bricks IN'
   ufw allow out proto tcp to 10.0.0.0/23 port 24007:24008 comment 'GlusterFS Management OUT'
   ufw allow out proto tcp to 10.0.0.0/23 port 49152:49251 comment 'GlusterFS Bricks OUT'
-
+  
   # Enable firewall only if not active
+  log INFO "[*] ... Configuring UFW ...DONE"
   if ! ufw status | grep -q "Status: active"; then
-  log INFO "[*] Enabling UFW..."
+  log INFO "[*] ... Enabling UFW..."
   echo "y" | ufw enable
+  log INFO "[*] ... Enabling UFW...DONE"
   fi
 
+  log INFO "[*] ... Reloading UFW..."
   ufw reload
   ufw status verbose
+  log INFO "[*] ... Reloading UFW...DONE"
+
   log INFO "[+] Configuring firewall...DONE"
 }
 
@@ -127,12 +164,10 @@ configure_firewall() {
 # that the mount points are added to /etc/fstab for persistence across reboots.
 mount_disks() {
   log INFO "[*] Preparing and mounting disk volumes..."
-
-  local workspace_file=$(get_workspace_file "$PATH_TEMP" "$WORKSPACE") || exit 1
   local server_id=$(get_server_id "$WORKSPACE_FILE" "$HOSTNAME") || exit 1
 
   # Identify the OS disk by partition mounted at root '/'
-  log INFO "[*] Identify the OS disk by root mountpoint"
+  log INFO "[*] ... Identify the OS disk by root mountpoint"
   local os_part=$(findmnt -n -o SOURCE /)
   local os_disk=$(lsblk -no PKNAME "$os_part")
   local os_disk_base="$os_disk"
@@ -144,31 +179,36 @@ mount_disks() {
     grep -v "^$os_disk_base$" | \
     grep -E '^sd[b-z]' | \
     sort -k2,2n -k1,1)
+
   # Insert OS disk as the first element
   os_size=$(lsblk -bn -o SIZE -d "/dev/$os_disk_base")
   disks=("$os_disk_base $os_size" "${disks[@]}")
+
   # Create disk name array
   declare -a disk_names
   for line in "${disks[@]}"; do
     disk_names+=("$(echo "$line" | awk '{print $1}')")
   done
 
-  local disk_count=$(jq -r --arg id "$server_id" '.servers[] | select(.id == $id) | .disks | length' "$workspace_file")
+  # Getting workspace disks
+  local disk_count=$(jq -r --arg id "$server_id" '.servers[] | select(.id == $id) | .disks | length' "$WORKSPACE_FILE")
   log INFO "[*] ... Found $disk_count disks for $HOSTNAME (including OS disk)"
   if (( ${#disk_names[@]} < disk_count )); then
     log ERROR "[!] Only found ${#disk_names[@]} disks but expected $disk_count"
     return 1
   fi
 
-  local mount_template=$(jq -r --arg id "$server_id" '.servers[] | select(.id == $id) | .mountpoint' "$workspace_file")
+  # Get mouting template for server
+  local mount_template=$(jq -r --arg id "$server_id" '.servers[] | select(.id == $id) | .mountpoint' "$WORKSPACE_FILE")
 
+  # Loop all disks found
   log INFO "[*] Looping over all disks"
   for i in $(seq 0 $((disk_count - 1))); do
     log INFO "[*] Mounting disk $i for $HOSTNAME"
 
     local disk="/dev/${disk_names[$i]}"
     local label=$(jq -r --arg id "$server_id" --argjson i "$i" \
-      '.servers[] | select(.id == $id) | .disks[$i].label' "$workspace_file")
+      '.servers[] | select(.id == $id) | .disks[$i].label' "$WORKSPACE_FILE")
     local part=""
     local fs_type=""
     local current_label=""
@@ -204,7 +244,7 @@ mount_disks() {
 
     # Get expected disk size from workspace metadata (in GB)
     local expected_size_gb=$(jq -r --arg id "$server_id" --argjson i "$i" \
-      '.servers[] | select(.id == $id) | .disks[$i].size' "$workspace_file")
+      '.servers[] | select(.id == $id) | .disks[$i].size' "$WORKSPACE_FILE")
     
     # Get actual disk size in bytes and convert to GB (rounding down)
     local actual_size_bytes=$(lsblk -bn -o SIZE -d "$disk")
@@ -273,28 +313,6 @@ mount_disks() {
   done
 
   log INFO "[+] All disks prepared and mounted."
-}
-
-# Function to check if the actual disk size matches the expected size within a tolerance
-disk_size_matches() {
-  local actual_gb="$1"        # e.g. 39
-  local expected_gb="$2"      # e.g. 40
-  local tolerance_mb="${3:-20}"  # Optional, default to 20 MiB
-
-  local BYTES_PER_GB=1073741824
-  local BYTES_PER_MB=1048576
-
-  local expected_bytes=$(( expected_gb * BYTES_PER_GB ))
-  local actual_bytes=$(( actual_gb * BYTES_PER_GB ))
-  local diff_bytes=$(( actual_bytes - expected_bytes ))
-  local diff_mb=$(( diff_bytes / BYTES_PER_MB ))
-  local abs_diff_mb=${diff_mb#-}
-
-  if (( abs_diff_mb <= tolerance_mb )); then
-    return 0  # Match within tolerance
-  else
-    return 1  # Too far off
-  fi
 }
 
 # Function to install Docker if not already installed
@@ -420,46 +438,48 @@ install_gluster() {
 
 # Main function to initialize the remote server
 main() {
-    echo "[*] Initializing remote server..."
+  echo "[*] Initializing remote server..."
+  cd /
 
-    install_private_key || {
-      log ERROR "[X] Failed to install private key."
-      exit 1
-    }
+  install_private_key || {
+    log ERROR "[X] Failed to install private key."
+    exit 1
+  }
 
-    configure_firewall || {
-      log ERROR "[X] Failed to configure firewall."
-      exit 1
-    }
+  configure_firewall || {
+    log ERROR "[X] Failed to configure firewall."
+    exit 1
+  }
 
-    mount_disks || {
-      log ERROR "[X] Failed to mount disks."
-      exit 1
-    }
+  mount_disks || {
+    log ERROR "[X] Failed to mount disks."
+    exit 1
+  }
 
-    install_docker_if_needed || {
-      log ERROR "[X] Failed to install Docker."
-      exit 1
-    }
+  install_docker_if_needed || {
+    log ERROR "[X] Failed to install Docker."
+    exit 1
+  }
 
-    configure_swarm || {
-      log ERROR "[X] Failed to configure Docker Swarm."
-      exit 1
-    }
+  configure_swarm || {
+    log ERROR "[X] Failed to configure Docker Swarm."
+    exit 1
+  }
 
-    enable_docker_service || {
-      log ERROR "[X] Failed to enable Docker service."
-      exit 1
-    }
+  enable_docker_service || {
+    log ERROR "[X] Failed to enable Docker service."
+    exit 1
+  }
 
-    install_gluster || {
-      log ERROR "[X] Failed to install GlusterFS."
-      exit 1
-    }
-    
-    echo "[*] Remote server cleanup..."
-    rm -rf /tmp/app/*
-    echo "[+] Remote server initialization completed."
+  install_gluster || {
+    log ERROR "[X] Failed to install GlusterFS."
+    exit 1
+  }
+  
+  echo "[*] Cleaning up swarm cluster..."
+  # : "${PATH_TEMP:="/tmp/app"}"
+  safe_rm_rf /tmp/app/*
+  echo "[+] Remote server initialization completed."
 }
 
 main

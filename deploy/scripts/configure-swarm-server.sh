@@ -1,76 +1,108 @@
 #!/bin/bash
+#===============================================================================
+# Script Name   : configure-swarm-server.sh
+# Description   : Pipeline code to call remote configuration code
+# Usage         : ./configure-swarm-server.sh <REMOTE_IP>
+# Author        : Vincent Huybrechts
+# Created       : 2025-07-23
+# Last Modified : 2025-07-23
+#===============================================================================
 set -euo pipefail
+trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 
 # Get the remote IP and matrix from the arguments
-if [ "$#" -ne 2 ]; then
-  echo "Usage: $0 <REMOTE_IP> <MATRIX>"
+if [ "$#" -ne 1 ]; then
+  echo "Usage: $0 <REMOTE_IP>"
   exit 1
 fi
 
+# Get the input parameters into variables
 REMOTE_IP="$1"
-MATRIX="$2"
-
 if [[ ! "$REMOTE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "Invalid IP address format: $REMOTE_IP"
   exit 1
 fi
-if [[ -z "$MATRIX" ]]; then
-  echo "MATRIX cannot be empty"
-  exit 1
-fi
+
+# The deployment paths
+: "${VAR_PATH_TEMP:="/tmp/app"}"
+: "${VAR_MATRIX:?VAR_MATRIX is required}"
+
+PATH_DEPLOY="$VAR_PATH_TEMP/.deploy"
+PATH_CONFIG="$VAR_PATH_TEMP/.config"
+PATH_DOCS="$VAR_PATH_TEMP/.docs"
 
 # Source the utilities script for logging and environment variable handling
 source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
 
 # Create secret and variable files based on expected prefixes
-# Creates variable.env 
-# Creates secrets.env
-# Creates terraform.json file with the provided MATRIX
-create_secret_file() {
-  generate_env_file "VAR_" "./src/variables.env"
-  generate_env_file "SECRET_" "./src/secrets.env"
-  echo "$MATRIX" > "./src/terraform.json"
+# Output files added to deploy folder
+# |- ./deploy/configuration.env   (VAR_)
+# |- ./deploy/secrets.env     (SECRET_)
+# |- ./deploy/terraform.json  (TFOUTPUT)
+create_environment_files() {
+  # Save the TFOUPTUT as terraform.json
+  echo "$VAR_MATRIX" > "./deploy/terraform.json"
+  unset "$VAR_MATRIX"
+  
+  # Add the serverpaths to the workspace file
+  WORKSPACE_FILE=$(get_workspace_file "./deploy/workspaces" "$VAR_WORKSPACE")
+  create_workspace_serverpaths "$WORKSPACE_FILE" > "./deploy/workspace.json"
+  cp -f "./deploy/workspace.json" "$WORKSPACE_FILE"
+  rm -f "./deploy/workspace.json"
+
+  # Generate environment and secrets file
+  generate_env_file "VAR_" "./deploy/configuration.env"
+  generate_env_file "SECRET_" "./deploy/secrets.env"
 }
 
-# Initializes the remote server by creating necessary directories
+# Copy configuration files to the remote server by creating necessary directories
 # Creates the temporary application path and subdirectories on the remote server
-# This is done to ensure the remote server has the necessary structure before copying files
-init_copy_files() {
-log INFO "[*] Initializing REMOTE configuration..."
+copy_configuration_files() {
+  log INFO "[*] Copying configuration files to $REMOTE_IP..."
+  shopt -s nullglob
+
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-mkdir -p "$VAR_PATH_TEMP" "$VAR_PATH_TEMP"/deploy "$VAR_PATH_TEMP"/src
-echo "[*] Initializing REMOTE server...DONE"
+mkdir -p "$VAR_PATH_TEMP" "$PATH_DEPLOY" "$PATH_CONFIG" "$PATH_DOCS"
 EOF
 then
-log ERROR "[!] Initializing configuration failed on $REMOTE_IP"
+log ERROR "[X] Copying configuration failed to $REMOTE_IP"
 exit 1
 fi
-}
 
-# Copies configuration files to the remote server
-# This function copies the necessary scripts and configuration files to the remote server
-# It ensures that the remote server has the required files to run the configuration script
-# The files are copied to the temporary application path created earlier
-copy_config_files() {
-  log INFO "[*] Copying environment files to remote server..."
-  shopt -s nullglob
-  log INFO "[*] Copying environment files to remote server...Deploy"
-  scp -o StrictHostKeyChecking=no \
-    ./deploy/scripts/*.* \
-    root@"$REMOTE_IP":"$VAR_PATH_TEMP"/deploy || {
-      log ERROR "[x] Failed to transfer configuration scripts to remote server"
-      exit 1
-    }
-  log INFO "[*] Copying environment files to remote server...Sources"
-  scp -o StrictHostKeyChecking=no \
-    ./deploy/workspaces/*.* \
-    ./scripts/*.sh \
-    ./src/*.* \
-    root@"$REMOTE_IP":"$VAR_PATH_TEMP"/src || {
-      log ERROR "[x] Failed to transfer configuration scripts to remote server"
-      exit 1
-    }
-  log INFO "[+] Copying environment files to remote server...DONE"
+log INFO "[*] Copying deployment scripts to remote server...Deploy"
+scp -o StrictHostKeyChecking=no \
+  ./deploy/scripts/*.* \
+  root@"$REMOTE_IP":"$PATH_DEPLOY"/ || {
+    log ERROR "[x] Failed to transfer deployment scripts to remote server"
+    exit 1
+  }
+
+log INFO "[*] Copying configuration files to remote server...Sources"
+scp -o StrictHostKeyChecking=no \
+  ./deploy/workspaces/*.* \
+  ./deploy/*.* \
+  ./scripts/*.sh \
+  root@"$REMOTE_IP":"$PATH_CONFIG"/ || {
+    log ERROR "[x] Failed to transfer configuration files to remote server"
+    exit 1
+  }
+
+log INFO "[*] Copying documentation files to remote server...Docs"
+scp -r -o StrictHostKeyChecking=no \
+  ./docs/ \
+  root@"$REMOTE_IP":"$PATH_DOCS"/ || {
+    log ERROR "[x] Failed to transfer documentation files to remote server"
+    exit 1
+  }
+
+log INFO "[*] Debugging deployment path of remote server..."
+ssh -o StrictHostKeyChecking=no root@$REMOTE_IP << EOF
+  ls -la "$PATH_DEPLOY"
+  ls -la "$PATH_CONFIG"
+  ls -la "$PATH_DOCS"
+EOF
+
+  log INFO "[*] Copying configuration files to $REMOTE_IP...DONE"
 }
 
 # Configures the remote server by executing the configuration script
@@ -80,45 +112,31 @@ copy_config_files() {
 configure_server() {
 log INFO "[*] Executing REMOTE configuration..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-set -e
-echo "[*] Executing on REMOTE server..."
-echo "[*] Using temporary path: $VAR_PATH_TEMP"
-shopt -s nullglob
-set -a
-source "$VAR_PATH_TEMP/src/variables.env"
-source "$VAR_PATH_TEMP/src/secrets.env"
-source "$VAR_PATH_TEMP/deploy/utilities.sh"
-set +a
-chmod +x "$VAR_PATH_TEMP/deploy/configure-remote-server.sh"
-"$VAR_PATH_TEMP/deploy/configure-remote-server.sh"
-echo "[*] Executing on REMOTE server...DONE"
+chmod +x "$PATH_DEPLOY/configure-remote-server.sh"
+"$PATH_DEPLOY/configure-remote-server.sh" "$VAR_PATH_TEMP"
 EOF
 then
-log ERROR "[!] Remote configuration failed on $REMOTE_IP"
+log ERROR "[X] Remote configuration failed on $REMOTE_IP"
 exit 1
 fi
+log INFO "[*] Executing on REMOTE server...DONE"
 }
 
 main() {
   log INFO "[*] Configuring remote server at $REMOTE_IP..."
 
-  if ! create_secret_file; then
-    log ERROR "[x] Failed to create environment file."
+  if ! create_environment_files; then
+    log ERROR "[X] Failed to create environment files."
     exit 1
   fi
 
-  if ! init_copy_files; then
-    log ERROR "[x] Failed to initialize remote configuration"
-    exit 1
-  fi
-
-  if ! copy_config_files; then
-    log ERROR "[x] Failed to copy configuration files to remote server"
+  if ! copy_configuration_files; then
+    log ERROR "[X] Failed to copy configuration files to remote server"
     exit 1
   fi
 
   if ! configure_server; then
-    log ERROR "[x] Failed to configure remote server"
+    log ERROR "[X] Failed to configure remote server"
     exit 1
   fi
 

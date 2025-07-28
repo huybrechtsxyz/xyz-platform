@@ -1,5 +1,6 @@
 {
   "deploy": {
+    "id": "platform",
     "name": "Platform Workspace on Kamatera",
     "version": "1.0.0",
     "description": "Workspace deployment configuration for the shared Kamatera Platform."
@@ -26,6 +27,7 @@
   },
   "paths": [
     { "type": "config", "path": "/etc/app"     , "volume": "replicated" },
+    { "type": "docs",   "path": "/opt/app/docs", "volume": "replicated" },
     { "type": "data",   "path": "/var/data/app", "volume": "local" },
     { "type": "logs",   "path": "/var/logs/app", "volume": "local" },
     { "type": "serve",  "path": "/srv/app"     , "volume": "distributed" }
@@ -41,6 +43,7 @@
       "mountpoint": "/mnt/data${disk}/app",
       "mounts": [
         { "type": "config", "disk": 1 },
+        { "type": "docs", "disk": 1 },
         { "type": "data", "disk": 1 },
         { "type": "logs", "disk": 1 },
         { "type": "serve", "disk": 1 }
@@ -57,6 +60,7 @@
       "mountpoint": "/mnt/data${disk}/app",
       "mounts": [
         { "type": "config", "disk": 2 },
+        { "type": "docs", "disk": 2 },
         { "type": "data", "disk": 2 },
         { "type": "logs", "disk": 2 },
         { "type": "serve", "disk": 2 }
@@ -73,6 +77,7 @@
       "mountpoint": "/mnt/data${disk}/app",
       "mounts": [
         { "type": "config", "disk": 2 },
+        { "type": "docs", "disk": 2 },
         { "type": "data", "disk": 2 },
         { "type": "logs", "disk": 2 },
         { "type": "serve", "disk": 2 }
@@ -88,6 +93,7 @@
       "mountpoint": "/mnt/data${disk}/app",
       "mounts": [
         { "type": "config", "disk": 1 },
+        { "type": "docs", "disk": 1 },
         { "type": "data", "disk": 1 },
         { "type": "logs", "disk": 1 },
         { "type": "serve", "disk": 1 }
@@ -103,6 +109,7 @@
       "mountpoint": "/mnt/data${disk}/app",
       "mounts": [
         { "type": "config", "disk": 1 },
+        { "type": "docs", "disk": 1 },
         { "type": "data", "disk": 1 },
         { "type": "logs", "disk": 1 },
         { "type": "serve", "disk": 1 }

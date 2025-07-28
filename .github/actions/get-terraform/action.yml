@@ -1,0 +1,66 @@
+name: Fetch Terraform Output
+description: Restore Terraform output from cache or pull from HCP
+
+inputs:
+  WORKSPACE:
+    description: Workspace
+    required: true
+  TEMPPATH:
+    description: Temporary path
+    required: true
+  API_TOKEN:
+    description: Terraform API Token
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    # Set ENVIRONMENT path
+    - name: Set ENVIRONMENT path
+      shell: bash
+      run: |
+        mkdir -p ${{ inputs.TEMPPATH }}
+        echo "TEMPPATH=${{ inputs.TEMPPATH }}" >> "$GITHUB_ENV"
+
+    # Restore Terraform Cache
+    - name: Restore Terraform Cache
+      id: restore-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ env.TEMPPATH }}/tf_output.json
+        key: terraform-output-${{ inputs.WORKSPACE }}
+
+    # Check for Restored Terraform Output
+    - name: Check for Restored Terraform Output
+      id: check-cache
+      shell: bash
+      run: |
+        if [ -f "${TEMPPATH}/tf_output.json" ]; then
+          echo "found=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "found=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    # Setup Terraform CLI
+    - name: Setup Terraform CLI
+      if: steps.check-cache.outputs.found == 'false'
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.6
+
+    # Download Terraform Output from HCP
+    - name: Download Terraform Output from HCP
+      if: steps.check-cache.outputs.found == 'false'
+      shell: bash
+      env:
+        TF_TOKEN_app_terraform_io: ${{ inputs.API_TOKEN }}
+      run: |
+        terraform login -no-color || true
+        terraform pull -WORKSPACE="${{ inputs.WORKSPACE }}" > "${TEMPPATH}/tfstate.tfstate"
+        terraform show -json "${TEMPPATH}/tfstate.tfstate" | jq '.values.outputs' > "${TEMPPATH}/tf_output.json"
+
+    # Debug output
+    - name: View Debug Output
+      shell: bash
+      run: |
+        jq '.' ${TEMPPATH}/tf_output.json | head -n 20

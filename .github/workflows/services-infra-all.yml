@@ -1,5 +1,5 @@
-# This workflow deploys all services to the shared environment
-name: Deploy All Services
+# This workflow deploys services
+name: Services - Infrastructure
 
 on:
   workflow_dispatch:
@@ -11,6 +11,6 @@ jobs:
     with:
       workspace: platform
       environment: infra
-      services: "*"
+      services: "traefik"
     secrets:
       BITWARDEN_TOKEN: ${{ secrets.BITWARDEN_TOKEN }}

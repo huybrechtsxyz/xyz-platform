@@ -1,5 +1,5 @@
 # This workflow deploys all infrastructure to the shared environment
-name: Deploy Platform
+name: Workspace - Platform
 
 on:
   workflow_dispatch:
@@ -10,7 +10,6 @@ jobs:
     uses: ./.github/workflows/_workspace.yml
     with:
       workspace: platform
-      environment: platform
       infrastructure: true
     secrets:
       BITWARDEN_TOKEN: ${{ secrets.BITWARDEN_TOKEN }}

@@ -1,4 +1,12 @@
 #!/bin/bash
+#===============================================================================
+# Script Name   : utilities.sh
+# Description   : Different modular and reusable functions
+# Usage         : n.a.
+# Author        : Vincent Huybrechts
+# Created       : 2025-07-23
+# Last Modified : 2025-07-23
+#===============================================================================
 
 # Logging function
 log() {
@@ -14,49 +22,118 @@ log() {
   esac
 }
 
-# Generate an environment file only taking env vars with specific prefix
-# Usage: generate_env_file <PREFIX> <OUTPUT_FILE>
-# Example: generate_env_file MYAPP_ /path/to/output.env
-# This function will create an environment file with all variables starting with the given prefix.
-# It will strip the prefix from the variable names in the output file.
-# It will also ensure that all variables are non-empty before writing to the file.
-generate_env_file() {
-  local prefix="$1"
-  local output_file="$2"
+# Build PATH_SERVERID_MOUNT
+get_server_variable_name() {
+  local server="$1"
+  local mounttype="$2"
 
-  if [[ -z "$prefix" || -z "$output_file" ]]; then
-    echo "[!] Usage: generate_env_file <PREFIX> <OUTPUT_FILE>" >&2
-    return 1
+  # Sanitize: uppercase, then replace non-alphanum with _
+  local varserver=$(echo "$server" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
+  local varmount=$(echo "$mounttype" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
+
+  echo "PATH_${varserver}_${varmount}"
+}
+
+# Build SERVICE_PATH_MOUNT
+get_service_variable_name() {
+  local service="$1"
+  local mount="$2"
+
+  # Sanitize: uppercase, then replace non-alphanum with _
+  local varservice=$(echo "$service" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
+  local varmount=$(echo "$mount" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
+
+  echo "${varservice}_PATH_${varmount}"
+}
+
+# Save force removal function
+# As a safety precaution, check that the path you're about to wipe isn't / or empty
+safe_rm_rf() {
+  local path="$1"
+
+  if [[ -z "$path" || "$path" == "/" ]]; then
+    log WARN "[!] ... Skipped unsafe or empty path: '$path'"
+    return
   fi
 
-  log INFO "[*] Generating environment file for variables with prefix '$prefix'..."
+  # Resolve real path to protect against symlinks to /
+  local real_path
+  real_path=$(realpath -m "$path")  # -m handles non-existent paths
 
-  # Get all variables starting with the prefix
-  mapfile -t vars < <(compgen -v | grep "^${prefix}")
-
-  if [[ "${#vars[@]}" -eq 0 ]]; then
-    echo "[!] Error: No environment variables found with prefix '$prefix'" >&2
-    return 1
+  if [[ "$real_path" == "/" ]]; then
+    log ERROR "[X] ... Refusing to remove root directory"
+    return
   fi
 
-  # Validate all are non-empty
-  for var in "${vars[@]}"; do
-    [[ -z "${!var}" ]] && { echo "[!] Error: Missing required variable '$var'" >&2; return 1; }
-  done
+  if [[ -f "$real_path" ]]; then
+    log INFO "[*] ... Removing file: $real_path"
+    rm -f "$real_path"
+  elif [[ -d "$real_path" ]]; then
+    log INFO "[*] ... Removing directory contents: $real_path"
+    shopt -s nullglob dotglob
+    rm -rf "$real_path"/*
+    shopt -u nullglob dotglob
+  else
+    log WARN "[!] ... Skipped non-existent path: $real_path"
+  fi
+}
 
-  # Ensure output directory exists
-  mkdir -p "$(dirname "$output_file")"
+# The function runs the validation script on the given JSON file.
+# Usage: validate_workspace <SCRIPT_PATH> <WORKSPACE_FILE>
+validate_workspace() {
+  local path="$1"
+  local workspace_file="$2"
+  "$path/validate-workspace.sh" "$workspace_file"
+  if [[ $? -ne 0 ]]; then
+    echo "Validation failed. Exiting."
+    exit 1
+  fi
+}
 
-  # Generate the env file with the prefix stripped
-  {
-    echo "# Auto-generated environment file (prefix '$prefix' stripped)"
-    for var in "${vars[@]}"; do
-      short_var="${var#$prefix}"
-      printf '%s=%q\n' "$short_var" "${!var}"
-    done
-  } > "$output_file"
+# The function runs the validation script on the given JSON file.
+# Usage: validate_workspace <SCRIPT_PATH> <REGISTRY_FILE>
+validate_registry() {
+  local path="$1"
+  local registry_file="$2"
+  "$path/validate-registry.sh" "$registry_file"
+  if [[ $? -ne 0 ]]; then
+    echo "Validation failed. Exiting."
+    exit 1
+  fi
+}
 
-  log INFO "[+] Environment file generated at '$output_file'"
+# The function runs the validation script on the given JSON file.
+# Usage: validate_service <SCRIPT_PATH> <SERVICE_FILE>
+validate_service() {
+  local path="$1"
+  local service_file="$2"
+  "$path/validate-service.sh" "$service_file"
+  if [[ $? -ne 0 ]]; then
+    echo "Validation failed. Exiting."
+    exit 1
+  fi
+}
+
+# Function to check if the actual disk size matches the expected size within a tolerance
+disk_size_matches() {
+  local actual_gb="$1"        # e.g. 39
+  local expected_gb="$2"      # e.g. 40
+  local tolerance_mb="${3:-20}"  # Optional, default to 20 MiB
+
+  local BYTES_PER_GB=1073741824
+  local BYTES_PER_MB=1048576
+
+  local expected_bytes=$(( expected_gb * BYTES_PER_GB ))
+  local actual_bytes=$(( actual_gb * BYTES_PER_GB ))
+  local diff_bytes=$(( actual_bytes - expected_bytes ))
+  local diff_mb=$(( diff_bytes / BYTES_PER_MB ))
+  local abs_diff_mb=${diff_mb#-}
+
+  if (( abs_diff_mb <= tolerance_mb )); then
+    return 0  # Match within tolerance
+  else
+    return 1  # Too far off
+  fi
 }
 
 # Function to create a Docker network if it doesn't exist
@@ -200,6 +277,99 @@ load_docker_secrets() {
   done < "$secrets_file"
 
   echo "[+] Finished loading secrets."
+}
+
+# Generate an environment file only taking env vars with specific prefix
+# Usage: generate_env_file <PREFIX> <OUTPUT_FILE>
+# Example: generate_env_file MYAPP_ /path/to/output.env
+# This function will create an environment file with all variables starting with the given prefix.
+# It will strip the prefix from the variable names in the output file.
+# It will also ensure that all variables are non-empty before writing to the file.
+generate_env_file() {
+  local prefix="$1"
+  local output_file="$2"
+
+  if [[ -z "$prefix" || -z "$output_file" ]]; then
+    echo "[!] Usage: generate_env_file <PREFIX> <OUTPUT_FILE>" >&2
+    return 1
+  fi
+
+  log INFO "[*] Generating environment file for variables with prefix '$prefix'..."
+
+  # Get all variables starting with the prefix
+  mapfile -t vars < <(compgen -v | grep "^${prefix}")
+
+  if [[ "${#vars[@]}" -eq 0 ]]; then
+    echo "[!] Error: No environment variables found with prefix '$prefix'" >&2
+    return 1
+  fi
+
+  # Validate all are non-empty
+  for var in "${vars[@]}"; do
+    [[ -z "${!var}" ]] && { echo "[!] Error: Missing required variable '$var'" >&2; return 1; }
+  done
+
+  # Ensure output directory exists
+  mkdir -p "$(dirname "$output_file")"
+
+  # Generate the env file with the prefix stripped
+  {
+    echo "# Auto-generated environment file (prefix '$prefix' stripped)"
+    for var in "${vars[@]}"; do
+      short_var="${var#$prefix}"
+      printf '%s=%q\n' "$short_var" "${!var}"
+    done
+  } > "$output_file"
+
+  log INFO "[+] Environment file generated at '$output_file'"
+}
+
+# Merge two environment files
+# This function preserves the values from the first file, duplicate keys in the second file are ignored.
+# If OUTPUT_FILE is provided (even same as FILE1), merged result is written to it.
+merge_env_file() {
+  local FILE1="$1"
+  local FILE2="$2"
+  local OUTPUT_FILE="$3"
+
+  if [[ -z "$FILE1" || -z "$FILE2" || ! -f "$FILE1" || ! -f "$FILE2" ]]; then
+    echo "Usage: merge_env_file <FILE1> <FILE2> [OUTPUT_FILE]"
+    return 1
+  fi
+
+  local TMP_OUTPUT
+  TMP_OUTPUT=$(mktemp)
+
+  declare -A env_map
+
+  # Load first file — values from here are preserved
+  while IFS='=' read -r key value; do
+    [[ -z "$key" || "$key" =~ ^# ]] && continue
+    key=$(echo "$key" | xargs)
+    env_map["$key"]="$value"
+  done < "$FILE1"
+
+  # Load second file — skip keys that already exist
+  while IFS='=' read -r key value; do
+    [[ -z "$key" || "$key" =~ ^# ]] && continue
+    key=$(echo "$key" | xargs)
+    if [[ -z "${env_map[$key]+_}" ]]; then
+      env_map["$key"]="$value"
+    fi
+  done < "$FILE2"
+
+  # Write to temporary file first
+  for key in "${!env_map[@]}"; do
+    echo "$key=${env_map[$key]}"
+  done | sort > "$TMP_OUTPUT"
+
+  # Move temp file to output (or FILE1 if output not specified)
+  if [[ -n "$OUTPUT_FILE" ]]; then
+    mv "$TMP_OUTPUT" "$OUTPUT_FILE"
+  else
+    cat "$TMP_OUTPUT"
+    rm "$TMP_OUTPUT"
+  fi
 }
 
 # Function to get the Terraform output file path
@@ -377,4 +547,119 @@ validate_volume_configuration() {
   fi
 
   log INFO "[+] Volume '$volname' configuration validated successfully."
+}
+
+# Function to get the service file path
+# Usage: get_service_file <PATH_SERVICE>
+# Example: get_service_file /tmp/myservice
+# This function checks if the service file exists in the specified path.
+# If it does, it returns the full path to the service file.
+# If the file does not exist, it logs an error and returns 1.
+get_service_file() {
+  local SVC_PATH="$1"
+
+  if [[ -z "$SVC_PATH" ]]; then
+    log ERROR "[!] get_service_file requires SERVICE_PATH arguments."
+    return 1
+  fi
+
+  local SERVICE_FILE="$SVC_PATH/service.json"
+
+  if [[ ! -f "$SERVICE_FILE" ]]; then
+    log ERROR "[!] Service definition file not found: $SERVICE_FILE"
+    return 1
+  fi
+
+  echo "$SERVICE_FILE"
+}
+
+# Function to get the registry file path
+# Usage: get_registry_file <PATH_REGISTRY>
+# Example: get_registry_file /tmp/myregistry
+# This function checks if the registry file exists in the specified path.
+# If it does, it returns the full path to the registry file.
+# If the file does not exist, it logs an error and returns 1.
+get_registry_file() {
+  local SVC_PATH="$1"
+
+  if [[ -z "$SVC_PATH" ]]; then
+    log ERROR "[!] get_registry_file requires REGISTRY_PATH arguments."
+    return 1
+  fi
+
+  local REGISTRY_FILE="$SVC_PATH/registry.json"
+
+  if [[ ! -f "$REGISTRY_FILE" ]]; then
+    log ERROR "[!] Registry definition file not found: $REGISTRY_FILE"
+    return 1
+  fi
+
+  echo "$REGISTRY_FILE"
+}
+
+# Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
+create_workspace_serverpaths(){
+  local workspace_file="$1"
+
+  jq --argjson workspace "$(jq '.' "$workspace_file")" '
+    .servers |= map(
+      . + {
+        paths: (
+          .mounts
+          | map(
+              .type as $type
+              | .disk as $disk
+              | {
+                  type: $type,
+                  path: (
+                    # Replace ${disk} placeholder in mountpoint with the disk number
+                    (.mountpoint // "") 
+                    | gsub("\\$\\{disk\\}"; ($disk|tostring))
+                    # Append the path from workspace.paths for this type, fallback to just $type if missing
+                    + ("/" + (($workspace.paths[] | select(.type == $type) | .path) // $type))
+                  ),
+                  volume: ($workspace.paths[] | select(.type == $type) | .volume // "local")
+                }
+            )
+        )
+      }
+    )
+  ' "$workspace_file"
+}
+
+# Generates resolved service paths by combining mountpoints with workspace-defined subpaths.
+# target: (if ($smount.path // "") == "" then $smount.type else $smount.path end),
+create_service_serverpaths() {
+  local workspace_file="$1"
+  local service_file="$2"
+
+  jq  --argjson workspace "$(jq '.' "$workspace_file")" \
+      --argjson service "$(jq '.' "$service_file")" '
+      .service |= (
+        . + {
+          paths: (
+            [
+              ($workspace.servers[] | {serverid: .id, serverrole: .role, mountpoint: (.mountpoint // "")}) as $server
+              |
+              ($.mounts[] | {type, chmod, path: (.path // ""), source: (.source // "")}) as $smount
+              |
+              ($workspace.paths[] | select(.type == $smount.type)) as $wpath
+              |
+              {
+                serverid: $server.serverid,
+                serverrole: $server.serverrole,
+                name: ($smount.type + ($smount.path // "")),
+                type: $smount.type,
+                chmod: $smount.chmod,
+                source: $smount.source,
+                path: (
+                  ($server.mountpoint | gsub("\\$\\{disk\\}"; "1")) + "/" +
+                  (if $smount.path == "" then $wpath.path else $smount.path end)
+                )
+              }
+            ]
+          )
+        }
+      )
+    ' "$service_file"
 }

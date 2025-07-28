@@ -103,14 +103,17 @@ Specifies the types of data storage used by services and their corresponding dir
 
 > ⚠️ If new types of paths are required by a service, they **must be explicitly added here**. This list defines all valid mount types available across the infrastructure.
 
-Each service uses standardized directory paths for different data types:
+Each service uses standardized directory paths for different data types. The type (config, data, docs) are used in the different configuration scripts for automation purposes!
 
-| Type    | Path Template   | Purpose                         |
-|---------|-----------------|---------------------------------|
-| config  | `/etc/app`      | Configuration files             |
-| data    | `/var/data/app` | Persistent application data     |
-| logs    | `/var/logs/app` | Service-generated logs          |
-| serve   | `/srv/app`      | Content served by the services  |
+**The TYPE of paths is limited to the list below and can't be changed!**
+
+| **Type** | **Path Template** | **Purpose**                                                       |
+| -------- |-----------------| --------------------------------------------------------------------|
+| `config` | `/etc/app`      | Holds configuration files such as `.env`, `.json`, `.yaml`, scripts |
+| `docs`   | `/opt/app/`     | Stores platform and service documentation                           |
+| `data`   | `/var/data/app` | Stores service-specific persistent runtime data                     |
+| `logs`   | `/var/logs/app` | Stores logs from application runtime                                |
+| `serve`  | `/srv/app`      | Directory where the application serves or runs from                 |
 
 These paths are mounted onto servers' disks according to the mount configuration described below. Each path is added to a cluster volume maintained by GlusterFS.GlusterFS is an open-source, distributed file system that lets you pool storage across multiple servers into a single network volume.
 

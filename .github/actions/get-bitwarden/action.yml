@@ -9,18 +9,15 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install Bitwarden CLI
+    - name: Install Bitwarden Secrets Manager CLI
       shell: bash
       run: |
-        curl -Lso bw.zip "https://vault.bitwarden.com/download/?app=cli&platform=linux"
-        unzip bw.zip -d /usr/local/bin
-        chmod +x /usr/local/bin/bw
-        bw --version
+        curl -LO "https://github.com/bitwarden/sdk-sm/releases/download/bws-v1.0.0/bws-x86_64-unknown-linux-gnu-1.0.0.zip"
+        unzip bws-x86_64-unknown-linux-gnu-1.0.0.zip
+        sudo mv bws /usr/local/bin/
+        bws --version  # should output: 1.0.0
 
-    - name: Unlock Bitwarden Session
+    - name: Authenticate with Bitwarden Secrets Manager
       shell: bash
       run: |
-        export BW_SESSION=$(bw unlock --raw "$BITWARDEN_TOKEN")
-        echo "BW_SESSION=$BW_SESSION" >> "$GITHUB_ENV"
-      env:
-        BITWARDEN_TOKEN: ${{ inputs.bitwarden_token }}
+        export BWS_ACCESS_TOKEN=${{ inputs.bitwarden_token }}

@@ -24,90 +24,76 @@ env:
 jobs:
   # Setup the deployment of the service
   setup:
-    name: Setup Service
+    name: Setup Deployment
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     outputs:
-      manager: ${{ steps.mgr.outputs.manager }}
-      matrix: ${{ steps.regs.outputs.matrix }}
+      terraform: ${{ steps.terraform.outputs.tfoutput }}
+      services: ${{ steps.services.outputs.selection }}
     steps:
       # Check out the platform repo
       - name: Check Out
         uses: actions/checkout@v4
 
-      # Restore Terraform Cache
-      - name: Restore Terraform Cache
-        id: restore-cache
-        uses: actions/cache/restore@v4
+      # Set up GitHub Secrets
+      - name: Get General Secrets
+        uses: bitwarden/sm-action@v2
+        id: get-secrets
         with:
-          path: ${{ env.VAR_PATH_TEMP }}/tf_output.json
-          key: terraform-output-${{ inputs.workspace }}
+          access_token: ${{ secrets.BITWARDEN_TOKEN }}
+          secrets: |
+            d47e736b-2db8-47d5-b46b-b2c8016ece73 > TERRAFORM_API_TOKEN
 
-      # Check if the artifact exists
-      - name: Validate Terraform Output
-        run: |
-          if [ ! -f ${{ env.VAR_PATH_TEMP }}/tf_output.json ]; then
-            echo "[!] Artifact terraform-output-${{ inputs.workspace }} not found or tf_output.json missing. Exiting."
-            exit 1
-          fi
+      # Restore Terraform Cache
+      - name: Get Terraform Output
+        uses: ./.github/actions/get-terraform
+        with:
+          WORKSPACE: ${{ inputs.workspace }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          TEMPPATH: ${{ env.VAR_PATH_TEMP }}
+          API_TOKEN: ${{ steps.get-secrets.outputs.TERRAFORM_API_TOKEN }}
 
-      # Parse Terraform Output to find Manager Servers
-      - name: Parse Swarm Servers
-        id: mgr
+      # Parse Terraform Output
+      # Outputs the terraform server matrix
+      - name: Parse Terraform Output
+        id: terraform
         run: |
-          # Read raw JSON
+          # Parse Terraform Output
           matrix=$(jq -c '.' "${{ env.VAR_PATH_TEMP }}/tf_output.json")
           echo "================"
           echo "$matrix"
           echo "================"
-          # Load helper functions
-          source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
-          # Determine workspace file
-          WORKSPACE_FILE=$(get_workspace_file "$(dirname "${BASH_SOURCE[0]}")/../../deploy/workspaces" "${WORKSPACE}") || exit 1
-          echo "Using workspace file: $WORKSPACE_FILE"
-          # Determine manager label
-          MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
-          echo "Using manager label: $MANAGER_ID"
-          # Extract only the manager node
-          MANAGER_DATA=$(jq -c --arg label "$MANAGER_ID" '{ .include[] | select(.label == $label) }' "${{ env.VAR_PATH_TEMP }}/tf_output.json")
-          echo "================"
-          echo "Filtered manager data: $MANAGER_DATA"
-          echo "================"
-          # Export to GitHub Actions output
-          echo "manager=$MANAGER_DATA" >> "$GITHUB_OUTPUT"
+          echo "tfoutput=$matrix" >> "$GITHUB_OUTPUT"
 
-      # This step filters service definitions from the registry
-      # based on a list of requested service IDs (passed in as `inputs.services`).
-      # Example: inputs.services: "traefik,site"
-      # The script reads `registry/*.json`, each containing a `.service.id` field,
-      # and constructs a GitHub Actions matrix output including only the matched services.
-      # Output format:
-      # {
-      #   "include": [
-      #     { "id": "traefik", "name": "Traefik" },
-      #     { "id": "site", "name": "Website" }
-      #   ]
-      # }
-      - name: Parse service matrix
-        id: regs
+      # This step filters service definitions from the registry based on a list of requested service IDs (passed in as `inputs.services`).
+      # The script reads `registry/*.json`, each containing a `.service.id` field, and constructs a GitHub Actions matrix output including only the matched services.
+      # Input: inputs.services: "traefik,site"
+      # Outputs: selection: "{ "include": [ { "id": "traefik" }, { "id": "site" } ] }"
+      - name: Select Services
+        id: services
         run: |
           # inputs.services is a comma-separated list or JSON array of service IDs
           SERVICES_JSON=$(jq -R '[split(",")[]]' <<< "${{ inputs.services }}")
-
           echo "Filtering for services: $SERVICES_JSON"
-          MATRIX='{ "include": ['
-
+          # Check for an empty registry
+          shopt -s nullglob
+          FILES=(registry/*.json)
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "No JSON files found in registry/"
+            echo 'selection={"include": [{ "id": "", "name": "" }]}' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Loop registry
           FIRST=true
-          for file in registry/*.json; do
+          MATRIX='{ "include": ['
+          for file in "${FILES[@]}"; do
             ID=$(jq -r '.service.id' "$file")
-
-            # Check if the ID is in the input list
-            if jq -e --arg id "$ID" 'index($id)' <<< "$SERVICES_JSON" >/dev/null; then
+            # Include everything if SERVICES=* or match against SERVICES_JSON
+            if [[ "${{ inputs.services }}" == "*" ]] || jq -e --arg id "$ID" 'index($id)' <<< "$SERVICES_JSON" >/dev/null; then
               SERVICE_JSON=$(jq -c '.service' "$file")
-
               # Optional: enrich or customize structure here
-              ENTRY=$(jq -n --argjson svc "$SERVICE_JSON" '{ id: $svc.id, name: $svc.name }')
-
+              #ENTRY=$(jq -n --argjson svc "$SERVICE_JSON" '{ id: $svc.id, name: $svc.name }')
+              ENTRY=$(jq -n --argjson svc "$SERVICE_JSON" '{ id: $svc.id }')
               if [ "$FIRST" = true ]; then
                 MATRIX+="$ENTRY"
                 FIRST=false
@@ -116,46 +102,114 @@ jobs:
               fi
             fi
           done
-
           MATRIX+='] }'
-          echo "Generated matrix: $MATRIX"
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          # Prepare output
+          COMPACT_MATRIX=$(jq -c '.' <<< "$MATRIX")
+          echo "Generated matrix: $COMPACT_MATRIX"
+          echo "selection=$COMPACT_MATRIX" >> "$GITHUB_OUTPUT"
 
   deploy:
-    name: Deploy Services
+    name: Deploy Service
     needs: [setup]
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     if: ${{ always() && !contains(needs.*.result, 'failure') }}
     strategy:
-      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.setup.outputs.services) }}
     steps:
+      # Do we need to run?
+      - name: Skip Deployment
+        if: matrix.id == ''
+        run: |
+          echo "No services to deploy — skipping empty matrix list."
+
       # Check out the repo
       - name: Check Out Platform
         uses: actions/checkout@v4
+        if: matrix.id != ''
 
-      # Load Bitwarden CLI (from reusable action or install directly)
+      # Set up GitHub Secrets
+      - name: Get General Secrets
+        uses: bitwarden/sm-action@v2
+        id: get-secrets
+        if: matrix.id != ''
+        with:
+          access_token: ${{ secrets.BITWARDEN_TOKEN }}
+          secrets: |
+            f16fffe2-77b7-4d20-bf6c-b2c9015c71d3 > KAMATERA_PRIVATE_KEY
+
+      # Setup Bitwarden CLI
       - name: Setup Bitwarden CLI
-        uses: ./.github/actions/setup-bitwarden
+        uses: ./.github/actions/get-bitwarden
+        if: matrix.id != ''
         with:
           bitwarden_token: ${{ secrets.BITWARDEN_TOKEN }}
 
+      # Set up SSH connection
+      - name: Set up SSH connection
+        if: matrix.id != ''
+        env:
+          KAMATERA_PRIVATE_KEY: ${{ steps.get-secrets.outputs.KAMATERA_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$KAMATERA_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+     
       # Load service metadata from registry
+      # Outputs: repository - ref - registryinfo
       - name: Load Service Metadata
         id: load
+        if: matrix.id != ''
         run: |
-          SERVICE_ID="${{ matrix.id }}"
-          SERVICE_FILE="registry/${SERVICE_ID}.json"
-          echo "Reading $SERVICE_FILE"
-          SERVICE_JSON=$(cat "$SERVICE_FILE")
-          echo "service_json=$SERVICE_JSON" >> $GITHUB_OUTPUT
-          # Extract repo URL if needed for clone
-          REPO_URL=$(jq -r '.service.repository // "https://github.com/org/'"$SERVICE_ID"'.git"' <<< "$SERVICE_JSON")
-          echo "repo_url=$REPO_URL" >> $GITHUB_OUTPUT
+          REGISTRY_FILE="registry/${{ matrix.id }}.json"
+          echo "Reading $REGISTRY_FILE"
+          REGISTRY_DATA=$(jq -c . "$REGISTRY_FILE")
+          echo "Reading Repository and Ref"
+          SERVICE_REPO=$(jq -r '.service.repo' <<< "$REGISTRY_DATA")
+          SERVICE_REF=$(jq -r '.service.ref // "main"' <<< "$REGISTRY_DATA")
+          echo "repository=$SERVICE_REPO" >> "$GITHUB_OUTPUT"
+          echo "ref=$SERVICE_REF" >> "$GITHUB_OUTPUT"
+          echo "registryinfo=$REGISTRY_DATA" >> "$GITHUB_OUTPUT"
+
+      # Debug Service Info
+      - name: Debug Service Info
+        if: matrix.id != ''
+        run: |
+          echo Service ID: ${{ matrix.id }}
+          echo Registry Info: ${{ steps.load.outputs.registryinfo }}
+          echo Git Repo: ${{ steps.load.outputs.repository }}
+          echo Git Ref: ${{ steps.load.outputs.ref }}
 
       # Clone the service repository
+      # Outputs the service files to service/{serviceid}
       - name: Clone Service Repo
         uses: actions/checkout@v4
+        if: matrix.id != ''
         with:
-          repository: ${{ steps.load.outputs.repo_url }}
+          repository: ${{ steps.load.outputs.repository }}
+          ref: ${{ steps.load.outputs.ref }}
           path: service/${{ matrix.id }}
+
+      # Debug Service Contents
+      - name: Debug Service Contents
+        if: matrix.id != ''
+        run: |
+          echo "Debugging service contents"
+          path=$(jq -r '.service.path' <<< "$REGISTRY_DATA")
+          ls -la "service/${{ matrix.id }}"
+          ls -la "service/${{ matrix.id }}/$path"
+
+      # Deploy Service
+      - name: Deploy Service
+        if: matrix.id != ''
+        env:
+          VAR_WORKSPACE: ${{ inputs.workspace }}
+          VAR_ENVIRONMENT: ${{ inputs.environment }}
+          VAR_REGISTRYINFO: ${{ steps.load.outputs.registryinfo }}
+          VAR_TERRAFORM: ${{ needs.setup.outputs.terraform }}
+          VAR_PATH_TEMP: ${{ env.VAR_PATH_TEMP }}
+        run: |
+          echo "[*] Deploying service ${{ matrix.id }} ..."
+          chmod +x ./deploy/scripts/deploy-swarm-service.sh
+          ./deploy/scripts/deploy-swarm-service.sh
+          echo "[*] Deploying service ${{ matrix.id }} ... DONE"

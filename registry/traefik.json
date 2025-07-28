@@ -1,0 +1,10 @@
+{
+  "api-version": 1.0,
+  "service": {
+    "id": "traefik",
+    "repo": "huybrechtsxyz/xyz-traefik",
+    "ref": "main",
+    "path": "config",
+    "state": "enabled"
+  }
+}
