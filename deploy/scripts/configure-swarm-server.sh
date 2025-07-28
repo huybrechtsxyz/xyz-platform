@@ -63,6 +63,10 @@ copy_configuration_files() {
 
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
 mkdir -p "$VAR_PATH_TEMP" "$PATH_DEPLOY" "$PATH_CONFIG" "$PATH_DOCS"
+chmod 777 "$VAR_PATH_TEMP"
+chmod 777 "$PATH_DEPLOY"
+chmod 777 "$PATH_CONFIG"
+chmod 777 "$PATH_DOCS"
 EOF
 then
 log ERROR "[X] Copying configuration failed to $REMOTE_IP"
@@ -109,15 +113,15 @@ EOF
 # This script is executed on the remote server to set up the environment
 # It sources the necessary environment files and runs the configuration script
 # The script is executed in a non-interactive SSH session
-configure_server() {
+execute_configuration() {
 log INFO "[*] Executing REMOTE configuration..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-chmod +x "$PATH_DEPLOY/*.sh"
-"$PATH_DEPLOY/configure-remote-server.sh" "$VAR_PATH_TEMP"
+  chmod +x "$PATH_DEPLOY/configure-remote-server.sh.sh"
+  "$PATH_DEPLOY/configure-remote-server.sh" "$VAR_PATH_TEMP"
 EOF
 then
-log ERROR "[X] Remote configuration failed on $REMOTE_IP"
-exit 1
+  log ERROR "[X] Remote configuration failed on $REMOTE_IP"
+  exit 1
 fi
 log INFO "[*] Executing on REMOTE server...DONE"
 }
@@ -135,7 +139,7 @@ main() {
     exit 1
   fi
 
-  if ! configure_server; then
+  if ! execute_configuration; then
     log ERROR "[X] Failed to configure remote server"
     exit 1
   fi
