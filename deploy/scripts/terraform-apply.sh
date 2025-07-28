@@ -13,8 +13,8 @@ trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 # Generate the workspace.tfvars file base on the current workspace
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$SCRIPT_DIR/utilities.sh" ]]; then
-  log INFO "[*] ...Loading $SCRIPT_DIR/utilities.sh"
   source "$SCRIPT_DIR/utilities.sh"
+  log INFO "[*] ...Loaded $SCRIPT_DIR/utilities.sh"
 else
   log ERROR "[X] Missing utilities.sh at $SCRIPT_DIR"
   exit 1
