@@ -13,7 +13,7 @@ inputs:
     required: true
 
 runs:
-  using: "composite"
+  using: composite
   steps:
     # Set ENVIRONMENT path
     - name: Set ENVIRONMENT path

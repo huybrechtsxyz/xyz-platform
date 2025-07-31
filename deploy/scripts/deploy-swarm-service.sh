@@ -120,6 +120,29 @@ log INFO "[*] Remote deployment path: $VAR_PATH_DEPLOY"
 # |- ./deploy/variables.env   (VAR_)
 # |- ./deploy/secrets.env     (SECRET_)
 create_environment_files() {
+  # Extract matching secrets for given workspace and environment
+  secrets=$(jq -r \
+    --arg WORKSPACE "$WORKSPACE" \
+    --arg ENVIRONMENT "$ENVIRONMENT" \
+    '.service.workspaces[] 
+      | select(.id == $WORKSPACE) 
+      | .environments[] 
+      | select(.id == $ENVIRONMENT) 
+      | .secrets[] 
+      | "\(.key) \(.reference)"' "$WORKSPACE_FILE")
+
+  # Loop over each secret entry
+  while read -r key reference; do
+    # Fetch the secret value using Bitwarden CLI
+    value=$(bws secret get "$reference" --raw)
+    
+    # Export as environment variable
+    export "SECRET_${key}=$value"
+
+    # Optionally, echo or mask it for debugging
+    echo "Exported SECRET_${key}"
+  done <<< "$secrets"
+
   # Create variables and secret files
   generate_env_file "VAR_" "./deploy/variables.env"
   generate_env_file "SECRET_" "./deploy/secrets.env"
