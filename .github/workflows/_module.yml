@@ -1,5 +1,5 @@
-# Build and Deploy Jobs
-name: _ServiceDeployment
+# Build and Deploy Modules
+name: _ModuleDeployment
 
 on:
   workflow_call:
@@ -10,7 +10,7 @@ on:
       environment:
         required: true
         type: string
-      services:
+      modules:
         required: true
         type: string
     secrets:
@@ -22,14 +22,14 @@ env:
   VAR_PATH_TEMP: /tmp/app
 
 jobs:
-  # Setup the deployment of the service
+  # Setup the deployment of the module
   setup:
     name: Setup Deployment
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     outputs:
       terraform: ${{ steps.terraform.outputs.tfoutput }}
-      services: ${{ steps.services.outputs.selection }}
+      selection: ${{ steps.services.outputs.selection }}
     steps:
       # Check out the platform repo
       - name: Check Out
@@ -50,7 +50,7 @@ jobs:
         with:
           WORKSPACE: ${{ inputs.workspace }}
           TEMPPATH: ${{ env.VAR_PATH_TEMP }}
-          API_TOKEN: ${{ steps.get-secrets.outputs.TERRAFORM_API_TOKEN }}
+          APITOKEN: ${{ steps.get-secrets.outputs.TERRAFORM_API_TOKEN }}
 
       # Parse Terraform Output
       # Outputs the terraform server matrix
@@ -71,28 +71,27 @@ jobs:
       - name: Select Services
         id: services
         run: |
-          # inputs.services is a comma-separated list or JSON array of service IDs
-          SERVICES_JSON=$(jq -R '[split(",")[]]' <<< "${{ inputs.services }}")
-          echo "Filtering for services: $SERVICES_JSON"
-          # Check for an empty registry
+          # inputs.modules is a comma-separated list or JSON array of service IDs
+          MODULES_JSON=$(jq -R '[split(",")[]]' <<< "${{ inputs.modules }}")
+          echo "Filtering for services: $MODULES_JSON"
+          # Check for an empty module list
           shopt -s nullglob
-          FILES=(registry/*.json)
+          FILES=(modules/*.json)
           if [ ${#FILES[@]} -eq 0 ]; then
-            echo "No JSON files found in registry/"
+            echo "No JSON files found in modules/"
             echo 'selection={"include": [{ "id": "", "name": "" }]}' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Loop registry
+          # Loop modules
           FIRST=true
           MATRIX='{ "include": ['
           for file in "${FILES[@]}"; do
-            ID=$(jq -r '.service.id' "$file")
-            # Include everything if SERVICES=* or match against SERVICES_JSON
-            if [[ "${{ inputs.services }}" == "*" ]] || jq -e --arg id "$ID" 'index($id)' <<< "$SERVICES_JSON" >/dev/null; then
-              SERVICE_JSON=$(jq -c '.service' "$file")
+            ID=$(jq -r '.module.id' "$file")
+            # Include everything if MODULES=* or match against MODULES_JSON
+            if [[ "${{ inputs.modules }}" == "*" ]] || jq -e --arg id "$ID" 'index($id)' <<< "$MODULES_JSON" >/dev/null; then
+              MODULE_DATA=$(jq -c '.module' "$file")
               # Optional: enrich or customize structure here
-              #ENTRY=$(jq -n --argjson svc "$SERVICE_JSON" '{ id: $svc.id, name: $svc.name }')
-              ENTRY=$(jq -n --argjson svc "$SERVICE_JSON" '{ id: $svc.id }')
+              ENTRY=$(jq -n --argjson svc "$MODULE_DATA" '{ id: $svc.id }')
               if [ "$FIRST" = true ]; then
                 MATRIX+="$ENTRY"
                 FIRST=false
@@ -108,13 +107,13 @@ jobs:
           echo "selection=$COMPACT_MATRIX" >> "$GITHUB_OUTPUT"
 
   deploy:
-    name: Deploy Service
+    name: Deploy Module
     needs: [setup]
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     if: ${{ always() && !contains(needs.*.result, 'failure') }}
     strategy:
-      matrix: ${{ fromJson(needs.setup.outputs.services) }}
+      matrix: ${{ fromJson(needs.setup.outputs.selection) }}
     steps:
       # Do we need to run?
       - name: Skip Deployment
@@ -123,7 +122,7 @@ jobs:
           echo "No services to deploy — skipping empty matrix list."
 
       # Check out the repo
-      - name: Check Out Platform
+      - name: Platform Check Out
         uses: actions/checkout@v4
         if: matrix.id != ''
 
@@ -154,49 +153,40 @@ jobs:
           echo "$KAMATERA_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
      
-      # Load service metadata from registry
-      # Outputs: repository - ref - registryinfo
+      # Load service metadata from modules
+      # Outputs: repository - ref - moduleinfo
       - name: Load Service Metadata
         id: load
         if: matrix.id != ''
         run: |
-          REGISTRY_FILE="registry/${{ matrix.id }}.json"
-          echo "Reading $REGISTRY_FILE"
-          REGISTRY_DATA=$(jq -c . "$REGISTRY_FILE")
+          MODULE_FILE="modules/${{ matrix.id }}.json"
+          echo "Reading $MODULE_FILE"
+          MODULE_DATA=$(jq -c . "$MODULE_FILE")
           echo "Reading Repository and Ref"
-          SERVICE_REPO=$(jq -r '.service.repo' <<< "$REGISTRY_DATA")
-          SERVICE_REF=$(jq -r '.service.ref // "main"' <<< "$REGISTRY_DATA")
-          echo "repository=$SERVICE_REPO" >> "$GITHUB_OUTPUT"
-          echo "ref=$SERVICE_REF" >> "$GITHUB_OUTPUT"
-          echo "registryinfo=$REGISTRY_DATA" >> "$GITHUB_OUTPUT"
+          MODULE_REPO=$(jq -r '.module.repository' <<< "$MODULE_DATA")
+          MODULE_REF=$(jq -r '.module.reference // "main"' <<< "$MODULE_DATA")
+          echo "repository=$MODULE_REPO" >> "$GITHUB_OUTPUT"
+          echo "ref=$MODULE_REF" >> "$GITHUB_OUTPUT"
+          echo "moduleinfo=$MODULE_DATA" >> "$GITHUB_OUTPUT"
 
       # Debug Service Info
       - name: Debug Service Info
         if: matrix.id != ''
         run: |
           echo Service ID: ${{ matrix.id }}
-          echo Registry Info: ${{ steps.load.outputs.registryinfo }}
+          echo Registry Info: ${{ steps.load.outputs.moduleinfo }}
           echo Git Repo: ${{ steps.load.outputs.repository }}
           echo Git Ref: ${{ steps.load.outputs.ref }}
 
       # Clone the service repository
       # Outputs the service files to service/{serviceid}
-      - name: Clone Service Repo
+      - name: Service Check Out
         uses: actions/checkout@v4
         if: matrix.id != ''
         with:
           repository: ${{ steps.load.outputs.repository }}
           ref: ${{ steps.load.outputs.ref }}
-          path: service/${{ matrix.id }}
-
-      # Debug Service Contents
-      - name: Debug Service Contents
-        if: matrix.id != ''
-        run: |
-          echo "Debugging service contents"
-          path=$(jq -r '.service.path' <<< "$REGISTRY_DATA")
-          ls -la "service/${{ matrix.id }}"
-          ls -la "service/${{ matrix.id }}/$path"
+          path: services/${{ matrix.id }}
 
       # Deploy Service
       - name: Deploy Service
@@ -204,14 +194,14 @@ jobs:
         env:
           VAR_WORKSPACE: ${{ inputs.workspace }}
           VAR_ENVIRONMENT: ${{ inputs.environment }}
-          VAR_REGISTRYINFO: ${{ steps.load.outputs.registryinfo }}
+          VAR_MODULEINFO: ${{ steps.load.outputs.moduleinfo }}
           VAR_TERRAFORM: ${{ needs.setup.outputs.terraform }}
           VAR_PATH_TEMP: ${{ env.VAR_PATH_TEMP }}
         run: |
-          echo "[*] Deploying service ${{ matrix.id }} ..."
-          chmod +x ./deploy/scripts/deploy-swarm-service.sh
+          echo "[*] Deploying module ${{ matrix.id }} ..."
+          chmod +x ./deploy/scripts/deploy-swarm-module.sh
           chmod +x ./deploy/scripts/validate-workspace.sh
-          chmod +x ./deploy/scripts/validate-registry.sh
+          chmod +x ./deploy/scripts/validate-module.sh
           chmod +x ./deploy/scripts/validate-service.sh
-          ./deploy/scripts/deploy-swarm-service.sh
-          echo "[*] Deploying service ${{ matrix.id }} ... DONE"
+          ./deploy/scripts/deploy-swarm-module.sh
+          echo "[*] Deploying module ${{ matrix.id }} ... DONE"

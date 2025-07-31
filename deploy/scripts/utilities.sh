@@ -91,11 +91,11 @@ validate_workspace() {
 }
 
 # The function runs the validation script on the given JSON file.
-# Usage: validate_registry <SCRIPT_PATH> <REGISTRY_FILE>
-validate_registry() {
+# Usage: validate_module <SCRIPT_PATH> <MODULE_FILE>
+validate_module() {
   local path="$1"
-  local registry_file="$2"
-  "$path/validate-registry.sh" "$registry_file"
+  local module_file="$2"
+  "$path/validate-module.sh" "$module_file"
   if [[ $? -ne 0 ]]; then
     echo "Validation failed. Exiting."
     exit 1
@@ -107,7 +107,9 @@ validate_registry() {
 validate_service() {
   local path="$1"
   local service_file="$2"
-  "$path/validate-service.sh" "$service_file"
+  local workspace="$3"
+  local environment="$4"
+  "$path/validate-service.sh" "$service_file" "$workspace" "$environment"
   if [[ $? -ne 0 ]]; then
     echo "Validation failed. Exiting."
     exit 1
@@ -549,52 +551,28 @@ validate_volume_configuration() {
   log INFO "[+] Volume '$volname' configuration validated successfully."
 }
 
-# Function to get the service file path
-# Usage: get_service_file <PATH_SERVICE>
-# Example: get_service_file /tmp/myservice
-# This function checks if the service file exists in the specified path.
-# If it does, it returns the full path to the service file.
+# Function to get the module file path
+# Usage: get_module_file <PATH_MODULE>
+# Example: get_module_file /tmp/mymodule
+# This function checks if the module file exists in the specified path.
+# If it does, it returns the full path to the module file.
 # If the file does not exist, it logs an error and returns 1.
-get_service_file() {
+get_module_file() {
   local SVC_PATH="$1"
 
   if [[ -z "$SVC_PATH" ]]; then
-    log ERROR "[!] get_service_file requires SERVICE_PATH arguments."
+    log ERROR "[!] get_module_file requires MODULE_PATH arguments."
     return 1
   fi
 
-  local SERVICE_FILE="$SVC_PATH/service.json"
+  local MODULE_FILE="$SVC_PATH/module.json"
 
-  if [[ ! -f "$SERVICE_FILE" ]]; then
-    log ERROR "[!] Service definition file not found: $SERVICE_FILE"
+  if [[ ! -f "$MODULE_FILE" ]]; then
+    log ERROR "[!] Module definition file not found: $MODULE_FILE"
     return 1
   fi
 
-  echo "$SERVICE_FILE"
-}
-
-# Function to get the registry file path
-# Usage: get_registry_file <PATH_REGISTRY>
-# Example: get_registry_file /tmp/myregistry
-# This function checks if the registry file exists in the specified path.
-# If it does, it returns the full path to the registry file.
-# If the file does not exist, it logs an error and returns 1.
-get_registry_file() {
-  local SVC_PATH="$1"
-
-  if [[ -z "$SVC_PATH" ]]; then
-    log ERROR "[!] get_registry_file requires REGISTRY_PATH arguments."
-    return 1
-  fi
-
-  local REGISTRY_FILE="$SVC_PATH/registry.json"
-
-  if [[ ! -f "$REGISTRY_FILE" ]]; then
-    log ERROR "[!] Registry definition file not found: $REGISTRY_FILE"
-    return 1
-  fi
-
-  echo "$REGISTRY_FILE"
+  echo "$MODULE_FILE"
 }
 
 # Generates resolved server paths by combining mountpoints with workspace-defined subpaths.

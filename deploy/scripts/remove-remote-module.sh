@@ -58,7 +58,9 @@ log INFO "[*] Running on host : $HOSTNAME"
 
 # Get the registry and service file
 REGISTRY_FILE=$(get_registry_file "$PATH_DEPLOY")
+XXXXXXXXXXXXXXXXX
 SERVICE_FILE=$(get_service_file "$PATH_DEPLOY")
+XXXXXXXXXXXXXXXXX
 
 # Validate if registry and service id match
 REGISTRY_ID=$(jq -r '.service.id' "$REGISTRY_FILE")

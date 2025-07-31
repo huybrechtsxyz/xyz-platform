@@ -24,6 +24,10 @@ if [[ ! -d "$VAR_PATH_TEMP" ]]; then
   mkdir -p "$VAR_PATH_TEMP"
 fi
 
+#
+# WORKSPACE
+# 
+
 # Get the workspace file and validate it
 WORKSPACE_FILE=$(get_workspace_file "./deploy/workspaces" "$VAR_WORKSPACE") || exit 1
 log INFO "[*] Getting workspace file: $WORKSPACE_FILE"
@@ -49,25 +53,49 @@ fi
 echo "$VAR_TERRAFORM" > "./deploy/terraform.json"
 unset VAR_TERRAFORM
 
-# Get the service id
-SERVICE_ID=$(jq -r '.service.id' <<< "$VAR_REGISTRYINFO")
-if [[ -z "$SERVICE_ID" ]]; then
-  echo "Error: SERVICE_ID is null or missing"
+#
+# REGISTRY
+# 
+
+# Get the registry id
+REGISTRY_ID=$(jq -r '.registry.id' <<< "$VAR_REGISTRYINFO")
+if [[ -z "$REGISTRY_ID" ]]; then
+  echo "Error: REGISTRY_ID is null or missing"
   exit 1
 fi
+
+# Get the registry state
+REGISTRY_STATE=$(jq -r '.registry.state' <<< "$VAR_REGISTRYINFO")
+if [[ ! "$SERVICE_STATE" =~ ^(enabled|disabled|removed)$ ]]; then
+  log ERROR "[X] Invalid service registry state: '$SERVICE_STATE'. Must be one of: enabled, disabled, removed."
+  exit 1
+fi
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Get the service path
 SERVICE_PATH="./service/$SERVICE_ID"
 
-# Get the service state
-SERVICE_STATE=$(jq -r '.service.state' <<< "$VAR_REGISTRYINFO")
-if [[ ! "$SERVICE_STATE" =~ ^(enabled|disabled|removed)$ ]]; then
-  log ERROR "[X] Invalid service state: '$SERVICE_STATE'. Must be one of: enabled, disabled, removed."
-  exit 1
-fi
+
 
 # Get the service deployment path
-REGISTRY_PATH=$(jq -r '.service.path' <<< "$VAR_REGISTRYINFO")
+REGISTRY_PATH=$(jq -r '.registry.deploy' <<< "$VAR_REGISTRYINFO")
 SERVICE_DEPLOY="$SERVICE_PATH/$REGISTRY_PATH"
 if [[ ! -d "$SERVICE_DEPLOY" ]]; then
   echo "Temporary path $SERVICE_DEPLOY does not exist."
@@ -75,11 +103,24 @@ if [[ ! -d "$SERVICE_DEPLOY" ]]; then
 fi
 
 # Validate if registry and service id match
-REGISTRY_ID=$(jq -r '.service.id' <<< "$VAR_REGISTRYINFO")
+REGISTRY_ID=$(jq -r '.registry.id' <<< "$VAR_REGISTRYINFO")
 if [[ "$REGISTRY_ID" != "$SERVICE_ID" ]]; then
   log ERROR "[X] Service ID and Registry ID do not match: $SERVICE_ID vs $REGISTRY_ID"
   exit 1
 fi
+
+# Get the service file reference
+SERVICE_FILE=$(jq -r '.registry.service' <<< "$VAR_REGISTRYINFO")
+SERVICE_FILE="$SERVICE_PATH/$SERVICE_FILE"
+log INFO "[*] Getting service file: $SERVICE_FILE"
+log INFO "[*] Validating service file: $SERVICE_FILE"
+validate_service "./deploy/scripts" "$SERVICE_FILE" "$VAR_WORKSPACE" "$VAR_ENVIRONMENT"
+
+# Add the servicepaths to the service file and overwrite
+log INFO "[*] Set the service paths in: $SERVICE_FILE as $VAR_PATH_TEMP/service.json"
+create_service_serverpaths "$WORKSPACE_FILE" "$SERVICE_FILE" > "$VAR_PATH_TEMP/service.json"
+cp -f "$VAR_PATH_TEMP/service.json" "$SERVICE_FILE"
+rm -f "$VAR_PATH_TEMP/service.json"
 
 # Save the registry info in the service deploy path
 echo "$VAR_REGISTRYINFO" > "$SERVICE_DEPLOY/registry.json"
@@ -87,18 +128,6 @@ REGISTRY_FILE=$(get_registry_file "$SERVICE_DEPLOY") || exit 1
 log INFO "[*] Validating registry file: $REGISTRY_FILE"
 validate_registry "./deploy/scripts" "$REGISTRY_FILE"
 unset VAR_REGISTRYINFO
-
-# Add service paths per server
-SERVICE_FILE=$(get_service_file "$SERVICE_DEPLOY")
-log INFO "[*] Getting service file: $SERVICE_FILE"
-log INFO "[*] Validating service file: $SERVICE_FILE"
-validate_service "./deploy/scripts" "$SERVICE_FILE"
-
-# Add the servicepaths to the service file and overwrite
-log INFO "[*] Set the service paths in: $SERVICE_FILE as $VAR_PATH_TEMP/service.json"
-create_service_serverpaths "$WORKSPACE_FILE" "$SERVICE_FILE" > "$VAR_PATH_TEMP/service.json"
-cp -f "$VAR_PATH_TEMP/service.json" "$SERVICE_FILE"
-rm -f "$VAR_PATH_TEMP/service.json"
 
 # Get all the source and target paths
 mapfile -t SERVICEPATHS < <( jq -c --arg server_id "$MANAGER_ID" \
@@ -120,31 +149,42 @@ log INFO "[*] Remote deployment path: $VAR_PATH_DEPLOY"
 # |- ./deploy/variables.env   (VAR_)
 # |- ./deploy/secrets.env     (SECRET_)
 create_environment_files() {
-  # Extract matching secrets for given workspace and environment
-  secrets=$(jq -r \
-    --arg WORKSPACE "$WORKSPACE" \
-    --arg ENVIRONMENT "$ENVIRONMENT" \
-    '.service.workspaces[] 
-      | select(.id == $WORKSPACE) 
-      | .environments[] 
-      | select(.id == $ENVIRONMENT) 
-      | .secrets[] 
-      | "\(.key) \(.reference)"' "$WORKSPACE_FILE")
+  # Extract matching variables
+  mapfile -t var_lines < <(jq -r '.service.variables[] | "\(.key) \(.value)"' "$SERVICE_FILE")
+
+  # Loop over each variable entry
+  for line in "${var_lines[@]}"; do
+    key=$(awk '{print $1}' <<< "$line")
+    value=$(awk '{print $2}' <<< "$line")
+
+    echo "$key=$value"
+    export "VAR_${key}=$value"
+
+    echo "Exported VAR_${key}"
+  done
+
+  # Generate variable file
+  generate_env_file "VAR_" "$VAR_PATH_DEPLOY/variables.env"
+
+  # Extract matching secrets
+  mapfile -t secret_lines < <(jq -r '.service.secrets[] | "\(.key) \(.reference)"' "$SERVICE_FILE")
 
   # Loop over each secret entry
-  while read -r key reference; do
+  for line in "${secret_lines[@]}"; do
+    key=$(awk '{print $1}' <<< "$line")
+    reference=$(awk '{print $2}' <<< "$line")
+
     # Fetch the secret value using Bitwarden CLI
     value=$(bws secret get "$reference" --raw)
-    
+
     # Export as environment variable
+    echo "$key=$value"
     export "SECRET_${key}=$value"
 
-    # Optionally, echo or mask it for debugging
     echo "Exported SECRET_${key}"
-  done <<< "$secrets"
+  done
 
-  # Create variables and secret files
-  generate_env_file "VAR_" "./deploy/variables.env"
+  # Generate the secret file
   generate_env_file "SECRET_" "./deploy/secrets.env"
 }
 

@@ -8,7 +8,7 @@ inputs:
   TEMPPATH:
     description: Temporary path
     required: true
-  API_TOKEN:
+  APITOKEN:
     description: Terraform API Token
     required: true
 
@@ -53,7 +53,7 @@ runs:
       if: steps.check-cache.outputs.found == 'false'
       shell: bash
       env:
-        TF_TOKEN_app_terraform_io: ${{ inputs.API_TOKEN }}
+        TF_TOKEN_app_terraform_io: ${{ inputs.APITOKEN }}
       run: |
         terraform login -no-color || true
         terraform pull -WORKSPACE="${{ inputs.WORKSPACE }}" > "${TEMPPATH}/tfstate.tfstate"

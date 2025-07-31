@@ -28,6 +28,18 @@ if [[ -z "$SERVICE_FILE" || ! -f "$SERVICE_FILE" ]]; then
   exit 1
 fi
 
+"$WORKSPACE"="${2:-}"
+if [[ -z "$WORKSPACE" ]]; then
+  log ERROR "[X] Missing workspace"
+  exit 1
+fi
+
+"$ENVIRONMENT"="${3:-}"
+if [[ -z "$ENVIRONMENT" ]]; then
+  log ERROR "[X] Missing workspace"
+  exit 1
+fi
+
 main() {
   log INFO "[*] ... Validation service definition is valid."
   log INFO "[+] ... Service definition is valid."
