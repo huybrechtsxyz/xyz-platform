@@ -633,33 +633,32 @@ create_service_serverpaths() {
   local workspace_file="$1"
   local service_file="$2"
 
-  jq  --argjson workspace "$(jq '.' "$workspace_file")" \
-      --argjson service "$(jq '.' "$service_file")" '
-      .service |= (
-        . + {
+  jq --argjson workspace "$(jq '.' "$workspace_file")" \
+     --argjson service "$(jq '.' "$service_file")" '
+    $service + {
+      service: (
+        $service.service + {
           paths: (
             [
-              ($workspace.servers[] | {serverid: .id, serverrole: .role, mountpoint: (.mountpoint // "")}) as $server
-              |
-              ($.mounts[] | {type, chmod, path: (.path // ""), source: (.source // "")}) as $smount
-              |
-              ($workspace.paths[] | select(.type == $smount.type)) as $wpath
-              |
+              $workspace.servers[] as $server |
+              $service.service.mounts[] as $smount |
+              ($workspace.paths[] | select(.type == $smount.type)) as $wpath |
               {
-                serverid: $server.serverid,
-                serverrole: $server.serverrole,
+                serverid: $server.id,
+                serverrole: $server.role,
                 name: ($smount.type + ($smount.path // "")),
                 type: $smount.type,
                 chmod: $smount.chmod,
                 source: $smount.source,
                 path: (
-                  ($server.mountpoint | gsub("\\$\\{disk\\}"; "1")) + "/" +
-                  (if $smount.path == "" then $wpath.path else $smount.path end)
+                  ($server.mountpoint // "" | gsub("\\$\\{disk\\}"; "1")) + "/" +
+                  (if ($smount.path == null or $smount.path == "") then $wpath.path else $smount.path end)
                 )
               }
             ]
           )
         }
       )
-    ' "$service_file"
+    }
+  ' "$service_file"
 }
