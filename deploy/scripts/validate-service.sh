@@ -29,13 +29,13 @@ main() {
     exit 1
   fi
 
-  $WORKSPACE="${2:-}"
+  WORKSPACE="${2:-}"
   if [[ -z "$WORKSPACE" ]]; then
     log ERROR "[X] Missing workspace"
     exit 1
   fi
 
-  $ENVIRONMENT="${3:-}"
+  ENVIRONMENT="${3:-}"
   if [[ -z "$ENVIRONMENT" ]]; then
     log ERROR "[X] Missing workspace"
     exit 1
