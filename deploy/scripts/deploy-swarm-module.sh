@@ -73,7 +73,7 @@ if [[ ! "$MODULE_STATE" =~ ^(enabled|disabled|removed)$ ]]; then
   exit 1
 fi
 
-MODULE_CONFIG==$(jq -r '.module.config' <<< "$VAR_MODULEINFO")
+MODULE_CONFIG=$(jq -r '.module.config' <<< "$VAR_MODULEINFO")
 if [[ -z "$MODULE_CONFIG" ]]; then
   log ERROR "[X] MODULE_CONFIG is null or missing"
   exit 1
