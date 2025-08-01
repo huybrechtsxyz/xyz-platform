@@ -97,7 +97,7 @@ jobs:
           export WORKSPACE=${{ inputs.workspace }}
           export VAR_PATH_TEMP=${{ env.VAR_PATH_TEMP }}
           echo "[*] Server deployment and configuration ... APPLY"
-          chmod +x ../scripts/terraform-apply.sh
+          chmod +x ../scripts/*.sh
           ../scripts/terraform-apply.sh
           echo "[+] Server deployment and configuration ... DONE"
 
@@ -215,7 +215,7 @@ jobs:
           VAR_WORKSPACE: ${{ inputs.workspace }}
         run: |
           echo "[*] Initializing swarm cluster on ${{ matrix.ip }} ..."
-          chmod +x deploy/scripts/initialize-swarm-server.sh
+          chmod +x deploy/scripts/*.sh
           ./deploy/scripts/initialize-swarm-server.sh "${{ matrix.ip }}" "${{ matrix.private_ip }}" "${{ matrix.manager_ip }}"
           echo "[*] Initializing swarm cluster on ${{ matrix.ip }} ...DONE"
 
@@ -268,6 +268,6 @@ jobs:
           SECRET_PLATFORM_PASSWORD: ${{ steps.get-secrets.outputs.PLATFORM_PASSWORD }}
         run: |
           echo "[*] Configuring swarm server ${{ matrix.ip }} ..."
-          chmod +x deploy/scripts/configure-swarm-server.sh
+          chmod +x deploy/scripts/*.sh
           ./deploy/scripts/configure-swarm-server.sh "${{ matrix.ip }}"
           echo "[*] Configuring swarm server ${{ matrix.ip }} ...DONE"

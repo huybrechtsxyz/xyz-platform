@@ -9,9 +9,23 @@
 #===============================================================================
 set -euo pipefail
 
+# Logging function
+log() {
+  local level="$1"; shift
+  local msg="$*"
+  local timestamp
+  timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+  case "$level" in
+    INFO)    echo -e "[\033[1;34mINFO\033[0m]  - $msg" ;;
+    WARN)    echo -e "[\033[1;33mWARN\033[0m]  - $msg" ;;
+    ERROR)   echo -e "[\033[1;31mERROR\033[0m] - $msg" >&2 ;;
+    *)       echo -e "[UNKNOWN] - $msg" ;;
+  esac
+}
+
 WORKSPACE_FILE="${1:-}"
 if [[ -z "$WORKSPACE_FILE" || ! -f "$WORKSPACE_FILE" ]]; then
-  log-val- ERROR "[X] Missing or invalid workspace file"
+  log ERROR "[X] Missing or invalid workspace file"
   exit 1
 fi
 
@@ -39,7 +53,7 @@ check_deploy_id(){
 }
 
 check_role_definition() {
-  log INFO "[*] Validating role definitions..."
+  log INFO "[*] ...... Validating role definitions..."
 
   jq -c '.roles | to_entries[]' "$WORKSPACE_FILE" | while read -r role_entry; do
     role=$(jq -r '.key' <<< "$role_entry")
@@ -65,7 +79,7 @@ check_role_definition() {
       exit 1
     fi
 
-    log INFO "[✓] Role '$role' is valid: cpu=$cpu_cores, ram=$ram_mb, cost=$unit_cost"
+    log INFO "[+] ...... Role '$role' is valid: cpu=$cpu_cores, ram=$ram_mb, cost=$unit_cost"
   done
 }
 
@@ -78,7 +92,7 @@ check_path_types() {
     fi
   done
 
-  log INFO "[✓] All path types are valid"
+  log INFO "[+] ...... All path types are valid"
 }
 
 check_server_roles() {
@@ -122,6 +136,7 @@ check_server_disks() {
 }
 
 main() {
+  log INFO "[*] ... Validating workspace definition..."
   check_top_levels
   check_deploy_id
   check_role_definition
@@ -129,7 +144,7 @@ main() {
   check_server_roles
   check_server_mounts
   check_server_disks
-  log INFO "✔ Workspace JSON is valid."
+  log INFO "[+] ... Workspace definition is valid."
 }
 
 main "$@"

@@ -1,0 +1,11 @@
+{
+  "api-version": 1.0,
+  "module": {
+    "id": "traefik",
+    "repository": "huybrechtsxyz/xyz-traefik",
+    "reference": "main",
+    "config": "deploy/service.json",
+    "deploy": "deploy",
+    "state": "enabled"
+  }
+}

@@ -1,0 +1,16 @@
+# Module Deployment
+name: Module - Traefik
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy_module:
+    name: Deploy Module
+    uses: ./.github/workflows/_module.yml
+    with:
+      workspace: platform
+      environment: infra
+      modules: "traefik"
+    secrets:
+      BITWARDEN_TOKEN: ${{ secrets.BITWARDEN_TOKEN }}

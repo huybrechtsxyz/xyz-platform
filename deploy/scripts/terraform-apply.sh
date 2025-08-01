@@ -12,35 +12,43 @@ trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 
 # Generate the workspace.tfvars file base on the current workspace
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-echo "[*] ...Generating ${WORKSPACE}.tfvars file"
-SERVERS_JSON="$SCRIPT_DIR/../workspaces/${WORKSPACE}.ws.json"
+if [[ -f "$SCRIPT_DIR/utilities.sh" ]]; then
+  source "$SCRIPT_DIR/utilities.sh"
+  log INFO "[*] ...Loaded $SCRIPT_DIR/utilities.sh"
+else
+  log ERROR "[X] Missing utilities.sh at $SCRIPT_DIR"
+  exit 1
+fi
+
+log INFO "[*] ...Generating ${WORKSPACE}.tfvars file"
+WORKSPACE_FILE="$SCRIPT_DIR/../workspaces/${WORKSPACE}.ws.json"
 OUTPUT_FILE="$SCRIPT_DIR/../terraform/workspace.tfvars"
 
 # Validate the workspace definition
-echo "[*] ...Validating workspace definition $SERVERS_JSON"
-validate_workspace "$SCRIPT_DIR/../scripts" "$SERVERS_JSON"
+log INFO "[*] ...Validating workspace definition $WORKSPACE_FILE"
+validate_workspace "$SCRIPT_DIR" "$WORKSPACE_FILE"
 
 # Extract unique roles
-roles=$(jq -r '.servers[].role' "$SERVERS_JSON" | sort | uniq)
+roles=$(jq -r '.servers[].role' "$WORKSPACE_FILE" | sort | uniq)
 if [ -z "$roles" ]; then
-  echo "[!] No server roles found in $SERVERS_JSON"
+  log ERROR "[!] No server roles found in $WORKSPACE_FILE"
   exit 1
 fi
 
 # For each role, count servers and extract hardware profile and disks
 # This will generate a block for each role in the tfvars file
-echo "[*] ...Processing server roles and generating tfvars"
+log INFO "[*] ...Processing server roles and generating tfvars"
 echo "server_roles = {" > "$OUTPUT_FILE"
 for role in $roles; do
   # Count servers of this role
-  count=$(jq --arg role "$role" '[.servers[] | select(.role == $role)] | length' "$SERVERS_JSON")
+  count=$(jq --arg role "$role" '[.servers[] | select(.role == $role)] | length' "$WORKSPACE_FILE")
   # Get disk sizes from the first server of this role
-  disks=$(jq --arg role "$role" '[.servers[] | select(.role == $role)][0].disks | map(.size)' "$SERVERS_JSON")
+  disks=$(jq --arg role "$role" '[.servers[] | select(.role == $role)][0].disks | map(.size)' "$WORKSPACE_FILE")
   # Get hardware profile for the role
-  cpu_type=$(jq -r --arg role "$role" '.roles[$role].cpu_type' "$SERVERS_JSON")
-  cpu_cores=$(jq -r --arg role "$role" '.roles[$role].cpu_cores' "$SERVERS_JSON")
-  ram_mb=$(jq -r --arg role "$role" '.roles[$role].ram_mb' "$SERVERS_JSON")
-  unit_cost=$(jq -r --arg role "$role" '.roles[$role].unit_cost' "$SERVERS_JSON")
+  cpu_type=$(jq -r --arg role "$role" '.roles[$role].cpu_type' "$WORKSPACE_FILE")
+  cpu_cores=$(jq -r --arg role "$role" '.roles[$role].cpu_cores' "$WORKSPACE_FILE")
+  ram_mb=$(jq -r --arg role "$role" '.roles[$role].ram_mb' "$WORKSPACE_FILE")
+  unit_cost=$(jq -r --arg role "$role" '.roles[$role].unit_cost' "$WORKSPACE_FILE")
   # Write block to tfvars
   echo "  $role = {" >> "$OUTPUT_FILE"
   echo "    count     = $count" >> "$OUTPUT_FILE"
@@ -50,17 +58,17 @@ for role in $roles; do
   echo "    disks_gb  = $disks" >> "$OUTPUT_FILE"
   echo "    unit_cost = $unit_cost" >> "$OUTPUT_FILE"
   echo "  }" >> "$OUTPUT_FILE"
-  echo "[+] Processed role: $role with $count servers"
+  log INFO "[+] Processed role: $role with $count servers"
 done
 echo "}" >> "$OUTPUT_FILE"
-echo "[+] Terraform tfvars file generated at $OUTPUT_FILE"
-echo "[+] Terraform tfvars file workspace.tfvars content:"
+log INFO "[+] Terraform tfvars file generated at $OUTPUT_FILE"
+log INFO "[+] Terraform tfvars file workspace.tfvars content:"
 cat "$OUTPUT_FILE"
-echo "[*] ...Generating workspace.tfvars file completed"
+log INFO "[*] ...Generating workspace.tfvars file completed"
 
 # Substitute environment variables in the main.template.tf file
 cd "$SCRIPT_DIR/../terraform"
-echo "[*] ...Generating main.tf from template"
+log INFO "[*] ...Generating main.tf from template"
 envsubst < main.template.tf > main.tf
 rm -f main.template.tf
 cat main.tf
@@ -69,18 +77,18 @@ cat main.tf
 # Error: Saving a generated plan is currently not supported
 # Terraform Cloud does not support saving the generated execution plan
 
-echo "[*] ...Running terraform...INIT"
+log INFO "[*] ...Running terraform...INIT"
 mkdir -p "$VAR_PATH_TEMP"
 terraform init
 
-echo "[*] ...Running terraform...PLAN"
+log INFO "[*] ...Running terraform...PLAN"
 terraform plan -var-file="workspace.tfvars" -input=false
 
-echo "[*] ...Running terraform...APPLY"
+log INFO "[*] ...Running terraform...APPLY"
 terraform apply -auto-approve -var-file="workspace.tfvars" -input=false
 #echo "[*] ...Running terraform...APPLY skipped for safety"
 
-echo "[*] ...Reading Terraform output..."
+log INFO "[*] ...Reading Terraform output..."
 terraform output -json serverdata | jq -c '.' | tee $VAR_PATH_TEMP/tf_output.json
 
-echo "[+] ...Terraform output saved to tf_output.json and $VAR_PATH_TEMP/tf_output.json"
+log INFO "[+] ...Terraform output saved to tf_output.json and $VAR_PATH_TEMP/tf_output.json"

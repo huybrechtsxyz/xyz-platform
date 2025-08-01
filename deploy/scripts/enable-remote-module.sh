@@ -8,15 +8,16 @@
 # Last Modified : 2025-07-23
 #===============================================================================
 # Available directories and files
-# |- $PATH_WORKSPACE/variables.env (Contains PATH_CONFIG|DOCS)
-# |- $PATH_WORKSPACE/secrets.env
-# |- $PATH_WORKSPACE/terraform.json
-# |- $PATH_WORKSPACE/workspace.json
-# |- $PATH_DEPLOY/registry.json
-# |- $PATH_DEPLOY/service.json (includes paths[] )
+# |- $PATH_WORKSPACE  - Contains the deploy folder
+# |- $PATH_MODULE     - Module installpoint on the remote server
+# |- $PATH_DEPLOY     - Contains the module files, service scripts, service config
 #===============================================================================
 set -eo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
+
+#===============================================================================
+# WORKSPACE
+#===============================================================================
 
 # Resolve absolute path to the directory of this script
 PATH_WORKSPACE="${1:-}"
@@ -48,26 +49,6 @@ fi
 # Capture the server's hostname
 HOSTNAME=$(hostname)
 
-# Should be in variables.env
-# VAR_PATH_SERVICE
-
-log INFO "[*] Workspace path  : $PATH_WORKSPACE"
-log INFO "[*] Service path    : $PATH_SERVICE"
-log INFO "[*] Registry path   : $PATH_DEPLOY"
-log INFO "[*] Running on host : $HOSTNAME"
-
-# Get the registry and service file
-REGISTRY_FILE=$(get_registry_file "$PATH_DEPLOY")
-SERVICE_FILE=$(get_service_file "$PATH_DEPLOY")
-
-# Validate if registry and service id match
-REGISTRY_ID=$(jq -r '.service.id' "$REGISTRY_FILE")
-SERVICE_ID=$(jq -r '.service.id' "$SERVICE_FILE")
-if [[ "$REGISTRY_ID" != "$SERVICE_ID" ]]; then
-  log ERROR "[X] Service ID and Registry ID do not match: $SERVICE_ID vs $REGISTRY_ID"
-  exit 1
-fi
-
 # Get the workspace file
 : "${WORKSPACE:?Missing WORKSPACE env var}"
 WORKSPACE_FILE=$(get_workspace_file "$PATH_WORKSPACE" "$WORKSPACE") || exit 1
@@ -87,6 +68,49 @@ if [[ "$SERVER_NAME" != "$HOSTNAME" ]]; then
   log ERROR "[X] Service Name and Hostname do not match: $SERVER_NAME vs $HOSTNAME"
   exit 1
 fi
+
+# Should be in variables.env
+# VAR_PATH_SERVICE
+
+log INFO "[*] Workspace path  : $PATH_WORKSPACE"
+log INFO "[*] Module path     : $PATH_MODULE"
+log INFO "[*] Deploy path     : $PATH_DEPLOY"
+log INFO "[*] Running on host : $HOSTNAME"
+
+#===============================================================================
+# MODULE
+#===============================================================================
+
+if [[ ! -d "$PATH_MODULE" ]]; then
+  echo "ERROR: Module path $PATH_MODULE does not exist."
+  exit 1
+fi
+
+if [[ ! -d "$PATH_DEPLOY" ]]; then
+  echo "ERROR: Module deployment path $PATH_DEPLOY does not exist."
+  exit 1
+fi
+
+MODULE_FILE="$PATH_DEPLOY/module.json"
+if [[ ! -f "$MODULE_FILE" ]]; then
+  echo "ERROR: Module deployment file $MODULE_FILE does not exist."
+  exit 1
+fi
+
+MODULE_ID=$(jq -r '.module.id' "$MODULE_FILE")
+MODULE_CONFIG=$(jq -r '.module.config' "$MODULE_FILE")
+
+#===============================================================================
+# SERVICE
+#===============================================================================
+
+SERVICE_FILE="$PATH_MODULE/$MODULE_CONFIG"
+if [[ ! -f "$SERVICE_FILE" ]]; then
+  echo "ERROR: Service file $SERVICE_FILE does not exist."
+  exit 1
+fi
+
+#===============================================================================
 
 # Create the required service paths and copy the files
 create_service_paths() {

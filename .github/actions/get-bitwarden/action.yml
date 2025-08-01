@@ -1,5 +1,5 @@
 name: Get Bitwarden
-description: Installs Bitwarden CLI and authenticates using BITWARDEN_TOKEN
+description: Install and authenticate Bitwarden Secrets Manager CLI
 
 inputs:
   bitwarden_token:
@@ -7,7 +7,7 @@ inputs:
     required: true
 
 runs:
-  using: "composite"
+  using: composite
   steps:
     - name: Install Bitwarden Secrets Manager CLI
       shell: bash
@@ -19,5 +19,8 @@ runs:
 
     - name: Authenticate with Bitwarden Secrets Manager
       shell: bash
+      env:
+        BWS_ACCESS_TOKEN: ${{ inputs.bitwarden_token }}
       run: |
-        export BWS_ACCESS_TOKEN=${{ inputs.bitwarden_token }}
+        export BWS_ACCESS_TOKEN=$BWS_ACCESS_TOKEN
+        bws config profile default --access-token "$BWS_ACCESS_TOKEN"
