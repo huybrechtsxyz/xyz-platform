@@ -234,7 +234,7 @@ copy_service_files() {
   for item in "${servicepaths[@]}"; do
     local source=$(jq -r '.source' <<< "$item")
     [[ -z "$source" ]] && continue
-    [[ "$source" == "$MODULE_DEPLOY"]] && continue
+    [[ "$source" == "$MODULE_DEPLOY" ]] && continue
     local source_path="$SERVICE_PATH/$source"
     if [[ -d "$source_path" ]]; then
       log INFO "[*] Copying service source path '$source' to $REMOTE_IP..."
