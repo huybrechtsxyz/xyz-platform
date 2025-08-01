@@ -174,7 +174,7 @@ jobs:
         if: matrix.id != ''
         run: |
           echo Service ID: ${{ matrix.id }}
-          echo Registry Info: ${{ steps.load.outputs.moduleinfo }}
+          echo Module Info: ${{ steps.load.outputs.moduleinfo }}
           echo Git Repo: ${{ steps.load.outputs.repository }}
           echo Git Ref: ${{ steps.load.outputs.ref }}
 
@@ -188,8 +188,8 @@ jobs:
           ref: ${{ steps.load.outputs.ref }}
           path: services/${{ matrix.id }}
 
-      # Deploy Service
-      - name: Deploy Service
+      # Deploy Module
+      - name: Deploy Module
         if: matrix.id != ''
         env:
           VAR_WORKSPACE: ${{ inputs.workspace }}

@@ -53,7 +53,7 @@ check_top_keys() {
 check_module_structure() {
   log INFO "[*] ...... Validating service block..."
 
-  local required_service_keys=("id" "repository" "reference" "service" "deploy" "state")
+  local required_service_keys=("id" "repository" "reference" "config" "deploy" "state")
   for key in "${required_service_keys[@]}"; do
     if ! jq -e ".service.$key" "$MODULE_FILE" > /dev/null; then
       log ERROR "[X] Missing required service key: $key"

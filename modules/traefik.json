@@ -4,7 +4,7 @@
     "id": "traefik",
     "repository": "huybrechtsxyz/xyz-traefik",
     "reference": "main",
-    "service": "config/service.json",
+    "config": "config/service.json",
     "deploy": "config",
     "state": "enabled"
   }

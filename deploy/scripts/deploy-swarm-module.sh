@@ -1,8 +1,8 @@
 #!/bin/bash
 #===============================================================================
-# Script Name   : deploy-swarm-service.sh
+# Script Name   : deploy-swarm-module.sh
 # Description   : Pipeline code to call remote service deployment code
-# Usage         : ./deploy-swarm-service.sh
+# Usage         : ./deploy-swarm-module.sh
 # Author        : Vincent Huybrechts
 # Created       : 2025-07-23
 # Last Modified : 2025-07-23
@@ -12,7 +12,7 @@ trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 
 : "${VAR_WORKSPACE:?Missing WORKSPACE env var}"
 : "${VAR_ENVIRONMENT:?Missing ENVIRONMENT env var}"
-: "${VAR_REGISTRYINFO:?Missing REGISTRYINFO env var}"
+: "${VAR_MODULEINFO:?Missing VAR_MODULEINFO env var}"
 : "${VAR_TERRAFORM:?Missing TERRAFORM env var}"
 : "${VAR_PATH_TEMP:?Missing PATH_TEMP env var}"
 
@@ -24,9 +24,9 @@ if [[ ! -d "$VAR_PATH_TEMP" ]]; then
   mkdir -p "$VAR_PATH_TEMP"
 fi
 
-#
+#===============================================================================
 # WORKSPACE
-# 
+#===============================================================================
 
 # Get the workspace file and validate it
 WORKSPACE_FILE=$(get_workspace_file "./deploy/workspaces" "$VAR_WORKSPACE") || exit 1
@@ -50,71 +50,65 @@ if [[ ! "$REMOTE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 # Terraform file is already on the server
+# We deploy it to make it easier for module deployment
+# This file is not kept !
 echo "$VAR_TERRAFORM" > "./deploy/terraform.json"
 unset VAR_TERRAFORM
 
-#
-# REGISTRY
-# 
+#===============================================================================
+# MODULE
+#===============================================================================
 
-# Get the registry id
-REGISTRY_ID=$(jq -r '.registry.id' <<< "$VAR_REGISTRYINFO")
-if [[ -z "$REGISTRY_ID" ]]; then
-  echo "Error: REGISTRY_ID is null or missing"
+# Get the module id
+MODULE_ID=$(jq -r '.module.id' <<< "$VAR_MODULEINFO")
+if [[ -z "$MODULE_ID" ]]; then
+  log ERROR "[X] MODULE_ID is null or missing"
   exit 1
 fi
 
-# Get the registry state
-REGISTRY_STATE=$(jq -r '.registry.state' <<< "$VAR_REGISTRYINFO")
-if [[ ! "$SERVICE_STATE" =~ ^(enabled|disabled|removed)$ ]]; then
-  log ERROR "[X] Invalid service registry state: '$SERVICE_STATE'. Must be one of: enabled, disabled, removed."
+# Get the module state
+MODULE_STATE=$(jq -r '.module.state' <<< "$VAR_MODULEINFO")
+if [[ ! "$MODULE_STATE" =~ ^(enabled|disabled|removed)$ ]]; then
+  log ERROR "[X] Invalid service module state: '$MODULE_STATE'. Must be one of: enabled, disabled, removed."
   exit 1
 fi
 
+MODULE_CONFIG==$(jq -r '.module.config' <<< "$VAR_MODULEINFO")
+if [[ -z "$MODULE_CONFIG" ]]; then
+  log ERROR "[X] MODULE_CONFIG is null or missing"
+  exit 1
+fi
 
+MODULE_DEPLOY=$(jq -r '.module.deploy' <<< "$VAR_MODULEINFO")
+if [[ -z "$MODULE_DEPLOY" ]]; then
+  log ERROR "[X] MODULE_DEPLOY is null or missing"
+  exit 1
+fi
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#===============================================================================
+# SERVICE
+#===============================================================================
 
 # Get the service path
-SERVICE_PATH="./service/$SERVICE_ID"
+SERVICE_PATH="./services/$MODULE_ID"
 
-
-
-# Get the service deployment path
-REGISTRY_PATH=$(jq -r '.registry.deploy' <<< "$VAR_REGISTRYINFO")
-SERVICE_DEPLOY="$SERVICE_PATH/$REGISTRY_PATH"
-if [[ ! -d "$SERVICE_DEPLOY" ]]; then
-  echo "Temporary path $SERVICE_DEPLOY does not exist."
-  exit 1
-fi
-
-# Validate if registry and service id match
-REGISTRY_ID=$(jq -r '.registry.id' <<< "$VAR_REGISTRYINFO")
-if [[ "$REGISTRY_ID" != "$SERVICE_ID" ]]; then
-  log ERROR "[X] Service ID and Registry ID do not match: $SERVICE_ID vs $REGISTRY_ID"
-  exit 1
-fi
-
-# Get the service file reference
-SERVICE_FILE=$(jq -r '.registry.service' <<< "$VAR_REGISTRYINFO")
-SERVICE_FILE="$SERVICE_PATH/$SERVICE_FILE"
+# Get the service file
+SERVICE_FILE="$SERVICE_PATH/$MODULE_CONFIG"
 log INFO "[*] Getting service file: $SERVICE_FILE"
+if [[ ! -f "$SERVICE_FILE" ]]; then
+  log ERROR "[X] Service file $SERVICE_FILE does not exist."
+  exit 1
+fi
+
 log INFO "[*] Validating service file: $SERVICE_FILE"
 validate_service "./deploy/scripts" "$SERVICE_FILE" "$VAR_WORKSPACE" "$VAR_ENVIRONMENT"
+
+# Get the service deployment path
+SERVICE_DEPLOY="$SERVICE_PATH/$MODULE_DEPLOY"
+if [[ ! -d "$SERVICE_DEPLOY" ]]; then
+  log ERROR "[X] Service deployment folder $SERVICE_DEPLOY does not exist."
+  exit 1
+fi
 
 # Add the servicepaths to the service file and overwrite
 log INFO "[*] Set the service paths in: $SERVICE_FILE as $VAR_PATH_TEMP/service.json"
@@ -123,11 +117,15 @@ cp -f "$VAR_PATH_TEMP/service.json" "$SERVICE_FILE"
 rm -f "$VAR_PATH_TEMP/service.json"
 
 # Save the registry info in the service deploy path
-echo "$VAR_REGISTRYINFO" > "$SERVICE_DEPLOY/registry.json"
-REGISTRY_FILE=$(get_registry_file "$SERVICE_DEPLOY") || exit 1
-log INFO "[*] Validating registry file: $REGISTRY_FILE"
-validate_registry "./deploy/scripts" "$REGISTRY_FILE"
-unset VAR_REGISTRYINFO
+MODULE_FILE="$SERVICE_DEPLOY/module.json"
+echo "$VAR_MODULEINFO" > "$MODULE_FILE"
+log INFO "[*] Validating module file: $MODULE_FILE"
+validate_module "./deploy/scripts" "$MODULE_FILE"
+unset VAR_MODULEINFO
+
+#===============================================================================
+# DEPLOYMENT PATHS
+#===============================================================================
 
 # Get all the source and target paths
 mapfile -t SERVICEPATHS < <( jq -c --arg server_id "$MANAGER_ID" \
@@ -138,11 +136,13 @@ mapfile -t SERVICEPATHS < <( jq -c --arg server_id "$MANAGER_ID" \
 VAR_PATH_WORKSPACE="$VAR_PATH_TEMP/.deploy"
 log INFO "[*] Remote workspace path: $VAR_PATH_WORKSPACE"
 
-VAR_PATH_SERVICE="$VAR_PATH_TEMP/$SERVICE_ID"
-log INFO "[*] Remote service path: $VAR_PATH_SERVICE"
+VAR_PATH_MODULE="$VAR_PATH_TEMP/$MODULE_ID"
+log INFO "[*] Remote module path: $VAR_PATH_MODULE"
 
-VAR_PATH_DEPLOY="$VAR_PATH_SERVICE/$REGISTRY_PATH"
+VAR_PATH_DEPLOY="$VAR_PATH_MODULE/$MODULE_DEPLOY"
 log INFO "[*] Remote deployment path: $VAR_PATH_DEPLOY"
+
+#===============================================================================
 
 # Create secret and variable files based on expected prefixes
 # Output files added to deploy folder
@@ -150,7 +150,7 @@ log INFO "[*] Remote deployment path: $VAR_PATH_DEPLOY"
 # |- ./deploy/secrets.env     (SECRET_)
 create_environment_files() {
   # Extract matching variables
-  mapfile -t var_lines < <(jq -r '.service.variables[] | "\(.key) \(.value)"' "$SERVICE_FILE")
+  mapfile -t var_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy.$env.variables[] | "\(.key) \(.value)"' "$SERVICE_FILE")
 
   # Loop over each variable entry
   for line in "${var_lines[@]}"; do
@@ -167,7 +167,7 @@ create_environment_files() {
   generate_env_file "VAR_" "$VAR_PATH_DEPLOY/variables.env"
 
   # Extract matching secrets
-  mapfile -t secret_lines < <(jq -r '.service.secrets[] | "\(.key) \(.reference)"' "$SERVICE_FILE")
+  mapfile -t secret_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy.$env.secrets[] | "\(.key) \(.reference)"' "$SERVICE_FILE")
 
   # Loop over each secret entry
   for line in "${secret_lines[@]}"; do
@@ -197,14 +197,15 @@ copy_service_files() {
   local mkdir_cmds=()
 
   # Ensure base temp service path is included
-  mkdir_cmds+=("mkdir -p '$VAR_PATH_SERVICE'")
+  mkdir_cmds+=("mkdir -p '$VAR_PATH_WORKSPACE'")
+  mkdir_cmds+=("mkdir -p '$VAR_PATH_MODULE'")
   mkdir_cmds+=("mkdir -p '$VAR_PATH_DEPLOY'")
 
   # Build mkdir commands for each source subdirectory
   for item in "${SERVICEPATHS[@]}"; do
     local source=$(jq -r '.source' <<< "$item")
     [[ -z "$source" ]] && continue
-    mkdir_cmds+=("mkdir -p '$VAR_PATH_SERVICE/$source'")
+    mkdir_cmds+=("mkdir -p '$VAR_PATH_MODULE/$source'")
   done
 
   # Execute mkdirs in a single SSH command
@@ -229,15 +230,17 @@ copy_service_files() {
     }
 
   # Copy all paths with defined `source` folders
+  # Do not copy the when the "$source" equals "$MODULE_"
   for item in "${servicepaths[@]}"; do
     local source=$(jq -r '.source' <<< "$item")
     [[ -z "$source" ]] && continue
-    local source_path="./service/$SERVICE_ID/$source"
+    [[ "$source" == "$MODULE_DEPLOY"]] && continue
+    local source_path="$SERVICE_PATH/$source"
     if [[ -d "$source_path" ]]; then
       log INFO "[*] Copying service source path '$source' to $REMOTE_IP..."
       scp -r -o StrictHostKeyChecking=no
         "$source_path/"* \
-        root@"$REMOTE_IP":"$VAR_PATH_SERVICE/$source"/ || {
+        root@"$REMOTE_IP":"$VAR_PATH_MODULE/$source"/ || {
           log ERROR "[X] Failed to copy source folder '$source' to $REMOTE_IP"
           exit 1
         }
@@ -247,10 +250,11 @@ copy_service_files() {
   done
 
   # Copy service-specific scripts and files (if exist)
+  # Copy the deployment files to the root of the remote module
   log INFO "[*] Copying service-specific scripts..."
   scp -o StrictHostKeyChecking=no \
-    ./service/"$SERVICE_ID"/*.* \
-    ./service/"$SERVICE_ID"/scripts/*.* \
+    "$SERVICE_PATH/$MODULE_DEPLOY"/*.* \
+    "$SERVICE_PATH"/scripts/*.* \
     root@"$REMOTE_IP":"$VAR_PATH_DEPLOY"/ || {
       log ERROR "[X] Failed to transfer service scripts to $REMOTE_IP"
       exit 1
