@@ -32,6 +32,19 @@
     { "type": "logs",   "path": "/var/logs/app", "volume": "local" },
     { "type": "serve",  "path": "/srv/app"     , "volume": "distributed" }
   ],
+  "variables": [
+    { "key": "WORKSPACE", "value": "platform" },
+    { "key": "DATACENTER", "value": "kamatera-eu-fr" },
+    { "key": "DOCKER_WORKER", "value": "worker" },
+    
+    { "key": "DOMAIN_DEV", "value": "huybrechts.dev" },
+    { "key": "DOMAIN_XYZ", "value": "huybrechts.xyz" },
+    { "key": "DOMAIN_LIZARD", "value": "theorderoftheblacklizard.be" },
+    
+    { "key": "DOMAIN_RPG", "value": "alderwyn.xyz" },
+    { "key": "PLATFORM_EMAIL", "value": "webmaster@huybrechts.xyz" },
+    { "key": "PLATFORM_SQL_NAME", "value": "platform-db" }    
+  ],
   "servers": [
     {
       "id": "manager-1",
