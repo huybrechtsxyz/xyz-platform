@@ -150,7 +150,7 @@ log INFO "[*] Remote deployment path: $VAR_PATH_DEPLOY"
 # |- ./deploy/secrets.env     (SECRET_)
 create_environment_files() {
   # Extract matching variables
-  mapfile -t var_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy.$env.variables[] | "\(.key) \(.value)"' "$SERVICE_FILE")
+  mapfile -t var_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy[$env].variables[] | "\(.key) \(.value)"' "$SERVICE_FILE")
 
   # Loop over each variable entry
   for line in "${var_lines[@]}"; do
@@ -167,7 +167,7 @@ create_environment_files() {
   generate_env_file "VAR_" "$VAR_PATH_DEPLOY/variables.env"
 
   # Extract matching secrets
-  mapfile -t secret_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy.$env.secrets[] | "\(.key) \(.reference)"' "$SERVICE_FILE")
+  mapfile -t secret_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy[$env].secrets[] | "\(.key) \(.reference)"' "$SERVICE_FILE")
 
   # Loop over each secret entry
   for line in "${secret_lines[@]}"; do
