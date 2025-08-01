@@ -303,11 +303,11 @@ log INFO "[*] Removing service $SERVICE_ID...DONE"
 }
 
 main() {
-  log INFO "[*] Deploying service $SERVICE_ID..."
+  log INFO "[*] Deploying service $MODULE_ID..."
 
   create_environment_files
 
-  case "$SERVICE_STATE" in
+  case "$MODULE_STATE" in
     enabled)
       copy_service_files
       enable_service
@@ -319,11 +319,11 @@ main() {
       remove_service
       ;;
     *)
-      log ERROR "[X] Invalid service state: '$SERVICE_STATE'. Must be one of: enabled, disabled, removed."
+      log ERROR "[X] Invalid service state: '$MODULE_STATE'. Must be one of: enabled, disabled, removed."
       exit 1
       ;;
   esac
-  log INFO "[*] Deploying service $SERVICE_ID...DONE"
+  log INFO "[*] Deploying service $MODULE_ID...DONE"
 }
 
 main
