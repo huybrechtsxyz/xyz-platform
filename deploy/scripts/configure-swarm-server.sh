@@ -55,7 +55,7 @@ create_environment_files() {
   mapfile -t var_lines < <(jq -r '.workspace.variables[] | "\(.key) \(.value)"' "$WORKSPACE_FILE")
 
   # Clear file before writing
-  > ./deploy/configuration.env  
+  > ./deploy/configuration.env
 
   for line in "${var_lines[@]}"; do
     read -r key value <<< "$line"
@@ -73,7 +73,7 @@ create_environment_files() {
   export BWS_ACCESS_TOKEN="${BWS_ACCESS_TOKEN:?Missing BWS_ACCESS_TOKEN environment variable}"
 
   SECRETS_ENV_FILE="./deploy/secrets.env"
-  > "$SECRETS_ENV_FILE"  # Clear existing file
+  > "$SECRETS_ENV_FILE"
 
   for line in "${var_lines[@]}"; do
     read -r key source id <<< "$line"

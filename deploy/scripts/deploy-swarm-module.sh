@@ -29,7 +29,7 @@ fi
 #===============================================================================
 
 # Get the workspace file and validate it
-WORKSPACE_FILE=$(get_workspace_file "./deploy/workspaces" "$VAR_WORKSPACE") || exit 1
+WORKSPACE_FILE=$(get_workspace_file "./workspaces" "$VAR_WORKSPACE") || exit 1
 log INFO "[*] Getting workspace file: $WORKSPACE_FILE"
 log INFO "[*] Validating workspace file: $WORKSPACE_FILE"
 validate_workspace "./deploy/scripts" "$WORKSPACE_FILE"
@@ -150,43 +150,54 @@ log INFO "[*] Remote deployment path: $VAR_PATH_DEPLOY"
 # |- ./deploy/secrets.env     (SECRET_)
 create_environment_files() {
   # Extract matching variables
+  log INFO "[*] Creating variable file $VAR_PATH_DEPLOY/variables.env"
   mapfile -t var_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy[$env].variables[] | "\(.key) \(.value)"' "$SERVICE_FILE")
+
+  # Clear file before writing
+  > "$VAR_PATH_DEPLOY/variables.env"
 
   # Loop over each variable entry
   for line in "${var_lines[@]}"; do
-    key=$(awk '{print $1}' <<< "$line")
-    value=$(awk '{print $2}' <<< "$line")
-
-    echo "$key=$value"
+    read -r key value <<< "$line"
     export "VAR_${key}=$value"
-
     echo "Exported VAR_${key}"
   done
-
+  
   # Generate variable file
   generate_env_file "VAR_" "$VAR_PATH_DEPLOY/variables.env"
 
   # Extract matching secrets
+  log INFO "[*] Creating secret file ./deploy/secrets.env"
   mapfile -t secret_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy[$env].secrets[] | "\(.key) \(.source) \(.id)"' "$SERVICE_FILE")
 
-  # Loop over each secret entry
+  export BWS_ACCESS_TOKEN="${BWS_ACCESS_TOKEN:?Missing BWS_ACCESS_TOKEN environment variable}"
+
+  SECRETS_ENV_FILE="./deploy/secrets.env"
+  > "$SECRETS_ENV_FILE"
+
   for line in "${var_lines[@]}"; do
-    key=$(awk '{print $1}' <<< "$line")
-    source=$(awk '{print $2}' <<< "$line")
-    id=$(awk '{print $3}' <<< "$line")
+    read -r key source id <<< "$line"
 
-    # Fetch the secret value using Bitwarden CLI
-    data=$(bws secret get "$id" --output json)
-    value=$data.value
+    if [[ "$source" != "bitwarden" ]]; then
+      log WARN "[!] Skipping unsupported secret source: $source"
+      continue
+    fi
 
-    # Export it as variable
-    echo "$key=$value"
+    data=$(bws secret get "$id" --output json 2>/dev/null || true)
+
+    if [[ -z "$data" ]]; then
+      log ERROR "[!] Failed to fetch secret for $key (id: $id)"
+      continue
+    fi
+
+    value=$(jq -r '.value' <<< "$data")
+    #echo "$key=${value@Q}"
     export "SECRET_${key}=$value"
     echo "Exported SECRET_${key}"
   done
 
   # Generate secret file
-  generate_env_file "SECRET_" "./deploy/secrets.env"
+  generate_env_file "SECRET_" "$SECRETS_ENV_FILE"
 }
 
 # Function will lookup all service paths to copy
@@ -224,7 +235,7 @@ copy_service_files() {
   scp -o StrictHostKeyChecking=no \
     ./deploy/*.* \
     ./deploy/scripts/*.* \
-    ./deploy/workspaces/*.* \
+    ./workspaces/*.* \
     root@"$REMOTE_IP":"$VAR_PATH_WORKSPACE"/ || {
       log ERROR "[X] Failed to transfer core deployment scripts to $REMOTE_IP"
       exit 1

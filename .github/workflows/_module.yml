@@ -197,6 +197,7 @@ jobs:
           VAR_MODULEINFO: ${{ steps.load.outputs.moduleinfo }}
           VAR_TERRAFORM: ${{ needs.setup.outputs.terraform }}
           VAR_PATH_TEMP: ${{ env.VAR_PATH_TEMP }}
+          BWS_ACCESS_TOKEN: ${{ secrets.BITWARDEN_TOKEN }}
         run: |
           echo "[*] Deploying module ${{ matrix.id }} ..."
           chmod +x ./deploy/scripts/deploy-swarm-module.sh
