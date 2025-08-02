@@ -580,7 +580,7 @@ create_workspace_serverpaths(){
   local workspace_file="$1"
 
   jq --argjson workspace "$(jq '.' "$workspace_file")" '
-    .servers |= map(
+    .workspace.servers |= map(
       . + {
         paths: (
           .mounts
