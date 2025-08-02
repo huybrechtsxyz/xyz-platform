@@ -114,7 +114,7 @@ check_path_types() {
 check_server_roles() {
   # Validate all server roles exist in .roles
   jq -r '.workspace.servers[].role' "$WORKSPACE_FILE" | while read -r role; do
-    if ! jq -e --arg role "$role" '.roles[$role]' "$WORKSPACE_FILE" > /dev/null; then
+    if ! jq -e --arg role "$role" '.workspace.roles[$role]' "$WORKSPACE_FILE" > /dev/null; then
       log ERROR "[X] Undefined role \"$role\" in servers"
       exit 1
     fi
