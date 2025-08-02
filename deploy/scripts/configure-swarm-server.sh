@@ -71,6 +71,7 @@ create_environment_files() {
   mapfile -t var_lines < <(jq -r '.workspace.secrets[] | "\(.key) \(.source) \(.id)"' "$WORKSPACE_FILE")
 
   # Loop over each secret entry
+  export BWS_ACCESS_TOKEN=$BWS_ACCESS_TOKEN
   for line in "${var_lines[@]}"; do
     key=$(awk '{print $1}' <<< "$line")
     source=$(awk '{print $2}' <<< "$line")
