@@ -59,7 +59,7 @@ create_environment_files() {
 
   for line in "${var_lines[@]}"; do
     read -r key value <<< "$line"
-    echo "$key=$value"
+    #echo "$key=$value"
     export "VAR_${key}=$value"
     echo "Exported VAR_${key}"
   done
@@ -91,7 +91,7 @@ create_environment_files() {
     fi
 
     value=$(jq -r '.value' <<< "$data")
-    echo "$key=${value@Q}" >> "$SECRETS_ENV_FILE"
+    #echo "$key=${value@Q}"
     export "SECRET_${key}=$value"
     echo "Exported SECRET_${key}"
   done

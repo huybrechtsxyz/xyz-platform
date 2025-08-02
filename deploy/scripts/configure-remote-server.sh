@@ -279,11 +279,13 @@ create-fs-volumes() {
   declare -A volume_map
 
   # Read all workspace servers for debugging
+  log INFO "[*] ... Loading workspace data..."
   mapfile -t servers < <(jq -c '.workspace.servers[]' "$WORKSPACE_FILE")
   server_count=${#servers[@]}
-  log INFO "[*] ... Workspace data loaded: $server_count servers found: $(jq -r '.servers[].id' "$WORKSPACE_FILE" | paste -sd "," -)"
+  log INFO "[*] ... Workspace data loaded: $server_count servers found: $(jq -r '.workspace.servers[].id' "$WORKSPACE_FILE" | paste -sd "," -)"
 
   # Read terraform servers for debugging
+  log INFO "[*] ... Loading terraform data..."
   mapfile -t tservers < <(jq -c '.include[]' "$TERRAFORM_FILE")
   tserver_count=${#tservers[@]}
   log INFO "[*] ... Terraform data loaded: $tserver_count servers found: $(jq -r '.include[].label' "$TERRAFORM_FILE" | paste -sd ',')"
