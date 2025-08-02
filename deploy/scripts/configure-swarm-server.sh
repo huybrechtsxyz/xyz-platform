@@ -50,6 +50,20 @@ create_environment_files() {
   cp -f "./deploy/workspace.json" "$WORKSPACE_FILE"
   rm -f "./deploy/workspace.json"
 
+  # Extract matching variables
+  mapfile -t var_lines < <(jq -r '.variables[] | "\(.key) \(.value)"' "$WORKSPACE_FILE")
+
+  # Loop over each variable entry
+  for line in "${var_lines[@]}"; do
+    key=$(awk '{print $1}' <<< "$line")
+    value=$(awk '{print $2}' <<< "$line")
+
+    echo "$key=$value"
+    export "VAR_${key}=$value"
+
+    echo "Exported VAR_${key}"
+  done
+
   # Generate environment and secrets file
   generate_env_file "VAR_" "./deploy/configuration.env"
   generate_env_file "SECRET_" "./deploy/secrets.env"
