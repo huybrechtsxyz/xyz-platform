@@ -40,59 +40,63 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
 # |- ./deploy/secrets.env     (SECRET_)
 # |- ./deploy/terraform.json  (TFOUTPUT)
 create_environment_files() {
-  # Save the TFOUPTUT as terraform.json
   log INFO "[*] Saving Terraform output to ./deploy/terraform.json"
   echo "$VAR_MATRIX" > "./deploy/terraform.json"
-  unset "$VAR_MATRIX"
-  
-  # Add the serverpaths to the workspace file
+  unset VAR_MATRIX
+
   log INFO "[*] Creating workspace server paths"
   WORKSPACE_FILE=$(get_workspace_file "./workspaces" "$VAR_WORKSPACE")
   create_workspace_serverpaths "$WORKSPACE_FILE" > "./deploy/workspace.json"
   cp -f "./deploy/workspace.json" "$WORKSPACE_FILE"
   rm -f "./deploy/workspace.json"
 
-  # Extract matching variables
+  # Extract workspace variables
   log INFO "[*] Creating variable file ./deploy/configuration.env"
   mapfile -t var_lines < <(jq -r '.workspace.variables[] | "\(.key) \(.value)"' "$WORKSPACE_FILE")
 
-  # Loop over each variable entry
-  for line in "${var_lines[@]}"; do
-    key=$(awk '{print $1}' <<< "$line")
-    value=$(awk '{print $2}' <<< "$line")
+  # Clear file before writing
+  > ./deploy/configuration.env  
 
+  for line in "${var_lines[@]}"; do
+    read -r key value <<< "$line"
     echo "$key=$value"
     export "VAR_${key}=$value"
-
     echo "Exported VAR_${key}"
   done
 
-  # Generate environment file
   generate_env_file "VAR_" "./deploy/configuration.env"
 
-  # Extract matching secrets
+  # Extract secrets
   log INFO "[*] Creating secret file ./deploy/secrets.env"
   mapfile -t var_lines < <(jq -r '.workspace.secrets[] | "\(.key) \(.source) \(.id)"' "$WORKSPACE_FILE")
 
-  # Loop over each secret entry
-  export BWS_ACCESS_TOKEN=$BWS_ACCESS_TOKEN
+  export BWS_ACCESS_TOKEN="${BWS_ACCESS_TOKEN:?Missing BWS_ACCESS_TOKEN environment variable}"
+
+  SECRETS_ENV_FILE="./deploy/secrets.env"
+  > "$SECRETS_ENV_FILE"  # Clear existing file
+
   for line in "${var_lines[@]}"; do
-    key=$(awk '{print $1}' <<< "$line")
-    source=$(awk '{print $2}' <<< "$line")
-    id=$(awk '{print $3}' <<< "$line")
+    read -r key source id <<< "$line"
 
-    # Fetch the secret value using Bitwarden CLI
-    data=$(bws secret get "$id" --output json)
-    value=$data.value
+    if [[ "$source" != "bitwarden" ]]; then
+      log WARN "[!] Skipping unsupported secret source: $source"
+      continue
+    fi
 
-    # Export it as variable
-    echo "$key=$value"
+    data=$(bws secret get "$id" --output json 2>/dev/null || true)
+
+    if [[ -z "$data" ]]; then
+      log ERROR "[!] Failed to fetch secret for $key (id: $id)"
+      continue
+    fi
+
+    value=$(jq -r '.value' <<< "$data")
+    echo "$key=${value@Q}" >> "$SECRETS_ENV_FILE"
     export "SECRET_${key}=$value"
     echo "Exported SECRET_${key}"
   done
 
-  # Generate secret file
-  generate_env_file "SECRET_" "./deploy/secrets.env"
+  generate_env_file "SECRET_" "$SECRETS_ENV_FILE"
 }
 
 # Copy configuration files to the remote server by creating necessary directories

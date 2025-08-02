@@ -12,7 +12,7 @@ You only need to edit the relevant sections of your workspace file and re-run th
 
 - Edit the Workspace File by opening your workspace JSON:
 
-> /deploy/workspaces/{your-environment}.json
+> /workspaces/{your-environment}.ws.json
 
 Update the roles and server_groups sections. Example to increase worker count:
 

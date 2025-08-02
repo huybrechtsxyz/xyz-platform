@@ -436,6 +436,20 @@ create_workspace() {
   # Set configuration path as executable
   chmod 755 "$configpath"/*.sh
 
+  # Build the path based on {PATH_SERVER_TYPE}
+  local docspathname=$(get_server_variable_name "$SERVER_ID" "DOCS")
+  local docspath="${!docspathname}"
+  log INFO "[*] ... Copying global documentation files to: $docspath"
+
+  # Copy the base configuration files and scripts
+  # E.g. /mnt/data1/etc/app/
+  if [[ -f docspath ]]; then
+    if ! cp -rf "$PATH_DOCS"/* "$docspath/"; then
+      log ERROR "[x] Failed to copy configuration files to $configpath"
+      return 1
+    fi
+  fi
+
   # Ensure the workspace definition file exists
   log INFO "[*] Workspace $WORKSPACE setup COMPLETE on host $HOSTNAME"
 }
