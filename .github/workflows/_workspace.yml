@@ -247,8 +247,13 @@ jobs:
             6cc5b975-56a9-4d7a-80c7-b2c90151cce0 > KAMATERA_PUBLIC_KEY
             f16fffe2-77b7-4d20-bf6c-b2c9015c71d3 > KAMATERA_PRIVATE_KEY
             5083ae32-429d-428b-b7df-b2c901441bbb > KAMATERA_ROOT_PASSWORD
-            09171644-23c8-4b7f-9015-b2e5015a4572 > PLATFORM_USERNAME
-            ffa5e6f9-de6a-47fa-887e-b2e5015ae1a4 > PLATFORM_PASSWORD
+
+      # Setup Bitwarden CLI
+      - name: Setup Bitwarden CLI
+        uses: ./.github/actions/get-bitwarden
+        if: matrix.id != ''
+        with:
+          bitwarden_token: ${{ secrets.BITWARDEN_TOKEN }}
 
       # Set up SSH connection
       - name: Set up SSH connection
@@ -264,8 +269,6 @@ jobs:
         env:
           VAR_MATRIX: ${{ needs.restore.outputs.matrix }}
           VAR_WORKSPACE: ${{ inputs.workspace }}
-          SECRET_PLATFORM_USERNAME: ${{ steps.get-secrets.outputs.PLATFORM_USERNAME }}
-          SECRET_PLATFORM_PASSWORD: ${{ steps.get-secrets.outputs.PLATFORM_PASSWORD }}
         run: |
           echo "[*] Configuring swarm server ${{ matrix.ip }} ..."
           chmod +x deploy/scripts/*.sh

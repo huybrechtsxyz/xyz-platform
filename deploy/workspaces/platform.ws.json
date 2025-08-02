@@ -40,10 +40,14 @@
     { "key": "DOMAIN_DEV", "value": "huybrechts.dev" },
     { "key": "DOMAIN_XYZ", "value": "huybrechts.xyz" },
     { "key": "DOMAIN_LIZARD", "value": "theorderoftheblacklizard.be" },
-    
     { "key": "DOMAIN_RPG", "value": "alderwyn.xyz" },
+    
     { "key": "PLATFORM_EMAIL", "value": "webmaster@huybrechts.xyz" },
     { "key": "PLATFORM_SQL_NAME", "value": "platform-db" }    
+  ],
+  "secrets": [
+    { "key": "PLATFORM_USERNAME", "source": "bitwarden", "id": "09171644-23c8-4b7f-9015-b2e5015a4572" },
+    { "key": "PLATFORM_PASSWORD", "source": "bitwarden", "id": "ffa5e6f9-de6a-47fa-887e-b2e5015ae1a4" }
   ],
   "servers": [
     {
