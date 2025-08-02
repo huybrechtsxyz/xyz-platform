@@ -467,7 +467,7 @@ get_server_id() {
     return 1
   fi
 
-  local SERVER_ID=$(jq -r '.servers[].id' "$WORKSPACE_FILE" | while read -r id; do
+  local SERVER_ID=$(jq -r '.workspace.servers[].id' "$WORKSPACE_FILE" | while read -r id; do
     if [[ "$HOSTNAME" == *"$id"* ]]; then
       echo "$id"
       break
@@ -501,7 +501,7 @@ get_manager_id() {
     return 1
   fi
 
-  local MAIN_MANAGER_ID=$(jq -r '.servers[0].id' "$WORKSPACE_FILE")
+  local MAIN_MANAGER_ID=$(jq -r '.workspace.servers[0].id' "$WORKSPACE_FILE")
 
   if [[ -z "$MAIN_MANAGER_ID" || "$MAIN_MANAGER_ID" == "null" ]]; then
     log ERROR "[!] No main manager ID found in workspace file."
@@ -594,9 +594,9 @@ create_workspace_serverpaths(){
                     (.mountpoint // "") 
                     | gsub("\\$\\{disk\\}"; ($disk|tostring))
                     # Append the path from workspace.paths for this type, fallback to just $type if missing
-                    + ("/" + (($workspace.paths[] | select(.type == $type) | .path) // $type))
+                    + ("/" + (($workspace.workspace.paths[] | select(.type == $type) | .path) // $type))
                   ),
-                  volume: ($workspace.paths[] | select(.type == $type) | .volume // "local")
+                  volume: ($workspace.workspace.paths[] | select(.type == $type) | .volume // "local")
                 }
             )
         )
@@ -618,9 +618,9 @@ create_service_serverpaths() {
         $service.service + {
           paths: (
             [
-              $workspace.servers[] as $server |
+              $workspace.workspace.servers[] as $server |
               $service.service.mounts[] as $smount |
-              ($workspace.paths[] | select(.type == $smount.type)) as $wpath |
+              ($workspace.workspace.paths[] | select(.type == $smount.type)) as $wpath |
               {
                 serverid: $server.id,
                 serverrole: $server.role,

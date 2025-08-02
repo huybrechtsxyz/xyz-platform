@@ -29,7 +29,7 @@ log INFO "[*] ...Validating workspace definition $WORKSPACE_FILE"
 validate_workspace "$SCRIPT_DIR" "$WORKSPACE_FILE"
 
 # Extract unique roles
-roles=$(jq -r '.servers[].role' "$WORKSPACE_FILE" | sort | uniq)
+roles=$(jq -r '.workspace.servers[].role' "$WORKSPACE_FILE" | sort | uniq)
 if [ -z "$roles" ]; then
   log ERROR "[!] No server roles found in $WORKSPACE_FILE"
   exit 1
@@ -41,14 +41,14 @@ log INFO "[*] ...Processing server roles and generating tfvars"
 echo "server_roles = {" > "$OUTPUT_FILE"
 for role in $roles; do
   # Count servers of this role
-  count=$(jq --arg role "$role" '[.servers[] | select(.role == $role)] | length' "$WORKSPACE_FILE")
+  count=$(jq --arg role "$role" '[.workspace.servers[] | select(.role == $role)] | length' "$WORKSPACE_FILE")
   # Get disk sizes from the first server of this role
-  disks=$(jq --arg role "$role" '[.servers[] | select(.role == $role)][0].disks | map(.size)' "$WORKSPACE_FILE")
+  disks=$(jq --arg role "$role" '[.workspace.servers[] | select(.role == $role)][0].disks | map(.size)' "$WORKSPACE_FILE")
   # Get hardware profile for the role
-  cpu_type=$(jq -r --arg role "$role" '.roles[$role].cpu_type' "$WORKSPACE_FILE")
-  cpu_cores=$(jq -r --arg role "$role" '.roles[$role].cpu_cores' "$WORKSPACE_FILE")
-  ram_mb=$(jq -r --arg role "$role" '.roles[$role].ram_mb' "$WORKSPACE_FILE")
-  unit_cost=$(jq -r --arg role "$role" '.roles[$role].unit_cost' "$WORKSPACE_FILE")
+  cpu_type=$(jq -r --arg role "$role" '.workspace.roles[$role].cpu_type' "$WORKSPACE_FILE")
+  cpu_cores=$(jq -r --arg role "$role" '.workspace.roles[$role].cpu_cores' "$WORKSPACE_FILE")
+  ram_mb=$(jq -r --arg role "$role" '.workspace.roles[$role].ram_mb' "$WORKSPACE_FILE")
+  unit_cost=$(jq -r --arg role "$role" '.workspace.roles[$role].unit_cost' "$WORKSPACE_FILE")
   # Write block to tfvars
   echo "  $role = {" >> "$OUTPUT_FILE"
   echo "    count     = $count" >> "$OUTPUT_FILE"

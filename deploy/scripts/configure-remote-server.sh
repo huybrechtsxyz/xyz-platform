@@ -159,7 +159,7 @@ create_docker_labels() {
 
     # Add custom labels from workspace JSON (jq filters by node id)
     log INFO "[*] ...... Add custom labels from workspace on $node"
-    mapfile -t ws_labels < <(jq -r --arg id "$node" '.servers[] | select(.id == $id) | .labels[]?' "$WORKSPACE_FILE")
+    mapfile -t ws_labels < <(jq -r --arg id "$node" '.workspace.servers[] | select(.id == $id) | .labels[]?' "$WORKSPACE_FILE")
     for label in "${ws_labels[@]}"; do
       # Split label key and value
       local key="${label%%=*}"
@@ -279,7 +279,7 @@ create-fs-volumes() {
   declare -A volume_map
 
   # Read all workspace servers for debugging
-  mapfile -t servers < <(jq -c '.servers[]' "$WORKSPACE_FILE")
+  mapfile -t servers < <(jq -c '.workspace.servers[]' "$WORKSPACE_FILE")
   server_count=${#servers[@]}
   log INFO "[*] ... Workspace data loaded: $server_count servers found: $(jq -r '.servers[].id' "$WORKSPACE_FILE" | paste -sd "," -)"
 
@@ -315,7 +315,7 @@ create-fs-volumes() {
       local fullpath=$(echo "$path" | jq -r '.path')
 
       # Find matching workspace path info to get volume type
-      pathinfo=$(jq -r --arg type "$mounttype" '.paths[] | select(.type==$type)' "$WORKSPACE_FILE")
+      pathinfo=$(jq -r --arg type "$mounttype" '.workspace.paths[] | select(.type==$type)' "$WORKSPACE_FILE")
       local volume=$(echo "$pathinfo" | jq -r '.volume')
 
       if [[ -z "$pathinfo" || -z "$volume" || -z "$fullpath" ]]; then

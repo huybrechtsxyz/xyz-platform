@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["api-version", "workspace"],
+  "properties": {
+    "api-version": {
+      "type": "number"
+    },
+    "workspace": {
+      "type": "object",
+      "required": ["deploy", "roles", "paths", "variables", "secrets", "servers"],
+      "properties": {
+        "deploy": {
+          "type": "object",
+          "required": ["id", "name", "version", "description"],
+          "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "version": { "type": "string" },
+            "description": { "type": "string" }
+          }
+        },
+        "roles": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_-]+$": {
+              "type": "object",
+              "required": ["cpu_type", "cpu_cores", "ram_mb", "unit_cost"],
+              "properties": {
+                "cpu_type": { "type": "string" },
+                "cpu_cores": { "type": "integer", "minimum": 1 },
+                "ram_mb": { "type": "integer", "minimum": 1 },
+                "unit_cost": { "type": "number", "minimum": 0 }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "path", "volume"],
+            "properties": {
+              "type": { "type": "string" },
+              "path": { "type": "string" },
+              "volume": { "type": "string", "enum": ["replicated", "local", "distributed"] }
+            }
+          }
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "value"],
+            "properties": {
+              "key": { "type": "string" },
+              "value": { "type": "string" }
+            }
+          }
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "source", "id"],
+            "properties": {
+              "key": { "type": "string" },
+              "source": { "type": "string" },
+              "id": { "type": "string", "format": "uuid" }
+            }
+          }
+        },
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "role", "labels", "disks", "mountpoint", "mounts"],
+            "properties": {
+              "id": { "type": "string" },
+              "role": { "type": "string" },
+              "labels": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "disks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["size", "label"],
+                  "properties": {
+                    "size": { "type": "integer", "minimum": 1 },
+                    "label": { "type": "string" }
+                  }
+                }
+              },
+              "mountpoint": { "type": "string" },
+              "mounts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["type", "disk"],
+                  "properties": {
+                    "type": { "type": "string" },
+                    "disk": { "type": "integer", "minimum": 1 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

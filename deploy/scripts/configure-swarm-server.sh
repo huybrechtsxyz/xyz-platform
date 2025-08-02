@@ -51,7 +51,7 @@ create_environment_files() {
   rm -f "./deploy/workspace.json"
 
   # Extract matching variables
-  mapfile -t var_lines < <(jq -r '.variables[] | "\(.key) \(.value)"' "$WORKSPACE_FILE")
+  mapfile -t var_lines < <(jq -r '.workspace.variables[] | "\(.key) \(.value)"' "$WORKSPACE_FILE")
 
   # Loop over each variable entry
   for line in "${var_lines[@]}"; do
@@ -68,7 +68,7 @@ create_environment_files() {
   generate_env_file "VAR_" "./deploy/configuration.env"
 
   # Extract matching secrets
-  mapfile -t var_lines < <(jq -r '.secrets[] | "\(.key) \(.source) \(.id)"' "$WORKSPACE_FILE")
+  mapfile -t var_lines < <(jq -r '.workspace.secrets[] | "\(.key) \(.source) \(.id)"' "$WORKSPACE_FILE")
 
   # Loop over each secret entry
   for line in "${var_lines[@]}"; do
