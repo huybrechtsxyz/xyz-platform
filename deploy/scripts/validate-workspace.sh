@@ -50,7 +50,7 @@ check_top_levels(){
   fi
 
   # Check required top-level keys
-  required_keys=("deploy" "roles" "paths" "servers" "variables" "secrets")
+  required_keys=("deploy" "roles" "paths" "variables" "secrets" "servers" "modules")
   for key in "${required_keys[@]}"; do
     if ! jq -e ".workspace.${key}" "$WORKSPACE_FILE" > /dev/null; then
       log ERROR "[X] Missing top-level key: $key"

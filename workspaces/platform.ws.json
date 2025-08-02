@@ -134,6 +134,9 @@
           { "type": "serve", "disk": 1 }
         ]
       }
+    ],
+    "modules": [
+      { "id": "traefik", "environment": "infra", "priority": 1, "state": "enabled" }
     ]
   }
 }

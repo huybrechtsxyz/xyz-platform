@@ -61,12 +61,6 @@ check_module_structure() {
     fi
   done
 
-  state=$(jq -r '.module.state' "$MODULE_FILE")
-  if [[ ! "$state" =~ ^(enabled|disabled|removed)$ ]]; then
-    log ERROR "[X] Invalid state value: '$state'. Must be one of: enabled, disabled, removed."
-    exit 1
-  fi
-
   log INFO "[+] ...... Module definition is valid: id=$(jq -r '.module.id' "$MODULE_FILE"), state=$state"
 }
 

@@ -1,31 +1,7 @@
 # [Workspace Setup Guide]
-# To create new servers
-#  - Create a new {workspace-name}.ws.json file
-#  - To recreate the servers delete existing:
-#    - Servers and networks in Kamatera
-#      on https://console.kamatera.com
-#    - The HCP Terraform Cloud Workspace
-#      on https://app.terraform.io/app/xyz/workspaces/{workspace}
-#
-# To add a new path:
-#  - Update env vars in the pipeline accordingly
-#  - Add the new path under "paths" in workspace.json
-#  - Add a corresponding mount entry under "mounts" for the target server
-#  - Check service.json if the service uses this path
-#
-# To add a new disk:
-#  - Add disk details to the "disks" array for the target server in workspace.json
-#  - Update or add matching "mounts" entries for relevant path types
-#
-# To add environment variables:
-#  - Use the VAR_ prefix for application config (e.g., VAR_PORT, VAR_ENV)
-#  - Add them under the "env:" block of the relevant pipeline step
-#  - The SECRET_ prefix is dropped when exporting variables to the remote server.
-#
-# To add secrets:
-#  - Use the SECRET_ prefix (e.g., SECRET_API_KEY)
-#  - Add them under the "env:" block, referencing the secret store as needed
-#  - The VAR_ prefix is dropped when exporting variables to the remote server.
+# Instructions on how the workspace is created can be found in the documentation.
+# HOW-TO.md         > Shows how to update a workspace definition file
+# INFRASTRUCTURE.md > Explains how the workspace is constructed
 
 # Build and Deploy Jobs
 name: _WorkspaceDeployment

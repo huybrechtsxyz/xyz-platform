@@ -10,7 +10,6 @@ jobs:
     uses: ./.github/workflows/_module.yml
     with:
       workspace: platform
-      environment: infra
-      modules: "traefik"
+      modules: "*"
     secrets:
       BITWARDEN_TOKEN: ${{ secrets.BITWARDEN_TOKEN }}

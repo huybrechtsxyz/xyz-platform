@@ -11,7 +11,6 @@ set -euo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 
 : "${VAR_WORKSPACE:?Missing WORKSPACE env var}"
-: "${VAR_ENVIRONMENT:?Missing ENVIRONMENT env var}"
 : "${VAR_MODULEINFO:?Missing VAR_MODULEINFO env var}"
 : "${VAR_TERRAFORM:?Missing TERRAFORM env var}"
 : "${VAR_PATH_TEMP:?Missing PATH_TEMP env var}"
@@ -22,6 +21,29 @@ source "$(dirname "${BASH_SOURCE[0]}")/utilities.sh"
 if [[ ! -d "$VAR_PATH_TEMP" ]]; then
   log INFO "[*] Temporary path $VAR_PATH_TEMP does not exist. Creating it."
   mkdir -p "$VAR_PATH_TEMP"
+fi
+
+#===============================================================================
+# MODULE
+#===============================================================================
+
+# Get the module id
+MODULE_ID=$(jq -r '.module.id' <<< "$VAR_MODULEINFO")
+if [[ -z "$MODULE_ID" ]]; then
+  log ERROR "[X] MODULE_ID is null or missing"
+  exit 1
+fi
+
+MODULE_CONFIG=$(jq -r '.module.config' <<< "$VAR_MODULEINFO")
+if [[ -z "$MODULE_CONFIG" ]]; then
+  log ERROR "[X] MODULE_CONFIG is null or missing"
+  exit 1
+fi
+
+MODULE_DEPLOY=$(jq -r '.module.deploy' <<< "$VAR_MODULEINFO")
+if [[ -z "$MODULE_DEPLOY" ]]; then
+  log ERROR "[X] MODULE_DEPLOY is null or missing"
+  exit 1
 fi
 
 #===============================================================================
@@ -55,35 +77,31 @@ fi
 echo "$VAR_TERRAFORM" > "./deploy/terraform.json"
 unset VAR_TERRAFORM
 
-#===============================================================================
-# MODULE
-#===============================================================================
-
-# Get the module id
-MODULE_ID=$(jq -r '.module.id' <<< "$VAR_MODULEINFO")
-if [[ -z "$MODULE_ID" ]]; then
-  log ERROR "[X] MODULE_ID is null or missing"
-  exit 1
-fi
-
 # Get the module state
-MODULE_STATE=$(jq -r '.module.state' <<< "$VAR_MODULEINFO")
+MODULE_STATE=$(jq --arg module_id $MODULE_ID -r '.workspace.modules[] | select(.id == "$module_id") | .' "$WORKSPACE_FILE")
 if [[ ! "$MODULE_STATE" =~ ^(enabled|disabled|removed)$ ]]; then
   log ERROR "[X] Invalid service module state: '$MODULE_STATE'. Must be one of: enabled, disabled, removed."
   exit 1
 fi
 
-MODULE_CONFIG=$(jq -r '.module.config' <<< "$VAR_MODULEINFO")
-if [[ -z "$MODULE_CONFIG" ]]; then
-  log ERROR "[X] MODULE_CONFIG is null or missing"
-  exit 1
-fi
 
-MODULE_DEPLOY=$(jq -r '.module.deploy' <<< "$VAR_MODULEINFO")
-if [[ -z "$MODULE_DEPLOY" ]]; then
-  log ERROR "[X] MODULE_DEPLOY is null or missing"
-  exit 1
-fi
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #===============================================================================
 # SERVICE
@@ -152,9 +170,6 @@ create_environment_files() {
   # Extract matching variables
   log INFO "[*] Creating variable file $VAR_PATH_DEPLOY/variables.env"
   mapfile -t var_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy[$env].variables[] | "\(.key) \(.value)"' "$SERVICE_FILE")
-
-  # Clear file before writing
-  > "$VAR_PATH_DEPLOY/variables.env"
 
   # Loop over each variable entry
   for line in "${var_lines[@]}"; do
