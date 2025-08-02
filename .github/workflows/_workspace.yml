@@ -251,7 +251,6 @@ jobs:
       # Setup Bitwarden CLI
       - name: Setup Bitwarden CLI
         uses: ./.github/actions/get-bitwarden
-        if: matrix.id != ''
         with:
           bitwarden_token: ${{ secrets.BITWARDEN_TOKEN }}
 
