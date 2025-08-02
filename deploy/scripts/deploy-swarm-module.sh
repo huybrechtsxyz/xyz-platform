@@ -167,24 +167,25 @@ create_environment_files() {
   generate_env_file "VAR_" "$VAR_PATH_DEPLOY/variables.env"
 
   # Extract matching secrets
-  mapfile -t secret_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy[$env].secrets[] | "\(.key) \(.reference)"' "$SERVICE_FILE")
+  mapfile -t secret_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy[$env].secrets[] | "\(.key) \(.source) \(.id)"' "$SERVICE_FILE")
 
   # Loop over each secret entry
-  for line in "${secret_lines[@]}"; do
+  for line in "${var_lines[@]}"; do
     key=$(awk '{print $1}' <<< "$line")
-    reference=$(awk '{print $2}' <<< "$line")
+    source=$(awk '{print $2}' <<< "$line")
+    id=$(awk '{print $3}' <<< "$line")
 
     # Fetch the secret value using Bitwarden CLI
-    value=$(bws secret get "$reference" --raw)
+    data=$(bws secret get "$id" --output json)
+    value=$data.value
 
-    # Export as environment variable
+    # Export it as variable
     echo "$key=$value"
     export "SECRET_${key}=$value"
-
     echo "Exported SECRET_${key}"
   done
 
-  # Generate the secret file
+  # Generate secret file
   generate_env_file "SECRET_" "./deploy/secrets.env"
 }
 
