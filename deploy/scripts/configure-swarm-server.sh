@@ -45,7 +45,7 @@ create_environment_files() {
   unset "$VAR_MATRIX"
   
   # Add the serverpaths to the workspace file
-  WORKSPACE_FILE=$(get_workspace_file "./deploy/workspaces" "$VAR_WORKSPACE")
+  WORKSPACE_FILE=$(get_workspace_file "./workspaces" "$VAR_WORKSPACE")
   create_workspace_serverpaths "$WORKSPACE_FILE" > "./deploy/workspace.json"
   cp -f "./deploy/workspace.json" "$WORKSPACE_FILE"
   rm -f "./deploy/workspace.json"
@@ -118,7 +118,7 @@ scp -o StrictHostKeyChecking=no \
 
 log INFO "[*] Copying configuration files to remote server...Sources"
 scp -o StrictHostKeyChecking=no \
-  ./deploy/workspaces/*.* \
+  ./workspaces/*.* \
   ./deploy/*.* \
   ./scripts/*.sh \
   root@"$REMOTE_IP":"$PATH_CONFIG"/ || {
