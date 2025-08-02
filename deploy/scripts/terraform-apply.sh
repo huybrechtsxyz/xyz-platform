@@ -21,7 +21,7 @@ else
 fi
 
 log INFO "[*] ...Generating ${WORKSPACE}.tfvars file"
-WORKSPACE_FILE="$SCRIPT_DIR/workspaces/${WORKSPACE}.ws.json"
+WORKSPACE_FILE="$SCRIPT_DIR/../../workspaces/${WORKSPACE}.ws.json"
 OUTPUT_FILE="$SCRIPT_DIR/../terraform/workspace.tfvars"
 
 # Validate the workspace definition
