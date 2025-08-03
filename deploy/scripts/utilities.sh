@@ -576,33 +576,41 @@ get_module_file() {
 }
 
 # Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
-create_workspace_serverpaths(){
+create_workspace_serverpaths() {
   local workspace_file="$1"
 
+  if [[ ! -f "$workspace_file" ]]; then
+    echo "[X] Workspace file not found: $workspace_file" >&2
+    return 1
+  fi
+
   jq '
-  .workspace.servers |= map(
-    if (.mountpoint // "") == "" then
-      error("[X] Missing or empty mountpoint for server: \(.id)")
-    else
-      . + {
-        paths: (
-          .mounts
-          | map(
-              .type as $type
-              | .disk as $disk
-              | {
-                  type: $type,
-                  path: (
-                    (.mountpoint | gsub("\\$\\{disk\\}"; ($disk|tostring)))
-                    + ((.workspace.paths[] | select(.type == $type) | .path) // $type)
-                  ),
-                  volume: ((.workspace.paths[] | select(.type == $type) | .volume) // "local")
-                }
-            )
-        )
-      }
-    end
-  )
+    .workspace.paths as $workspace_paths |
+    .workspace.servers |= map(
+      if (.mountpoint // "") == "" then
+        error("[X] Missing or empty mountpoint for server: \(.id)")
+      else
+        . + {
+          paths: (
+            .mounts
+            | map(
+                .type as $type
+                | .disk as $disk
+                | {
+                    type: $type,
+                    path: (
+                      (.mountpoint | gsub("\\$\\{disk\\}"; ($disk|tostring)))
+                      + (($workspace_paths[] | select(.type == $type) | .path) // $type)
+                    ),
+                    volume: (
+                      ($workspace_paths[] | select(.type == $type) | .volume) // "local"
+                    )
+                  }
+              )
+          )
+        }
+      end
+    )
   ' "$workspace_file"
 }
 
