@@ -580,7 +580,10 @@ create_workspace_serverpaths(){
   local workspace_file="$1"
 
   jq --argjson workspace "$(jq '.' "$workspace_file")" '
-    .workspace.servers |= map(
+  .workspace.servers |= map(
+    if (.mountpoint // "") == "" then
+      error("[X] Missing or empty mountpoint for server: \(.id)")
+    else
       . + {
         paths: (
           .mounts
@@ -590,18 +593,16 @@ create_workspace_serverpaths(){
               | {
                   type: $type,
                   path: (
-                    # Replace ${disk} placeholder in mountpoint with the disk number
-                    (.mountpoint // "") 
-                    | gsub("\\$\\{disk\\}"; ($disk|tostring))
-                    # Append the path from workspace.paths for this type, fallback to just $type if missing
-                    + ("/" + (($workspace.workspace.paths[] | select(.type == $type) | .path) // $type))
+                    (.mountpoint | gsub("\\$\\{disk\\}"; ($disk|tostring)))
+                    + ((($workspace.workspace.paths[] | select(.type == $type) | .path) // $type))
                   ),
                   volume: ($workspace.workspace.paths[] | select(.type == $type) | .volume // "local")
                 }
             )
         )
       }
-    )
+    end
+  )
   ' "$workspace_file"
 }
 

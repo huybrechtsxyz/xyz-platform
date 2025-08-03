@@ -525,6 +525,9 @@ main() {
   log INFO "[*] Remote server cleanup..."
   # PATH_TEMP PATH_CONFIG PATH_DEPLOY
   safe_rm_rf /tmp/app
+  safe_rm_rf /tmp/app/.deploy
+  safe_rm_rf /tmp/app/.config
+  safe_rm_rf /tmp/app/.docs
 
   log INFO "[+] Configuring Swarm Node: $HOSTNAME...DONE"
 }
