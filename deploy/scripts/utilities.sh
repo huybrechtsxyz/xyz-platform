@@ -52,29 +52,29 @@ safe_rm_rf() {
   local path="$1"
 
   if [[ -z "$path" || "$path" == "/" ]]; then
-    log WARN "[!] ... Skipped unsafe or empty path: '$path'"
-    return
+    log WARN "[!] Skipped unsafe or empty path: '$path'"
+    return 1
   fi
 
-  # Resolve real path to protect against symlinks to /
   local real_path
-  real_path=$(realpath -m "$path")  # -m handles non-existent paths
+  real_path=$(realpath -m "$path")
 
   if [[ "$real_path" == "/" ]]; then
-    log ERROR "[X] ... Refusing to remove root directory"
-    return
+    log ERROR "[X] Refusing to remove root directory"
+    return 1
   fi
 
   if [[ -f "$real_path" ]]; then
-    log INFO "[*] ... Removing file: $real_path"
+    log INFO "[*] Removing file: $real_path"
     rm -f "$real_path"
   elif [[ -d "$real_path" ]]; then
-    log INFO "[*] ... Removing directory contents: $real_path"
+    log INFO "[*] Removing directory contents: $real_path"
     shopt -s nullglob dotglob
     rm -rf "$real_path"/*
     shopt -u nullglob dotglob
   else
-    log WARN "[!] ... Skipped non-existent path: $real_path"
+    log WARN "[!] Skipped non-existent path: $real_path"
+    return 1
   fi
 }
 

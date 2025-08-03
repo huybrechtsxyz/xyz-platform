@@ -478,7 +478,7 @@ main() {
   
   echo "[*] Cleaning up swarm cluster..."
   # : "${PATH_TEMP:="/tmp/app"}"
-  safe_rm_rf /tmp/app/*
+  safe_rm_rf /tmp/app
   echo "[+] Remote server initialization completed."
 }
 
