@@ -24,7 +24,7 @@ if [[ ! -d "$VAR_PATH_TEMP" ]]; then
 fi
 
 #===============================================================================
-# MODULE
+# MODULE AND SERVICE
 #===============================================================================
 
 # Get the module id
@@ -47,66 +47,8 @@ if [[ -z "$MODULE_DEPLOY" ]]; then
 fi
 
 #===============================================================================
-# WORKSPACE
-#===============================================================================
-
-# Get the workspace file and validate it
-WORKSPACE_FILE=$(get_workspace_file "./workspaces" "$VAR_WORKSPACE") || exit 1
-log INFO "[*] Getting workspace file: $WORKSPACE_FILE"
-log INFO "[*] Validating workspace file: $WORKSPACE_FILE"
-validate_workspace "./deploy/scripts" "$WORKSPACE_FILE"
-
-# Get the manager-id from the workspace
-MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
-log INFO "[*] Getting manager label: $MANAGER_ID"
-
-# Get the REMOTE IP for the MANAGER
-REMOTE_IP=$(echo "$VAR_TERRAFORM" | \
-  jq -r \
-     --arg label "$MANAGER_ID" \
-     '.include[] | select(.label == $label) | .ip') || exit 1
-log INFO "[*] Getting management IP for server: $REMOTE_IP"
-if [[ ! "$REMOTE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  log ERROR "[X] Invalid IP address format: $REMOTE_IP"
-  exit 1
-fi
-
-# Terraform file is already on the server
-# We deploy it to make it easier for module deployment
-# This file is not kept !
-echo "$VAR_TERRAFORM" > "./deploy/terraform.json"
-unset VAR_TERRAFORM
-
-# Get the module state
-MODULE_STATE=$(jq --arg module_id $MODULE_ID -r '.workspace.modules[] | select(.id == "$module_id") | .' "$WORKSPACE_FILE")
-if [[ ! "$MODULE_STATE" =~ ^(enabled|disabled|removed)$ ]]; then
-  log ERROR "[X] Invalid service module state: '$MODULE_STATE'. Must be one of: enabled, disabled, removed."
-  exit 1
-fi
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#===============================================================================
 # SERVICE
 #===============================================================================
-
 # Get the service path
 SERVICE_PATH="./services/$MODULE_ID"
 
@@ -140,6 +82,54 @@ echo "$VAR_MODULEINFO" > "$MODULE_FILE"
 log INFO "[*] Validating module file: $MODULE_FILE"
 validate_module "./deploy/scripts" "$MODULE_FILE"
 unset VAR_MODULEINFO
+
+#===============================================================================
+# WORKSPACE
+#===============================================================================
+
+# Get the workspace file and validate it
+WORKSPACE_FILE=$(get_workspace_file "./workspaces" "$VAR_WORKSPACE") || exit 1
+log INFO "[*] Getting workspace file: $WORKSPACE_FILE"
+log INFO "[*] Validating workspace file: $WORKSPACE_FILE"
+validate_workspace "./deploy/scripts" "$WORKSPACE_FILE"
+
+# Get the manager-id from the workspace
+MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
+log INFO "[*] Getting manager label: $MANAGER_ID"
+
+# Get the REMOTE IP for the MANAGER
+REMOTE_IP=$(echo "$VAR_TERRAFORM" | \
+  jq -r \
+     --arg label "$MANAGER_ID" \
+     '.include[] | select(.label == $label) | .ip') || exit 1
+log INFO "[*] Getting management IP for server: $REMOTE_IP"
+if [[ ! "$REMOTE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  log ERROR "[X] Invalid IP address format: $REMOTE_IP"
+  exit 1
+fi
+
+# Terraform file is already on the server
+# We deploy it to make it easier for module deployment
+# This file is not kept !
+echo "$VAR_TERRAFORM" > "./deploy/terraform.json"
+unset VAR_TERRAFORM
+
+# Get the module state
+MODULE_DATA=$(jq --arg module_id "$MODULE_ID" -r '.workspace.modules[] | select(.id == $module_id)' "$WORKSPACE_FILE")
+if [[ -z "$MODULE_DATA" ]]; then
+  log ERROR "[X] Module '$MODULE_ID' not found in workspace file."
+  exit 1
+fi
+
+MODULE_ENV=$(echo "$MODULE_DATA" | jq -r '.environment')
+MODULE_PRIO=$(echo "$MODULE_DATA" | jq -r '.priority')
+MODULE_STATE=$(echo "$MODULE_DATA" | jq -r '.state')
+
+# Validate module state
+if [[ ! "$MODULE_STATE" =~ ^(enabled|disabled|removed)$ ]]; then
+  log ERROR "[X] Invalid service module state: '$MODULE_STATE'. Must be one of: enabled, disabled, removed."
+  exit 1
+fi
 
 #===============================================================================
 # DEPLOYMENT PATHS

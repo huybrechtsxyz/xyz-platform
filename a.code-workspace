@@ -14,6 +14,6 @@
       "**/bin": true,
       "**/obj": true
     },
-    "powershell.cwd": "huybrechtsxyz"
+    "makefile.configureOnOpen": false
   }
 }
