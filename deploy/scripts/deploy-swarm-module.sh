@@ -158,7 +158,7 @@ create_environment_files() {
   # Extract matching variables
   log INFO "[*] Creating variable file $VAR_PATH_DEPLOY/variables.env"
   mapfile -t var_lines < <(
-  jq --arg ws "$VAR_WORKSPACE" --arg env "$VAR_ENVIRONMENT" -r '
+  jq --arg ws "$VAR_WORKSPACE" --arg env "$MODULE_ENV" -r '
       .service.deploy[]
       | select(.workspace == $ws and .environment == $env)
       | .variables[]?
@@ -179,7 +179,7 @@ create_environment_files() {
   # Extract matching secrets
   log INFO "[*] Creating secret file ./deploy/secrets.env"
   mapfile -t secret_lines < <(
-  jq --arg ws "$VAR_WORKSPACE" --arg env "$VAR_ENVIRONMENT" -r '
+  jq --arg ws "$VAR_WORKSPACE" --arg env "$MODULE_ENV" -r '
       .service.deploy[]
       | select(.workspace == $ws and .environment == $env)
       | .secrets[]?
