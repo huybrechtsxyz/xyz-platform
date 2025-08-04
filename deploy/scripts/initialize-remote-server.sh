@@ -191,7 +191,7 @@ mount_disks() {
   done
 
   # Getting workspace disks
-  local disk_count=$(jq -r --arg id "$server_id" '.servers[] | select(.id == $id) | .disks | length' "$WORKSPACE_FILE")
+  local disk_count=$(jq -r --arg id "$server_id" '.workspace.servers[] | select(.id == $id) | .disks | length' "$WORKSPACE_FILE")
   log INFO "[*] ... Found $disk_count disks for $HOSTNAME (including OS disk)"
   if (( ${#disk_names[@]} < disk_count )); then
     log ERROR "[!] Only found ${#disk_names[@]} disks but expected $disk_count"
@@ -199,7 +199,7 @@ mount_disks() {
   fi
 
   # Get mouting template for server
-  local mount_template=$(jq -r --arg id "$server_id" '.servers[] | select(.id == $id) | .mountpoint' "$WORKSPACE_FILE")
+  local mount_template=$(jq -r --arg id "$server_id" '.workspace.servers[] | select(.id == $id) | .mountpoint' "$WORKSPACE_FILE")
 
   # Loop all disks found
   log INFO "[*] Looping over all disks"
@@ -208,7 +208,7 @@ mount_disks() {
 
     local disk="/dev/${disk_names[$i]}"
     local label=$(jq -r --arg id "$server_id" --argjson i "$i" \
-      '.servers[] | select(.id == $id) | .disks[$i].label' "$WORKSPACE_FILE")
+      '.workspace.servers[] | select(.id == $id) | .disks[$i].label' "$WORKSPACE_FILE")
     local part=""
     local fs_type=""
     local current_label=""
@@ -244,7 +244,7 @@ mount_disks() {
 
     # Get expected disk size from workspace metadata (in GB)
     local expected_size_gb=$(jq -r --arg id "$server_id" --argjson i "$i" \
-      '.servers[] | select(.id == $id) | .disks[$i].size' "$WORKSPACE_FILE")
+      '.workspace.servers[] | select(.id == $id) | .disks[$i].size' "$WORKSPACE_FILE")
     
     # Get actual disk size in bytes and convert to GB (rounding down)
     local actual_size_bytes=$(lsblk -bn -o SIZE -d "$disk")
@@ -478,7 +478,7 @@ main() {
   
   echo "[*] Cleaning up swarm cluster..."
   # : "${PATH_TEMP:="/tmp/app"}"
-  safe_rm_rf /tmp/app/*
+  safe_rm_rf /tmp/app
   echo "[+] Remote server initialization completed."
 }
 

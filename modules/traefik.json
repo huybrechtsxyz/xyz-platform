@@ -5,7 +5,6 @@
     "repository": "huybrechtsxyz/xyz-traefik",
     "reference": "main",
     "config": "deploy/service.json",
-    "deploy": "deploy",
-    "state": "enabled"
+    "deploy": "deploy"
   }
 }

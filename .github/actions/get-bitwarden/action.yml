@@ -23,4 +23,4 @@ runs:
         BWS_ACCESS_TOKEN: ${{ inputs.bitwarden_token }}
       run: |
         export BWS_ACCESS_TOKEN=$BWS_ACCESS_TOKEN
-        bws config profile default --access-token "$BWS_ACCESS_TOKEN"
+        bws run -- echo "Testing deployment of Bitwarden Secrets Manager"

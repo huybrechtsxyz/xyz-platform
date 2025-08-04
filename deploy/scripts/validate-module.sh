@@ -51,23 +51,17 @@ check_top_keys() {
 }
 
 check_module_structure() {
-  log INFO "[*] ...... Validating service block..."
+  log INFO "[*] ...... Validating module block..."
 
-  local required_service_keys=("id" "repository" "reference" "config" "deploy" "state")
-  for key in "${required_service_keys[@]}"; do
-    if ! jq -e ".service.$key" "$MODULE_FILE" > /dev/null; then
-      log ERROR "[X] Missing required service key: $key"
+  local required_module_keys=("id" "repository" "reference" "config" "deploy" "state")
+  for key in "${required_module_keys[@]}"; do
+    if ! jq -e ".module.$key" "$MODULE_FILE" > /dev/null; then
+      log ERROR "[X] Missing required module key: $key"
       exit 1
     fi
   done
 
-  state=$(jq -r '.service.state' "$MODULE_FILE")
-  if [[ ! "$state" =~ ^(enabled|disabled|removed)$ ]]; then
-    log ERROR "[X] Invalid state value: '$state'. Must be one of: enabled, disabled, removed."
-    exit 1
-  fi
-
-  log INFO "[+] ...... Service definition is valid: id=$(jq -r '.service.id' "$MODULE_FILE"), state=$state"
+  log INFO "[+] ...... Module definition is valid: id=$(jq -r '.module.id' "$MODULE_FILE"), state=$state"
 }
 
 main() {

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["api-version", "module"],
+  "properties": {
+    "api-version": {
+      "type": "number",
+      "const": 1.0
+    },
+    "module": {
+      "type": "object",
+      "required": ["id", "repository", "reference", "config", "deploy"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^[a-z0-9_.-]+/[a-z0-9_.-]+$"
+        },
+        "reference": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_.-]+$"
+        },
+        "config": {
+          "type": "string",
+          "pattern": "^([a-zA-Z0-9._/-]+\\.json)$"
+        },
+        "deploy": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

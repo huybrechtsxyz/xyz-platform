@@ -7,9 +7,6 @@ on:
       workspace:
         required: true
         type: string
-      environment:
-        required: true
-        type: string
       modules:
         required: true
         type: string
@@ -26,10 +23,9 @@ jobs:
   setup:
     name: Setup Deployment
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     outputs:
       terraform: ${{ steps.terraform.outputs.tfoutput }}
-      selection: ${{ steps.services.outputs.selection }}
+      selection: ${{ steps.modules.outputs.selection }}
     steps:
       # Check out the platform repo
       - name: Check Out
@@ -68,49 +64,18 @@ jobs:
       # The script reads `registry/*.json`, each containing a `.service.id` field, and constructs a GitHub Actions matrix output including only the matched services.
       # Input: inputs.services: "traefik,site"
       # Outputs: selection: "{ "include": [ { "id": "traefik" }, { "id": "site" } ] }"
-      - name: Select Services
-        id: services
+      - name: Select Modules
+        id: modules
         run: |
-          # inputs.modules is a comma-separated list or JSON array of service IDs
-          MODULES_JSON=$(jq -R '[split(",")[]]' <<< "${{ inputs.modules }}")
-          echo "Filtering for services: $MODULES_JSON"
-          # Check for an empty module list
-          shopt -s nullglob
-          FILES=(modules/*.json)
-          if [ ${#FILES[@]} -eq 0 ]; then
-            echo "No JSON files found in modules/"
-            echo 'selection={"include": [{ "id": "", "name": "" }]}' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # Loop modules
-          FIRST=true
-          MATRIX='{ "include": ['
-          for file in "${FILES[@]}"; do
-            ID=$(jq -r '.module.id' "$file")
-            # Include everything if MODULES=* or match against MODULES_JSON
-            if [[ "${{ inputs.modules }}" == "*" ]] || jq -e --arg id "$ID" 'index($id)' <<< "$MODULES_JSON" >/dev/null; then
-              MODULE_DATA=$(jq -c '.module' "$file")
-              # Optional: enrich or customize structure here
-              ENTRY=$(jq -n --argjson svc "$MODULE_DATA" '{ id: $svc.id }')
-              if [ "$FIRST" = true ]; then
-                MATRIX+="$ENTRY"
-                FIRST=false
-              else
-                MATRIX+=",$ENTRY"
-              fi
-            fi
-          done
-          MATRIX+='] }'
-          # Prepare output
-          COMPACT_MATRIX=$(jq -c '.' <<< "$MATRIX")
-          echo "Generated matrix: $COMPACT_MATRIX"
-          echo "selection=$COMPACT_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "[*] Selecting modules ${{ inputs.modules }} ..."
+          chmod +x ./deploy/scripts/select-modules.sh
+          ./deploy/scripts/select-modules.sh "${{ inputs.modules }}"
+          echo "[*] Selecting modules ${{ inputs.modules }} ...DONE"
 
   deploy:
     name: Deploy Module
     needs: [setup]
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     if: ${{ always() && !contains(needs.*.result, 'failure') }}
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.selection) }}
@@ -159,7 +124,7 @@ jobs:
         id: load
         if: matrix.id != ''
         run: |
-          MODULE_FILE="modules/${{ matrix.id }}.json"
+          MODULE_FILE="modules/${{ matrix.file }}.json"
           echo "Reading $MODULE_FILE"
           MODULE_DATA=$(jq -c . "$MODULE_FILE")
           echo "Reading Repository and Ref"
@@ -193,10 +158,10 @@ jobs:
         if: matrix.id != ''
         env:
           VAR_WORKSPACE: ${{ inputs.workspace }}
-          VAR_ENVIRONMENT: ${{ inputs.environment }}
           VAR_MODULEINFO: ${{ steps.load.outputs.moduleinfo }}
           VAR_TERRAFORM: ${{ needs.setup.outputs.terraform }}
           VAR_PATH_TEMP: ${{ env.VAR_PATH_TEMP }}
+          BWS_ACCESS_TOKEN: ${{ secrets.BITWARDEN_TOKEN }}
         run: |
           echo "[*] Deploying module ${{ matrix.id }} ..."
           chmod +x ./deploy/scripts/deploy-swarm-module.sh

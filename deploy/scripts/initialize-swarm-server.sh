@@ -48,7 +48,7 @@ log INFO "[*] Copying initialization scripts and cluster config to remote server
 scp -o StrictHostKeyChecking=no \
   ./deploy/*.* \
   ./deploy/scripts/* \
-  ./deploy/workspaces/* \
+  ./workspaces/* \
   root@"$VAR_REMOTE_IP":"$PATH_DEPLOY"/ || {
     log ERROR "[X] Failed to transfer initialization scripts to remote server"
     exit 1

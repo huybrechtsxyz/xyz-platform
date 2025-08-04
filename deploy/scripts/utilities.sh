@@ -52,29 +52,29 @@ safe_rm_rf() {
   local path="$1"
 
   if [[ -z "$path" || "$path" == "/" ]]; then
-    log WARN "[!] ... Skipped unsafe or empty path: '$path'"
-    return
+    log WARN "[!] Skipped unsafe or empty path: '$path'"
+    return 1
   fi
 
-  # Resolve real path to protect against symlinks to /
   local real_path
-  real_path=$(realpath -m "$path")  # -m handles non-existent paths
+  real_path=$(realpath -m "$path")
 
   if [[ "$real_path" == "/" ]]; then
-    log ERROR "[X] ... Refusing to remove root directory"
-    return
+    log ERROR "[X] Refusing to remove root directory"
+    return 1
   fi
 
   if [[ -f "$real_path" ]]; then
-    log INFO "[*] ... Removing file: $real_path"
+    log INFO "[*] Removing file: $real_path"
     rm -f "$real_path"
   elif [[ -d "$real_path" ]]; then
-    log INFO "[*] ... Removing directory contents: $real_path"
+    log INFO "[*] Removing directory contents: $real_path"
     shopt -s nullglob dotglob
     rm -rf "$real_path"/*
     shopt -u nullglob dotglob
   else
-    log WARN "[!] ... Skipped non-existent path: $real_path"
+    log WARN "[!] Skipped non-existent path: $real_path"
+    return 0
   fi
 }
 
@@ -467,7 +467,7 @@ get_server_id() {
     return 1
   fi
 
-  local SERVER_ID=$(jq -r '.servers[].id' "$WORKSPACE_FILE" | while read -r id; do
+  local SERVER_ID=$(jq -r '.workspace.servers[].id' "$WORKSPACE_FILE" | while read -r id; do
     if [[ "$HOSTNAME" == *"$id"* ]]; then
       echo "$id"
       break
@@ -501,7 +501,7 @@ get_manager_id() {
     return 1
   fi
 
-  local MAIN_MANAGER_ID=$(jq -r '.servers[0].id' "$WORKSPACE_FILE")
+  local MAIN_MANAGER_ID=$(jq -r '.workspace.servers[0].id' "$WORKSPACE_FILE")
 
   if [[ -z "$MAIN_MANAGER_ID" || "$MAIN_MANAGER_ID" == "null" ]]; then
     log ERROR "[!] No main manager ID found in workspace file."
@@ -576,7 +576,7 @@ get_module_file() {
 }
 
 # Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
-create_workspace_serverpaths(){
+create_workspace_serverpaths1(){
   local workspace_file="$1"
 
   jq --argjson workspace "$(jq '.' "$workspace_file")" '
@@ -591,14 +591,91 @@ create_workspace_serverpaths(){
                   type: $type,
                   path: (
                     # Replace ${disk} placeholder in mountpoint with the disk number
-                    (.mountpoint // "") 
-                    | gsub("\\$\\{disk\\}"; ($disk|tostring))
+                    (.mountpoint // "") | gsub("\\$\\{disk\\}"; ($disk|tostring))
                     # Append the path from workspace.paths for this type, fallback to just $type if missing
-                    + ("/" + (($workspace.paths[] | select(.type == $type) | .path) // $type))
+                    + ("" + (($workspace.paths[] | select(.type == $type) | .path) // $type))
                   ),
                   volume: ($workspace.paths[] | select(.type == $type) | .volume // "local")
                 }
             )
+        )
+      }
+    )
+  ' "$workspace_file"
+}
+
+# Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
+create_workspace_serverpaths2() {
+  local workspace_file="$1"
+
+  if [[ ! -f "$workspace_file" ]]; then
+    echo "[X] Workspace file not found: $workspace_file" >&2
+    return 1
+  fi
+
+  jq '
+    .workspace.paths as $workspace_paths |
+    .workspace.servers |= map(
+      if (.mountpoint // "") == "" then
+        error("[X] Missing or empty mountpoint for server: \(.id)")
+      else
+        . + {
+          paths: (
+            .mounts
+            | map(
+                .type as $type
+                | .disk as $disk
+                | {
+                    type: $type,
+                    path: (
+                      (.mountpoint | gsub("\\$\\{disk\\}"; ($disk|tostring)))
+                      + (($workspace_paths[] | select(.type == $type) | .path) // $type)
+                    ),
+                    volume: (
+                      ($workspace_paths[] | select(.type == $type) | .volume) // "local"
+                    )
+                  }
+              )
+          )
+        }
+      end
+    )
+  ' "$workspace_file"
+}
+
+# Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
+create_workspace_serverpaths() {
+  local workspace_file="$1"
+
+  if [[ ! -f "$workspace_file" ]]; then
+    echo "[X] Workspace file not found: $workspace_file" >&2
+    return 1
+  fi
+
+  # JQ statement to generate server paths and add them to the original workspace
+  jq '
+    # Store paths for reference
+    .workspace.paths as $paths |
+    
+    # Update the workspace by adding generated paths to each server
+    .workspace.servers |= map(
+      . as $server |
+      . + {
+        paths: (
+          # For each mount in the server
+          .mounts | map(
+            . as $mount |
+            # Find the corresponding path configuration
+            ($paths[] | select(.type == $mount.type)) as $path |
+            # Generate the final path by replacing ${disk} with actual disk number
+            ($server.mountpoint | gsub("\\$\\{disk\\}"; ($mount.disk | tostring))) as $final_mountpoint |
+            {
+              name: ($path.type + $path.path),
+              type: $path.type,
+              volume: $path.volume,
+              path: ($final_mountpoint + ($path.path // $path.type))
+            }
+          )
         )
       }
     )
@@ -618,9 +695,9 @@ create_service_serverpaths() {
         $service.service + {
           paths: (
             [
-              $workspace.servers[] as $server |
+              $workspace.workspace.servers[] as $server |
               $service.service.mounts[] as $smount |
-              ($workspace.paths[] | select(.type == $smount.type)) as $wpath |
+              ($workspace.workspace.paths[] | select(.type == $smount.type)) as $wpath |
               {
                 serverid: $server.id,
                 serverrole: $server.role,

@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["api-version", "workspace"],
+  "properties": {
+    "api-version": {
+      "type": "number",
+      "const": 1.0
+    },
+    "workspace": {
+      "type": "object",
+      "required": ["deploy", "roles", "paths", "variables", "secrets", "servers", "modules"],
+      "properties": {
+        "deploy": {
+          "type": "object",
+          "required": ["id", "name", "version", "description"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"
+            },
+            "description": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "roles": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9_-]+$": {
+              "type": "object",
+              "required": ["cpu_type", "cpu_cores", "ram_mb", "unit_cost"],
+              "properties": {
+                "cpu_type": { "type": "string" },
+                "cpu_cores": { "type": "integer", "minimum": 1 },
+                "ram_mb": {
+                  "type": "integer",
+                  "minimum": 1024,
+                  "multipleOf": 1024
+                },
+                "unit_cost": { "type": "number" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "path", "volume"],
+            "properties": {
+              "type": { "type": "string" },
+              "path": { "type": "string", "pattern": "^/.*" },
+              "volume": {
+                "type": "string",
+                "enum": ["replicated", "local", "distributed"]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "value"],
+            "properties": {
+              "key": { "type": "string" },
+              "value": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "source", "id"],
+            "properties": {
+              "key": { "type": "string" },
+              "source": { "type": "string", "enum": ["bitwarden"] },
+              "id": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F-]{36}$"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "role", "labels", "disks", "mountpoint", "mounts"],
+            "properties": {
+              "id": { "type": "string" },
+              "role": { "type": "string" },
+              "labels": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "disks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["size", "label"],
+                  "properties": {
+                    "size": { "type": "integer", "minimum": 1 },
+                    "label": { "type": "string" }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "mountpoint": {
+                "type": "string",
+                "pattern": "^/mnt/data\\$\\{disk}/[a-zA-Z0-9_-]+$"
+              },
+              "mounts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["type", "disk"],
+                  "properties": {
+                    "type": { "type": "string" },
+                    "disk": { "type": "integer", "minimum": 1 }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "environment", "priority", "state"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9_-]+$"
+              },
+              "environment": { "type": "string" },
+              "priority": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "state": {
+                "type": "string",
+                "enum": ["enabled", "disabled", "removed"]
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

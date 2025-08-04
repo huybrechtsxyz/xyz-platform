@@ -11,7 +11,6 @@ set -euo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
 
 : "${VAR_WORKSPACE:?Missing WORKSPACE env var}"
-: "${VAR_ENVIRONMENT:?Missing ENVIRONMENT env var}"
 : "${VAR_MODULEINFO:?Missing VAR_MODULEINFO env var}"
 : "${VAR_TERRAFORM:?Missing TERRAFORM env var}"
 : "${VAR_PATH_TEMP:?Missing PATH_TEMP env var}"
@@ -25,38 +24,7 @@ if [[ ! -d "$VAR_PATH_TEMP" ]]; then
 fi
 
 #===============================================================================
-# WORKSPACE
-#===============================================================================
-
-# Get the workspace file and validate it
-WORKSPACE_FILE=$(get_workspace_file "./deploy/workspaces" "$VAR_WORKSPACE") || exit 1
-log INFO "[*] Getting workspace file: $WORKSPACE_FILE"
-log INFO "[*] Validating workspace file: $WORKSPACE_FILE"
-validate_workspace "./deploy/scripts" "$WORKSPACE_FILE"
-
-# Get the manager-id from the workspace
-MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
-log INFO "[*] Getting manager label: $MANAGER_ID"
-
-# Get the REMOTE IP for the MANAGER
-REMOTE_IP=$(echo "$VAR_TERRAFORM" | \
-  jq -r \
-     --arg label "$MANAGER_ID" \
-     '.include[] | select(.label == $label) | .ip') || exit 1
-log INFO "[*] Getting management IP for server: $REMOTE_IP"
-if [[ ! "$REMOTE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  log ERROR "[X] Invalid IP address format: $REMOTE_IP"
-  exit 1
-fi
-
-# Terraform file is already on the server
-# We deploy it to make it easier for module deployment
-# This file is not kept !
-echo "$VAR_TERRAFORM" > "./deploy/terraform.json"
-unset VAR_TERRAFORM
-
-#===============================================================================
-# MODULE
+# MODULE AND SERVICE
 #===============================================================================
 
 # Get the module id
@@ -66,14 +34,7 @@ if [[ -z "$MODULE_ID" ]]; then
   exit 1
 fi
 
-# Get the module state
-MODULE_STATE=$(jq -r '.module.state' <<< "$VAR_MODULEINFO")
-if [[ ! "$MODULE_STATE" =~ ^(enabled|disabled|removed)$ ]]; then
-  log ERROR "[X] Invalid service module state: '$MODULE_STATE'. Must be one of: enabled, disabled, removed."
-  exit 1
-fi
-
-MODULE_CONFIG==$(jq -r '.module.config' <<< "$VAR_MODULEINFO")
+MODULE_CONFIG=$(jq -r '.module.config' <<< "$VAR_MODULEINFO")
 if [[ -z "$MODULE_CONFIG" ]]; then
   log ERROR "[X] MODULE_CONFIG is null or missing"
   exit 1
@@ -88,7 +49,6 @@ fi
 #===============================================================================
 # SERVICE
 #===============================================================================
-
 # Get the service path
 SERVICE_PATH="./services/$MODULE_ID"
 
@@ -124,6 +84,54 @@ validate_module "./deploy/scripts" "$MODULE_FILE"
 unset VAR_MODULEINFO
 
 #===============================================================================
+# WORKSPACE
+#===============================================================================
+
+# Get the workspace file and validate it
+WORKSPACE_FILE=$(get_workspace_file "./workspaces" "$VAR_WORKSPACE") || exit 1
+log INFO "[*] Getting workspace file: $WORKSPACE_FILE"
+log INFO "[*] Validating workspace file: $WORKSPACE_FILE"
+validate_workspace "./deploy/scripts" "$WORKSPACE_FILE"
+
+# Get the manager-id from the workspace
+MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
+log INFO "[*] Getting manager label: $MANAGER_ID"
+
+# Get the REMOTE IP for the MANAGER
+REMOTE_IP=$(echo "$VAR_TERRAFORM" | \
+  jq -r \
+     --arg label "$MANAGER_ID" \
+     '.include[] | select(.label == $label) | .ip') || exit 1
+log INFO "[*] Getting management IP for server: $REMOTE_IP"
+if [[ ! "$REMOTE_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  log ERROR "[X] Invalid IP address format: $REMOTE_IP"
+  exit 1
+fi
+
+# Terraform file is already on the server
+# We deploy it to make it easier for module deployment
+# This file is not kept !
+echo "$VAR_TERRAFORM" > "./deploy/terraform.json"
+unset VAR_TERRAFORM
+
+# Get the module state
+MODULE_DATA=$(jq --arg module_id "$MODULE_ID" -r '.workspace.modules[] | select(.id == $module_id)' "$WORKSPACE_FILE")
+if [[ -z "$MODULE_DATA" ]]; then
+  log ERROR "[X] Module '$MODULE_ID' not found in workspace file."
+  exit 1
+fi
+
+MODULE_ENV=$(echo "$MODULE_DATA" | jq -r '.environment')
+MODULE_PRIO=$(echo "$MODULE_DATA" | jq -r '.priority')
+MODULE_STATE=$(echo "$MODULE_DATA" | jq -r '.state')
+
+# Validate module state
+if [[ ! "$MODULE_STATE" =~ ^(enabled|disabled|removed)$ ]]; then
+  log ERROR "[X] Invalid service module state: '$MODULE_STATE'. Must be one of: enabled, disabled, removed."
+  exit 1
+fi
+
+#===============================================================================
 # DEPLOYMENT PATHS
 #===============================================================================
 
@@ -150,42 +158,51 @@ log INFO "[*] Remote deployment path: $VAR_PATH_DEPLOY"
 # |- ./deploy/secrets.env     (SECRET_)
 create_environment_files() {
   # Extract matching variables
-  mapfile -t var_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy.$env.variables[] | "\(.key) \(.value)"' "$SERVICE_FILE")
+  log INFO "[*] Creating variable file $VAR_PATH_DEPLOY/variables.env"
+  mapfile -t var_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy[$env].variables[] | "\(.key) \(.value)"' "$SERVICE_FILE")
 
   # Loop over each variable entry
   for line in "${var_lines[@]}"; do
-    key=$(awk '{print $1}' <<< "$line")
-    value=$(awk '{print $2}' <<< "$line")
-
-    echo "$key=$value"
+    read -r key value <<< "$line"
     export "VAR_${key}=$value"
-
     echo "Exported VAR_${key}"
   done
-
+  
   # Generate variable file
   generate_env_file "VAR_" "$VAR_PATH_DEPLOY/variables.env"
 
   # Extract matching secrets
-  mapfile -t secret_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy.$env.secrets[] | "\(.key) \(.reference)"' "$SERVICE_FILE")
+  log INFO "[*] Creating secret file ./deploy/secrets.env"
+  mapfile -t secret_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy[$env].secrets[] | "\(.key) \(.source) \(.id)"' "$SERVICE_FILE")
 
-  # Loop over each secret entry
-  for line in "${secret_lines[@]}"; do
-    key=$(awk '{print $1}' <<< "$line")
-    reference=$(awk '{print $2}' <<< "$line")
+  export BWS_ACCESS_TOKEN="${BWS_ACCESS_TOKEN:?Missing BWS_ACCESS_TOKEN environment variable}"
 
-    # Fetch the secret value using Bitwarden CLI
-    value=$(bws secret get "$reference" --raw)
+  SECRETS_ENV_FILE="./deploy/secrets.env"
+  > "$SECRETS_ENV_FILE"
 
-    # Export as environment variable
-    echo "$key=$value"
+  for line in "${var_lines[@]}"; do
+    read -r key source id <<< "$line"
+
+    if [[ "$source" != "bitwarden" ]]; then
+      log WARN "[!] Skipping unsupported secret source: $source"
+      continue
+    fi
+
+    data=$(bws secret get "$id" --output json 2>/dev/null || true)
+
+    if [[ -z "$data" ]]; then
+      log ERROR "[!] Failed to fetch secret for $key (id: $id)"
+      continue
+    fi
+
+    value=$(jq -r '.value' <<< "$data")
+    #echo "$key=${value@Q}"
     export "SECRET_${key}=$value"
-
     echo "Exported SECRET_${key}"
   done
 
-  # Generate the secret file
-  generate_env_file "SECRET_" "./deploy/secrets.env"
+  # Generate secret file
+  generate_env_file "SECRET_" "$SECRETS_ENV_FILE"
 }
 
 # Function will lookup all service paths to copy
@@ -223,7 +240,7 @@ copy_service_files() {
   scp -o StrictHostKeyChecking=no \
     ./deploy/*.* \
     ./deploy/scripts/*.* \
-    ./deploy/workspaces/*.* \
+    ./workspaces/*.* \
     root@"$REMOTE_IP":"$VAR_PATH_WORKSPACE"/ || {
       log ERROR "[X] Failed to transfer core deployment scripts to $REMOTE_IP"
       exit 1
@@ -234,7 +251,7 @@ copy_service_files() {
   for item in "${servicepaths[@]}"; do
     local source=$(jq -r '.source' <<< "$item")
     [[ -z "$source" ]] && continue
-    [[ "$source" == "$MODULE_DEPLOY"]] && continue
+    [[ "$source" == "$MODULE_DEPLOY" ]] && continue
     local source_path="$SERVICE_PATH/$source"
     if [[ -d "$source_path" ]]; then
       log INFO "[*] Copying service source path '$source' to $REMOTE_IP..."
@@ -303,11 +320,11 @@ log INFO "[*] Removing service $SERVICE_ID...DONE"
 }
 
 main() {
-  log INFO "[*] Deploying service $SERVICE_ID..."
+  log INFO "[*] Deploying service $MODULE_ID..."
 
   create_environment_files
 
-  case "$SERVICE_STATE" in
+  case "$MODULE_STATE" in
     enabled)
       copy_service_files
       enable_service
@@ -319,11 +336,11 @@ main() {
       remove_service
       ;;
     *)
-      log ERROR "[X] Invalid service state: '$SERVICE_STATE'. Must be one of: enabled, disabled, removed."
+      log ERROR "[X] Invalid service state: '$MODULE_STATE'. Must be one of: enabled, disabled, removed."
       exit 1
       ;;
   esac
-  log INFO "[*] Deploying service $SERVICE_ID...DONE"
+  log INFO "[*] Deploying service $MODULE_ID...DONE"
 }
 
 main

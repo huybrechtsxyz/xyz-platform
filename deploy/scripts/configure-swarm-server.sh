@@ -40,19 +40,63 @@ source "$(dirname "${BASH_SOURCE[0]}")/../../deploy/scripts/utilities.sh"
 # |- ./deploy/secrets.env     (SECRET_)
 # |- ./deploy/terraform.json  (TFOUTPUT)
 create_environment_files() {
-  # Save the TFOUPTUT as terraform.json
+  log INFO "[*] Saving Terraform output to ./deploy/terraform.json"
   echo "$VAR_MATRIX" > "./deploy/terraform.json"
-  unset "$VAR_MATRIX"
-  
-  # Add the serverpaths to the workspace file
-  WORKSPACE_FILE=$(get_workspace_file "./deploy/workspaces" "$VAR_WORKSPACE")
+  unset VAR_MATRIX
+
+  log INFO "[*] Creating workspace server paths"
+  WORKSPACE_FILE=$(get_workspace_file "./workspaces" "$VAR_WORKSPACE")
   create_workspace_serverpaths "$WORKSPACE_FILE" > "./deploy/workspace.json"
   cp -f "./deploy/workspace.json" "$WORKSPACE_FILE"
   rm -f "./deploy/workspace.json"
 
-  # Generate environment and secrets file
+  # Extract workspace variables
+  log INFO "[*] Creating variable file ./deploy/configuration.env"
+  mapfile -t var_lines < <(jq -r '.workspace.variables[] | "\(.key) \(.value)"' "$WORKSPACE_FILE")
+
+  # Clear file before writing
+  > ./deploy/configuration.env
+
+  for line in "${var_lines[@]}"; do
+    read -r key value <<< "$line"
+    #echo "$key=$value"
+    export "VAR_${key}=$value"
+    echo "Exported VAR_${key}"
+  done
+
   generate_env_file "VAR_" "./deploy/configuration.env"
-  generate_env_file "SECRET_" "./deploy/secrets.env"
+
+  # Extract secrets
+  log INFO "[*] Creating secret file ./deploy/secrets.env"
+  mapfile -t var_lines < <(jq -r '.workspace.secrets[] | "\(.key) \(.source) \(.id)"' "$WORKSPACE_FILE")
+
+  export BWS_ACCESS_TOKEN="${BWS_ACCESS_TOKEN:?Missing BWS_ACCESS_TOKEN environment variable}"
+
+  SECRETS_ENV_FILE="./deploy/secrets.env"
+  > "$SECRETS_ENV_FILE"
+
+  for line in "${var_lines[@]}"; do
+    read -r key source id <<< "$line"
+
+    if [[ "$source" != "bitwarden" ]]; then
+      log WARN "[!] Skipping unsupported secret source: $source"
+      continue
+    fi
+
+    data=$(bws secret get "$id" --output json 2>/dev/null || true)
+
+    if [[ -z "$data" ]]; then
+      log ERROR "[!] Failed to fetch secret for $key (id: $id)"
+      continue
+    fi
+
+    value=$(jq -r '.value' <<< "$data")
+    #echo "$key=${value@Q}"
+    export "SECRET_${key}=$value"
+    echo "Exported SECRET_${key}"
+  done
+
+  generate_env_file "SECRET_" "$SECRETS_ENV_FILE"
 }
 
 # Copy configuration files to the remote server by creating necessary directories
@@ -83,7 +127,7 @@ scp -o StrictHostKeyChecking=no \
 
 log INFO "[*] Copying configuration files to remote server...Sources"
 scp -o StrictHostKeyChecking=no \
-  ./deploy/workspaces/*.* \
+  ./workspaces/*.* \
   ./deploy/*.* \
   ./scripts/*.sh \
   root@"$REMOTE_IP":"$PATH_CONFIG"/ || {
@@ -101,8 +145,11 @@ scp -r -o StrictHostKeyChecking=no \
 
 log INFO "[*] Debugging deployment path of remote server..."
 ssh -o StrictHostKeyChecking=no root@$REMOTE_IP << EOF
+  echo "== DEPLOY : $PATH_DEPLOY ================================================="
   ls -la "$PATH_DEPLOY"
+  echo "== CONFIG : $PATH_CONFIG ================================================="
   ls -la "$PATH_CONFIG"
+  echo "== DOCS : $PATH_DOCS ====================================================="
   ls -la "$PATH_DOCS"
 EOF
 

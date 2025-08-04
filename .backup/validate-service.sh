@@ -22,25 +22,25 @@ log() {
   esac
 }
 
-SERVICE_FILE="${1:-}"
-if [[ -z "$SERVICE_FILE" || ! -f "$SERVICE_FILE" ]]; then
-  log ERROR "[X] Missing or invalid registry file"
-  exit 1
-fi
-
-"$WORKSPACE"="${2:-}"
-if [[ -z "$WORKSPACE" ]]; then
-  log ERROR "[X] Missing workspace"
-  exit 1
-fi
-
-"$ENVIRONMENT"="${3:-}"
-if [[ -z "$ENVIRONMENT" ]]; then
-  log ERROR "[X] Missing workspace"
-  exit 1
-fi
-
 main() {
+  SERVICE_FILE="${1:-}"
+  if [[ -z "$SERVICE_FILE" || ! -f "$SERVICE_FILE" ]]; then
+    log ERROR "[X] Missing or invalid registry file"
+    exit 1
+  fi
+
+  WORKSPACE="${2:-}"
+  if [[ -z "$WORKSPACE" ]]; then
+    log ERROR "[X] Missing workspace"
+    exit 1
+  fi
+
+  ENVIRONMENT="${3:-}"
+  if [[ -z "$ENVIRONMENT" ]]; then
+    log ERROR "[X] Missing workspace"
+    exit 1
+  fi
+
   log INFO "[*] ... Validation service definition is valid."
   log INFO "[+] ... Service definition is valid."
 }
