@@ -53,7 +53,7 @@ check_top_keys() {
 check_module_structure() {
   log INFO "[*] ...... Validating module block..."
 
-  local required_module_keys=("id" "repository" "reference" "config" "deploy" "state")
+  local required_module_keys=("id" "repository" "reference" "config" "deploy")
   for key in "${required_module_keys[@]}"; do
     if ! jq -e ".module.$key" "$MODULE_FILE" > /dev/null; then
       log ERROR "[X] Missing required module key: $key"
