@@ -49,18 +49,8 @@ else
   exit 1
 fi
 
-if [[ ! -d "$PATH_MODULE" ]]; then
-  echo "ERROR: Module path $PATH_MODULE does not exist."
-  exit 1
-fi
-
-if [[ ! -d "$PATH_DEPLOY" ]]; then
-  echo "ERROR: Module deployment path $PATH_DEPLOY does not exist."
-  exit 1
-fi
-
 #===============================================================================
-# GET FILES
+# WORKSPACE
 #===============================================================================
 
 # Get the workspace file that was deployed with the calculated paths
@@ -78,6 +68,24 @@ if [[ ! -f "$TERRAFORM_FILE" ]]; then
 fi
 log INFO "[*] Getting terraform file $TERRAFORM_FILE"
 
+# Get the server id
+MANAGER_ID=$(get_server_id "$WORKSPACE_FILE" "$HOSTNAME") || exit 1
+log INFO "[*] Getting workspace server id: $MANAGER_ID"
+
+#===============================================================================
+# MODULE
+#===============================================================================
+
+if [[ ! -d "$PATH_MODULE" ]]; then
+  echo "ERROR: Module path $PATH_MODULE does not exist."
+  exit 1
+fi
+
+if [[ ! -d "$PATH_DEPLOY" ]]; then
+  echo "ERROR: Module deployment path $PATH_DEPLOY does not exist."
+  exit 1
+fi
+
 MODULE_FILE="$PATH_DEPLOY/module.json"
 if [[ ! -f "$MODULE_FILE" ]]; then
   log ERROR "[X] Missing module definition at $MODULE_FILE"
@@ -85,103 +93,30 @@ if [[ ! -f "$MODULE_FILE" ]]; then
 fi
 log INFO "[*] Getting module file $MODULE_FILE"
 
+MODULE_ID=$(jq -r '.module.id' "$MODULE_FILE")
 
+#===============================================================================
+# SERVICE
+#===============================================================================
 
-
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
-
-
-
-
-
-
-
-
-# Get the manager id
-MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
-log INFO "[*] Getting manager label: $MANAGER_ID"
-
-# Get the server id
-SERVER_ID=$(get_server_id "$WORKSPACE_FILE" "$HOSTNAME") || exit 1
-log INFO "[*] Getting workspace server id: $SERVER_ID"
-
-# Check if we are indeed on the first manamagement server
-if [[ "$MANAGER_ID" != "$SERVER_ID" ]]; then
-  log ERROR "[X] Manager Name and Server Name do not match: $MANAGER_ID vs $SERVER_ID"
+SERVICE_FILE="$PATH_DEPLOY/service.json"
+if [[ ! -f "$SERVICE_FILE" ]]; then
+  log ERROR "[X] Missing service definition at $SERVICE_FILE"
   exit 1
 fi
-
-SERVER_NAME=$(get_terraform_data "$TERRAFORM_FILE" "$MANAGER_ID" "name")
-if [[ "$SERVER_NAME" != "$HOSTNAME" ]]; then
-  log ERROR "[X] Server Name and Hostname do not match: $SERVER_NAME vs $HOSTNAME"
-  exit 1
-fi
-
-# Get the server configuration path from the deployed workspace file
-SERVER_CONFIG_PATH=$(jq --arg server "$SERVER_ID" --arg type "CONFIG" -r '
-  .workspace.servers[]
-  | select(.id == $server)
-  | .paths[]?
-  | select(.type == $type and .name == $type)
-  | .path
-  ' "$WORKSPACE_FILE")
-
-if [[ ! -d "$SERVER_CONFIG_PATH" ]]; then
-  echo "ERROR: Server configuration path $SERVER_CONFIG_PATH does not exist."
-  exit 1
-fi
+log INFO "[*] Getting service file $SERVICE_FILE"
 
 log INFO "[*] Installpoint path : $PATH_WORKSPACE"
 log INFO "[*] Module path       : $PATH_MODULE"
 log INFO "[*] Deploy path       : $PATH_DEPLOY"
 log INFO "[*] Running on host   : $HOSTNAME"
 log INFO "[*] Manager ID        : $MANAGER_ID"
-log INFO "[*] Configuration path: $SERVER_CONFIG_PATH"
-
-#===============================================================================
-# WORKSPACE
-#===============================================================================
-
-# Get the workspace file that was on the server
-WORKSPACE_FILE=$(get_workspace_file "$SERVER_CONFIG_PATH" "$WORKSPACE")
-if [[ ! -f "$WORKSPACE_FILE" ]]; then
-  log ERROR "[X] Missing workspace definition at $WORKSPACE_FILE"
-  exit 1
-fi
-log INFO "[*] Getting workspace $WORKSPACE file: $WORKSPACE_FILE"
-
-#===============================================================================
-# MODULE
-#===============================================================================
-
-MODULE_FILE="$PATH_DEPLOY/module.json"
-if [[ ! -f "$MODULE_FILE" ]]; then
-  echo "ERROR: Module deployment file $MODULE_FILE does not exist."
-  exit 1
-fi
-
-MODULE_ID=$(jq -r '.module.id' "$MODULE_FILE")
-MODULE_CONFIG=$(jq -r '.module.config' "$MODULE_FILE")
-
-#===============================================================================
-# SERVICE
-#===============================================================================
-
-SERVICE_FILE="$PATH_MODULE/$MODULE_CONFIG"
-if [[ ! -f "$SERVICE_FILE" ]]; then
-  echo "ERROR: Service file $SERVICE_FILE does not exist."
-  exit 1
-fi
 
 #===============================================================================
 
-create_service_paths() {
+deploy_service(){
   log INFO "[*] Creating remote service paths for: $MODULE_ID..."
 
-
-  
-  
   mapfile -t servers < <(jq -c '.servers[]' "$WORKSPACE_FILE")
 
   for serverdata in "${servers[@]}"; do
@@ -194,203 +129,62 @@ create_service_paths() {
     fi
 
     # Get full path metadata once
-    mapfile -t serverpaths < <(jq -c --arg id "$serverid" '.servers[] | select(.id == $id) | .paths[]' "$WORKSPACE_FILE")
-    if (( ${#serverpaths[@]} == 0 )); then
-      log WARN "[!] No service paths found for server: $server_id"
+    mapfile -t modulepaths < <(jq -c --arg id "$serverid" '.service.paths[] | select(server.id == $id)' "$SERVICE_FILE")
+    if (( ${modulepaths[@]} == 0 )); then
+      log WARN "[!] No service paths found for server: $serverid"
       continue
     fi
 
     # Build mkdir commands
     commands=()
-    for pathdata in "${serverpaths[@]}"; do
-      path_target=$(jq -r '.path' <<< "$pathdata")
-      [[ -n "$path_target" ]] && commands+=("mkdir -p '$path_target'")
-    done
-
-
-  done
-
-  log INFO "[*] Creating remote service paths for: $MODULE_ID...DONE"
-}
-
-main() {
-  log INFO "[*] Deploying service: $SERVICE_ID..."
-
-  # Load docker secrets for service
-  load_docker_secrets "$PATH_DEPLOY/secrets.env" || {
-    log ERROR "[X] Error loading docker secrets for $SERVICE_ID"
-    exit 1
-  }
-  safe_rm_rf "$PATH_DEPLOY/secrets.env"
-
-  # Create the required service paths and copy files
-  create_service_paths || {
-    log ERROR "[X] Error creating service paths for $SERVICE_ID"
-    exit 1
-  }
-
-  log INFO "[*] Deploying service: $SERVICE_ID...DONE"
-}
-
-main
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Create the required service paths and copy the files
-create_service_paths() {
-  log INFO "[*] Creating remote service paths for: $SERVICE_ID"
-
-  mapfile -t servers < <(jq -c '.servers[]' "$WORKSPACE_FILE")
-
-  for serverdata in "${servers[@]}"; do
-    server_id=$(jq -r '.id' <<< "$serverdata")
-    private_ip=$(jq -r --arg label "$server_id" '.include[] | select(.label == $label) | .private_ip' "$TERRAFORM_FILE")
-
-    if [[ -z "$private_ip" ]]; then
-      log ERROR "[X] Could not find private IP for server label: $server_id"
-      exit 1
-    fi
-
-    # Get full path metadata once
-    mapfile -t serverpaths < <(jq -c --arg id "$server_id" '.servers[] | select(.id == $id) | .paths[]' "$WORKSPACE_FILE")
-    if (( ${#serverpaths[@]} == 0 )); then
-      log WARN "[!] No service paths found for server: $server_id"
-      continue
-    fi
-
-    # Build mkdir commands
-    commands=()
-    for pathdata in "${serverpaths[@]}"; do
+    for pathdata in "${modulepaths[@]}"; do
       path_target=$(jq -r '.path' <<< "$pathdata")
       [[ -n "$path_target" ]] && commands+=("mkdir -p '$path_target'")
     done
 
     # Create the directories
     if [[ "${#commands[@]}" -gt 0 ]]; then
-      if [[ "$server_id" == "$MANAGER_ID" ]]; then
-        log INFO "[*] Executing locally (manager: $MANAGER_ID)..."
+      if [[ "$serverid" == "$MANAGER_ID" ]]; then
+        log INFO "[*] ... Executing locally (manager: $MANAGER_ID)..."
         for cmd in "${commands[@]}"; do
           eval "$cmd" || {
-            log ERROR "[X] Failed to execute: $cmd"
+            log ERROR "[X] ... Failed to execute: $cmd"
             exit 1
           }
-          log INFO "[✓] Executed: $cmd"
+          log INFO "[+] ... Executed: $cmd"
         done
       else
-        log INFO "[*] Connecting to $private_ip for remote execution..."
-        ssh -o StrictHostKeyChecking=no root@"$private_ip" "${commands[*]}" || {
-          log ERROR "[X] Failed to create paths on server '$server_id' ($private_ip)"
+        log INFO "[*] ... Connecting to $privateip for remote execution..."
+        ssh -o StrictHostKeyChecking=no root@"$privateip" "${commands[*]}" || {
+          log ERROR "[X] Failed to create paths on server '$serverid' ($privateip)"
           exit 1
         }
-        log INFO "[✓] Created paths remotely on $server_id"
+        log INFO "[+] ... Created paths remotely on $server_id"
       fi
     fi
 
     # Copy files to server based on volume type
-    for pathdata in "${serverpaths[@]}"; do
+    for pathdata in "${modulepaths[@]}"; do
       path_type=$(jq -r '.type' <<< "$pathdata")
       path_target=$(jq -r '.path' <<< "$pathdata")
       path_volume=$(jq -r '.volume' <<< "$pathdata")
       path_source=$(jq -r '.source' <<< "$pathdata")
-      source_path="$PATH_SERVICE/$path_source"
+      source_path="$PATH_MODULE/$path_source"
 
       # Skip if there is no type source or target
       [[ -z "$path_source" || -z "$path_target" || -z "$path_type" || -z "$path_volume" ]] && continue
 
       # Skip if replicated/distributed and not manager
-      if [[ "$path_volume" != "local" && "$server_id" != "$MANAGER_ID" ]]; then
-        log INFO "[~] Skipping $path_type copy to $server_id (volume: $path_volume)"
+      if [[ "$path_volume" != "local" && "$serverid" != "$MANAGER_ID" ]]; then
+        log INFO "[~] Skipping $path_type copy to $serverid (volume: $path_volume)"
         continue
       fi
 
       if [[ -d "$source_path" ]]; then
-        if [[ "$server_id" != "$MANAGER_ID" ]]; then
-          log INFO "[*] Copying $path_type files to $server_id:$path_target"
-          scp -r -o StrictHostKeyChecking=no "$source_path/" root@"$private_ip":"$path_target"/ || {
-            log ERROR "[X] Failed to copy $path_type to $server_id"
+        if [[ "$serverid" != "$MANAGER_ID" ]]; then
+          log INFO "[*] Copying $path_type files to $serverid:$path_target"
+          scp -r -o StrictHostKeyChecking=no "$source_path/" root@"$privateip":"$path_target"/ || {
+            log ERROR "[X] Failed to copy $path_type to $serverid"
             exit 1
           }
         else
@@ -400,11 +194,34 @@ create_service_paths() {
             exit 1
           }
         fi
-        log INFO "[✓] Copied $path_type files to $server_id"
+        log INFO "[+] Copied $path_type files to $serverid"
       else
         log WARN "[!] Source path '$source_path' for $path_type does not exist, skipping"
       fi
     done
+
   done
+
+  log INFO "[*] Creating remote service paths for: $MODULE_ID...DONE"
 }
 
+main() {
+  log INFO "[*] Deploying service: $MODULE_ID..."
+
+  # Load docker secrets for service
+  load_docker_secrets "$PATH_DEPLOY/secrets.env" || {
+    log ERROR "[X] Error loading docker secrets for $MODULE_ID"
+    exit 1
+  }
+  safe_rm_rf "$PATH_DEPLOY/secrets.env"
+
+  # Create the required service paths and copy files
+  deploy_service || {
+    log ERROR "[X] Error creating service paths for $MODULE_ID"
+    exit 1
+  }
+
+  log INFO "[*] Deploying service: $MODULE_ID...DONE"
+}
+
+main
