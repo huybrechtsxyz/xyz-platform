@@ -61,7 +61,7 @@ check_module_structure() {
     fi
   done
 
-  log INFO "[+] ...... Module definition is valid: id=$(jq -r '.module.id' "$MODULE_FILE"), state=$state"
+  log INFO "[+] ...... Module definition is valid: id=$(jq -r '.module.id' "$MODULE_FILE")"
 }
 
 main() {
