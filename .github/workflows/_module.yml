@@ -156,7 +156,7 @@ jobs:
           path: services/${{ matrix.id }}
 
       # Deploy Module
-      - name: Deploy Module
+      - name: Deploy ${{ matrix.id }}
         if: matrix.id != ''
         env:
           VAR_WORKSPACE: ${{ inputs.workspace }}
