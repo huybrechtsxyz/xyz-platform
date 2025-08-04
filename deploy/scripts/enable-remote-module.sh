@@ -216,10 +216,10 @@ main() {
   safe_rm_rf "$PATH_DEPLOY/secrets.env"
 
   # Create the required service paths and copy files
-  deploy_service || {
-    log ERROR "[X] Error creating service paths for $MODULE_ID"
-    exit 1
-  }
+  # deploy_service || {
+  #   log ERROR "[X] Error creating service paths for $MODULE_ID"
+  #   exit 1
+  # }
 
   log INFO "[*] Deploying service: $MODULE_ID...DONE"
 }
