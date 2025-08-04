@@ -302,8 +302,8 @@ generate_env_file() {
   mapfile -t vars < <(compgen -v | grep "^${prefix}")
 
   if [[ "${#vars[@]}" -eq 0 ]]; then
-    echo "[!] Error: No environment variables found with prefix '$prefix'" >&2
-    return 1
+    echo "[!] Warning: No environment variables found with prefix '$prefix'" >&2
+    return 0
   fi
 
   # Validate all are non-empty
