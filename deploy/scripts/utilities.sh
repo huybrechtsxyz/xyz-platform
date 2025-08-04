@@ -576,7 +576,36 @@ get_module_file() {
 }
 
 # Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
-create_workspace_serverpaths() {
+create_workspace_serverpaths1(){
+  local workspace_file="$1"
+
+  jq --argjson workspace "$(jq '.' "$workspace_file")" '
+    .servers |= map(
+      . + {
+        paths: (
+          .mounts
+          | map(
+              .type as $type
+              | .disk as $disk
+              | {
+                  type: $type,
+                  path: (
+                    # Replace ${disk} placeholder in mountpoint with the disk number
+                    (.mountpoint // "") | gsub("\\$\\{disk\\}"; ($disk|tostring))
+                    # Append the path from workspace.paths for this type, fallback to just $type if missing
+                    + ("" + (($workspace.paths[] | select(.type == $type) | .path) // $type))
+                  ),
+                  volume: ($workspace.paths[] | select(.type == $type) | .volume // "local")
+                }
+            )
+        )
+      }
+    )
+  ' "$workspace_file"
+}
+
+# Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
+create_workspace_serverpaths2() {
   local workspace_file="$1"
 
   if [[ ! -f "$workspace_file" ]]; then
@@ -610,6 +639,45 @@ create_workspace_serverpaths() {
           )
         }
       end
+    )
+  ' "$workspace_file"
+}
+
+# Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
+create_workspace_serverpaths() {
+  local workspace_file="$1"
+
+  if [[ ! -f "$workspace_file" ]]; then
+    echo "[X] Workspace file not found: $workspace_file" >&2
+    return 1
+  fi
+
+  # JQ statement to generate server paths and add them to the original workspace
+  jq '
+    # Store paths for reference
+    .workspace.paths as $paths |
+    
+    # Update the workspace by adding generated paths to each server
+    .workspace.servers |= map(
+      . as $server |
+      . + {
+        paths: (
+          # For each mount in the server
+          .mounts | map(
+            . as $mount |
+            # Find the corresponding path configuration
+            ($paths[] | select(.type == $mount.type)) as $path |
+            # Generate the final path by replacing ${disk} with actual disk number
+            ($server.mountpoint | gsub("\\$\\{disk\\}"; ($mount.disk | tostring))) as $final_mountpoint |
+            {
+              name: ($path.type + $path.path),
+              type: $path.type,
+              volume: $path.volume,
+              path: ($final_mountpoint + ($path.path // $path.type))
+            }
+          )
+        )
+      }
     )
   ' "$workspace_file"
 }

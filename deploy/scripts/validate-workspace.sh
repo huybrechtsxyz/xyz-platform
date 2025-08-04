@@ -122,6 +122,16 @@ check_server_roles() {
 }
 
 check_server_mounts() {
+  # Validate all mountpoints are defined
+  jq -c '.workspace.servers[]' "$WORKSPACE_FILE" | while read -r server; do
+    id=$(echo "$server" | jq -r '.id')
+    mp=$(echo "$server" | jq -r '.mountpoint')
+    if [[ ! -z "$mp" ]]; then
+      log ERROR "[X] Invalid mountpoint \"$mp\" on server \"$id\""
+      exit 1
+    fi
+  done
+
   # Validate all mount types are defined in paths
   jq -c '.workspace.servers[]' "$WORKSPACE_FILE" | while read -r server; do
     id=$(echo "$server" | jq -r '.id')
