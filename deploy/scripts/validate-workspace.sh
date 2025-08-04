@@ -122,27 +122,31 @@ check_server_roles() {
 }
 
 check_server_mounts() {
-  # Validate all mountpoints are defined
-  jq -c '.workspace.servers[]' "$WORKSPACE_FILE" | while read -r server; do
-    id=$(echo "$server" | jq -r '.id')
-    mp=$(echo "$server" | jq -r '.mountpoint')
-    if [[ ! -z "$mp" ]]; then
-      log ERROR "[X] Invalid mountpoint \"$mp\" on server \"$id\""
-      exit 1
-    fi
-  done
+  local valid=1
+  local VALID_TYPES_REGEX="^(data|logs|cache)$"  # Customize this to your valid mount types
 
-  # Validate all mount types are defined in paths
+  # Validate that all servers have a mountpoint defined
   jq -c '.workspace.servers[]' "$WORKSPACE_FILE" | while read -r server; do
-    id=$(echo "$server" | jq -r '.id')
+    id=$(echo "$server" | jq -r '.id // .name')
+    mp=$(echo "$server" | jq -r '.mountpoint // empty')
+
+    if [[ -z "$mp" ]]; then
+      log ERROR "[X] Missing mountpoint on server \"$id\""
+      valid=0
+    fi
+
     echo "$server" | jq -c '.mounts[]' | while read -r mount; do
-      type=$(echo "$mount" | jq -r '.type')
+      type=$(echo "$mount" | jq -r '.type // empty')
       if [[ ! "$type" =~ $VALID_TYPES_REGEX ]]; then
         log ERROR "[X] Invalid mount type \"$type\" on server \"$id\""
-        exit 1
+        valid=0
       fi
     done
   done
+
+  if [[ "$valid" -eq 0 ]]; then
+    return 1
+  fi
 }
 
 check_server_disks() {
