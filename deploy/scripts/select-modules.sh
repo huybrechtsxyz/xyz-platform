@@ -10,6 +10,8 @@
 set -euo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: `$BASH_COMMAND`"' ERR
 
+: "${WORKSPACE:?Environment variable WORKSPACE not set}"
+
 # Setup
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULE_DIR="$SCRIPT_DIR/../../modules"
@@ -21,6 +23,7 @@ if [[ -f "$SCRIPT_DIR/utilities.sh" ]]; then
   log INFO "[*] Loaded $SCRIPT_DIR/utilities.sh"
 else
   echo "[X] Missing utilities.sh at $SCRIPT_DIR" >&2
+  echo "selection=$(jq -c -n '{include: [{id: "", file: ""}]}')" >> "$GITHUB_OUTPUT"
   exit 1
 fi
 
