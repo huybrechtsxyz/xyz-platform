@@ -123,7 +123,6 @@ check_server_roles() {
 
 check_server_mounts() {
   local valid=1
-  local VALID_TYPES_REGEX="^(data|logs|cache)$"  # Customize this to your valid mount types
 
   # Validate that all servers have a mountpoint defined
   jq -c '.workspace.servers[]' "$WORKSPACE_FILE" | while read -r server; do
@@ -167,13 +166,13 @@ check_server_disks() {
 
 main() {
   log INFO "[*] ... Validating workspace definition..."
-  check_top_levels
-  check_deploy_id
-  check_role_definition
-  check_path_types
-  check_server_roles
-  check_server_mounts
-  check_server_disks
+  check_top_levels || exit 1
+  check_deploy_id || exit 1
+  check_role_definition || exit 1
+  check_path_types || exit 1
+  check_server_roles || exit 1
+  check_server_mounts || exit 1
+  check_server_disks || exit 1
   log INFO "[+] ... Workspace definition is valid."
 }
 

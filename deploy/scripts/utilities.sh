@@ -74,7 +74,7 @@ safe_rm_rf() {
     shopt -u nullglob dotglob
   else
     log WARN "[!] Skipped non-existent path: $real_path"
-    return 1
+    return 0
   fi
 }
 

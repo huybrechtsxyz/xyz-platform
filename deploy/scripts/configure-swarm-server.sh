@@ -145,8 +145,11 @@ scp -r -o StrictHostKeyChecking=no \
 
 log INFO "[*] Debugging deployment path of remote server..."
 ssh -o StrictHostKeyChecking=no root@$REMOTE_IP << EOF
+  echo "== DEPLOY : $PATH_DEPLOY ================================================="
   ls -la "$PATH_DEPLOY"
+  echo "== CONFIG : $PATH_CONFIG ================================================="
   ls -la "$PATH_CONFIG"
+  echo "== DOCS : $PATH_DOCS ====================================================="
   ls -la "$PATH_DOCS"
 EOF
 

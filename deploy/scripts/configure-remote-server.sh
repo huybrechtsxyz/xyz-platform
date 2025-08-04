@@ -428,33 +428,70 @@ create_workspace() {
   local configpath="${!configpathname}"
   log INFO "[*] ... Copying global configuration files to: $configpath"
 
+  # Ensure source and destination config paths exist
+  if [[ ! -d "$PATH_CONFIG" || ! -d "$configpath" ]]; then
+    log ERROR "[x] Failed to copy configuration files from $PATH_CONFIG to $configpath"
+    return 1
+  fi
+
   # Copy the base configuration files and scripts
-  # E.g. /mnt/data1/etc/app/
   if ! cp -f "$PATH_CONFIG"/* "$configpath/"; then
     log ERROR "[x] Failed to copy configuration files to $configpath"
     return 1
   fi
 
-  # Set configuration path as executable
-  chmod 755 "$configpath"/*.sh
+  # Set configuration scripts as executable
+  shopt -s nullglob
+  for f in "$configpath"/*.sh; do
+    chmod 755 "$f"
+  done
 
   # Build the path based on {PATH_SERVER_TYPE}
   local docspathname=$(get_server_variable_name "$SERVER_ID" "DOCS")
   local docspath="${!docspathname}"
   log INFO "[*] ... Copying global documentation files to: $docspath"
 
-  # Copy the base configuration files and scripts
-  # E.g. /mnt/data1/etc/app/
-  if [[ -f docspath ]]; then
+  # Copy the base documentation files
+  if [[ -d "$docspath" ]]; then
     if ! cp -rf "$PATH_DOCS"/* "$docspath/"; then
-      log ERROR "[x] Failed to copy configuration files to $configpath"
+      log ERROR "[x] Failed to copy documentation files to $docspath"
       return 1
     fi
+  else
+    log WARN "[!] Skipping documentation copy — target directory not found: $docspath"
   fi
 
-  # Ensure the workspace definition file exists
   log INFO "[*] Workspace $WORKSPACE setup COMPLETE on host $HOSTNAME"
 }
+
+list_server_paths() {
+  if [[ ! -f "$WORKSPACE_FILE" ]]; then
+    echo "[X] Workspace file not found: $WORKSPACE_FILE" >&2
+    return 1
+  fi
+
+  # Check if the SERVER_ID exists
+  if ! jq -e --arg id "$SERVER_ID" '.workspace.servers[] | select(.id == $id)' "$WORKSPACE_FILE" > /dev/null; then
+    echo "[X] Server ID not found in workspace: $SERVER_ID" >&2
+    return 1
+  fi
+
+  # Extract and iterate over the .paths[] for the specified server
+  jq -r --arg id "$SERVER_ID" '
+    .workspace.servers[] 
+    | select(.id == $id) 
+    | .paths[]? 
+    | .path
+  ' "$WORKSPACE_FILE" | while read -r path; do
+    log INFO "[x] ... Listing contents of: $path"
+    if [[ -d "$path" ]]; then
+      ls -la "$path"
+    else
+      echo "[!] Directory does not exist: $path"
+    fi
+  done
+}
+
 
 # Main function to configure the remote server based on its role
 main_manager() {
@@ -492,12 +529,19 @@ main_manager() {
     return 1
   }
 
+  # List the content of the server paths
+  list_server_paths
+
   log INFO "[+] Configuring Manager Node: $HOSTNAME...DONE"
 }
 
 # Main function to configure the worker node
 main_worker() {
   log INFO "[*] Configuring Worker Node: $HOSTNAME..."
+  
+  # List the content of the server paths
+  list_server_paths
+
   log INFO "[+] Configuring Worker Node: $HOSTNAME...DONE"
 }
 
@@ -524,10 +568,10 @@ main() {
 
   log INFO "[*] Remote server cleanup..."
   # PATH_TEMP PATH_CONFIG PATH_DEPLOY
-  safe_rm_rf /tmp/app
-  safe_rm_rf /tmp/app/.deploy
-  safe_rm_rf /tmp/app/.config
   safe_rm_rf /tmp/app/.docs
+  safe_rm_rf /tmp/app/.config
+  safe_rm_rf /tmp/app/.deploy
+  safe_rm_rf /tmp/app
 
   log INFO "[+] Configuring Swarm Node: $HOSTNAME...DONE"
 }
