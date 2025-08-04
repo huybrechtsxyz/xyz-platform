@@ -71,8 +71,8 @@ fi
 # Extract module matches
 modules=$(jq -n --argjson ids "$selected_set" '
   [inputs
-   | {file: input_filename, id: .module.id}
-   | select(.id != null and (.id | IN($ids[])))]
+   | select(.id != null and (.id | IN($ids[])))
+   | {file: input_filename, id: .module.id}]
 ' "${module_files[@]}" 2>/dev/null || true)
 
 if [[ -z "$modules" || "$modules" == "[]" ]]; then

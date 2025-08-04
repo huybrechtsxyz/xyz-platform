@@ -126,7 +126,7 @@ jobs:
         id: load
         if: matrix.id != ''
         run: |
-          MODULE_FILE="modules/${{ matrix.file }}.json"
+          MODULE_FILE="${{ matrix.file }}"
           echo "Reading $MODULE_FILE"
           MODULE_DATA=$(jq -c . "$MODULE_FILE")
           echo "Reading Repository and Ref"
@@ -170,5 +170,5 @@ jobs:
           chmod +x ./deploy/scripts/validate-workspace.sh
           chmod +x ./deploy/scripts/validate-module.sh
           chmod +x ./deploy/scripts/validate-service.sh
-          ./deploy/scripts/deploy-swarm-module.sh
+          #./deploy/scripts/deploy-swarm-module.sh
           echo "[*] Deploying module ${{ matrix.id }} ... DONE"
