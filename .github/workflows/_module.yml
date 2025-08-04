@@ -170,5 +170,5 @@ jobs:
           chmod +x ./deploy/scripts/validate-workspace.sh
           chmod +x ./deploy/scripts/validate-module.sh
           chmod +x ./deploy/scripts/validate-service.sh
-          #./deploy/scripts/deploy-swarm-module.sh
+          ./deploy/scripts/deploy-swarm-module.sh
           echo "[*] Deploying module ${{ matrix.id }} ... DONE"
