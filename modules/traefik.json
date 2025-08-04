@@ -3,7 +3,7 @@
   "module": {
     "id": "traefik",
     "repository": "huybrechtsxyz/xyz-traefik",
-    "reference": "main",
+    "reference": "dev-traefik",
     "config": "deploy/service.json",
     "deploy": "deploy"
   }
