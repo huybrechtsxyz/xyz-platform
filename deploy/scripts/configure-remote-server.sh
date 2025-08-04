@@ -465,6 +465,7 @@ create_workspace() {
 }
 
 list_server_paths() {
+  log INFO "[*] Workspace server paths on host $HOSTNAME"
   if [[ ! -f "$WORKSPACE_FILE" ]]; then
     echo "[X] Workspace file not found: $WORKSPACE_FILE" >&2
     return 1
