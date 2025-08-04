@@ -60,9 +60,6 @@ if [[ ! -f "$SERVICE_FILE" ]]; then
   exit 1
 fi
 
-log INFO "[*] Validating service file: $SERVICE_FILE"
-validate_service "./deploy/scripts" "$SERVICE_FILE" "$VAR_WORKSPACE" "$VAR_ENVIRONMENT"
-
 # Get the service deployment path
 SERVICE_DEPLOY="$SERVICE_PATH/$MODULE_DEPLOY"
 if [[ ! -d "$SERVICE_DEPLOY" ]]; then
@@ -127,6 +124,10 @@ if [[ ! "$MODULE_STATE" =~ ^(enabled|disabled|removed)$ ]]; then
   log ERROR "[X] Invalid service module state: '$MODULE_STATE'. Must be one of: enabled, disabled, removed."
   exit 1
 fi
+
+# Validate service state
+log INFO "[*] Validating service file: $SERVICE_FILE"
+validate_service "./deploy/scripts" "$SERVICE_FILE" "$VAR_WORKSPACE" "$MODULE_ENV"
 
 #===============================================================================
 # DEPLOYMENT PATHS
