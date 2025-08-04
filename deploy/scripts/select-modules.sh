@@ -71,7 +71,8 @@ fi
 # Extract module matches
 modules=$(jq -n --argjson ids "$selected_set" '
   [inputs
-   | {file: input_filename, id: .module.id}
+   | .include[]
+   | {file, id}
    | select(.id != null and (.id | IN($ids[])))]
 ' "${module_files[@]}" 2>/dev/null || true)
 
@@ -85,4 +86,5 @@ fi
 log INFO "[*] Output selected modules"
 echo "$modules" | jq .
 
-echo "selection=$(jq -c --argjson include "$modules" '{include: $include}')" >> "$GITHUB_OUTPUT"
+log INFO "[*] Save selected modules for output"
+echo "selection=$modules" >> $GITHUB_OUTPUT
