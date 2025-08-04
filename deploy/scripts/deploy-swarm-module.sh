@@ -70,13 +70,7 @@ if [[ ! -d "$SERVICE_DEPLOY" ]]; then
   exit 1
 fi
 
-# Add the servicepaths to the service file and overwrite
-log INFO "[*] Set the service paths in: $SERVICE_FILE as $VAR_PATH_TEMP/service.json"
-create_service_serverpaths "$WORKSPACE_FILE" "$SERVICE_FILE" > "$VAR_PATH_TEMP/service.json"
-cp -f "$VAR_PATH_TEMP/service.json" "$SERVICE_FILE"
-rm -f "$VAR_PATH_TEMP/service.json"
-
-# Save the registry info in the service deploy path
+# Save the module info in the service deploy path
 MODULE_FILE="$SERVICE_DEPLOY/module.json"
 echo "$VAR_MODULEINFO" > "$MODULE_FILE"
 log INFO "[*] Validating module file: $MODULE_FILE"
@@ -92,6 +86,10 @@ WORKSPACE_FILE=$(get_workspace_file "./workspaces" "$VAR_WORKSPACE") || exit 1
 log INFO "[*] Getting workspace file: $WORKSPACE_FILE"
 log INFO "[*] Validating workspace file: $WORKSPACE_FILE"
 validate_workspace "./deploy/scripts" "$WORKSPACE_FILE"
+
+# The correct workspace file (including paths is on the remote server)
+# But we need to put it in the deploy folder so the remote deployment can find its paths
+create_workspace_serverpaths "$WORKSPACE_FILE" > "./deploy/workspace.json"
 
 # Get the manager-id from the workspace
 MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
@@ -110,7 +108,6 @@ fi
 
 # Terraform file is already on the server
 # We deploy it to make it easier for module deployment
-# This file is not kept !
 echo "$VAR_TERRAFORM" > "./deploy/terraform.json"
 unset VAR_TERRAFORM
 
@@ -136,8 +133,8 @@ fi
 #===============================================================================
 
 # Get all the source and target paths
-mapfile -t SERVICEPATHS < <( jq -c --arg server_id "$MANAGER_ID" \
-  '.service.paths | map(select(.source != "" and .serverid == $server_id)) | .[]' \
+mapfile -t SERVICEMOUNTS < <( jq -c --arg server_id "$MANAGER_ID" \
+  '.service.mounts | map(select(.source != "")) | .[]' \
   "$SERVICE_FILE")
 
 # Get the REMOTE deployment paths
@@ -159,7 +156,14 @@ log INFO "[*] Remote deployment path: $VAR_PATH_DEPLOY"
 create_environment_files() {
   # Extract matching variables
   log INFO "[*] Creating variable file $VAR_PATH_DEPLOY/variables.env"
-  mapfile -t var_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy[$env].variables[] | "\(.key) \(.value)"' "$SERVICE_FILE")
+  mapfile -t var_lines < <(
+  jq --arg ws "$VAR_WORKSPACE" --arg env "$VAR_ENVIRONMENT" -r '
+      .service.deploy[]
+      | select(.workspace == $ws and .environment == $env)
+      | .variables[]?
+      | "\(.key) \(.value)"
+    ' "$SERVICE_FILE"
+  )
 
   # Loop over each variable entry
   for line in "${var_lines[@]}"; do
@@ -173,7 +177,14 @@ create_environment_files() {
 
   # Extract matching secrets
   log INFO "[*] Creating secret file ./deploy/secrets.env"
-  mapfile -t secret_lines < <(jq --arg env "$VAR_ENVIRONMENT" -r '.service.deploy[$env].secrets[] | "\(.key) \(.source) \(.id)"' "$SERVICE_FILE")
+  mapfile -t secret_lines < <(
+  jq --arg ws "$VAR_WORKSPACE" --arg env "$VAR_ENVIRONMENT" -r '
+      .service.deploy[]
+      | select(.workspace == $ws and .environment == $env)
+      | .secrets[]?
+      | "\(.key) \(.source) \(.id)"
+    ' "$SERVICE_FILE"
+  )
 
   export BWS_ACCESS_TOKEN="${BWS_ACCESS_TOKEN:?Missing BWS_ACCESS_TOKEN environment variable}"
 
@@ -219,9 +230,10 @@ copy_service_files() {
   mkdir_cmds+=("mkdir -p '$VAR_PATH_DEPLOY'")
 
   # Build mkdir commands for each source subdirectory
-  for item in "${SERVICEPATHS[@]}"; do
+  for item in "${SERVICEMOUNTS[@]}"; do
     local source=$(jq -r '.source' <<< "$item")
     [[ -z "$source" ]] && continue
+    [[ "$source" == "$MODULE_DEPLOY" ]] && continue
     mkdir_cmds+=("mkdir -p '$VAR_PATH_MODULE/$source'")
   done
 
@@ -240,15 +252,24 @@ copy_service_files() {
   scp -o StrictHostKeyChecking=no \
     ./deploy/*.* \
     ./deploy/scripts/*.* \
-    ./workspaces/*.* \
     root@"$REMOTE_IP":"$VAR_PATH_WORKSPACE"/ || {
       log ERROR "[X] Failed to transfer core deployment scripts to $REMOTE_IP"
       exit 1
     }
 
+  # Copy service-specific scripts and files (if exist)
+  # Copy the deployment files to the root of the remote module
+  log INFO "[*] Copying service-specific scripts..."
+  scp -o StrictHostKeyChecking=no \
+    "$SERVICE_DEPLOY"/*.* \
+    root@"$REMOTE_IP":"$VAR_PATH_DEPLOY"/ || {
+      log ERROR "[X] Failed to transfer service scripts to $REMOTE_IP"
+      exit 1
+    }
+
   # Copy all paths with defined `source` folders
   # Do not copy the when the "$source" equals "$MODULE_"
-  for item in "${servicepaths[@]}"; do
+  for item in "${SERVICEMOUNTS[@]}"; do
     local source=$(jq -r '.source' <<< "$item")
     [[ -z "$source" ]] && continue
     [[ "$source" == "$MODULE_DEPLOY" ]] && continue
@@ -266,24 +287,13 @@ copy_service_files() {
     fi
   done
 
-  # Copy service-specific scripts and files (if exist)
-  # Copy the deployment files to the root of the remote module
-  log INFO "[*] Copying service-specific scripts..."
-  scp -o StrictHostKeyChecking=no \
-    "$SERVICE_PATH/$MODULE_DEPLOY"/*.* \
-    "$SERVICE_PATH"/scripts/*.* \
-    root@"$REMOTE_IP":"$VAR_PATH_DEPLOY"/ || {
-      log ERROR "[X] Failed to transfer service scripts to $REMOTE_IP"
-      exit 1
-    }
-
   log INFO "[*] Copying service files to $REMOTE_IP...DONE"
 }
 
 enable_service() {
 log INFO "[*] Deploying service $SERVICE_ID..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-chmod +x "$VAR_PATH_DEPLOY/*.sh"
+chmod +x "$VAR_PATH_DEPLOY/enable-remote-service.sh"
 "$VAR_PATH_DEPLOY/enable-remote-service.sh" "$VAR_PATH_WORKSPACE"
 EOF
 then
@@ -296,7 +306,7 @@ INFO "[*] Deploying service $SERVICE_ID...DONE"
 disable_service() {
 log INFO "[*] Disabling service $SERVICE_ID..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-chmod +x "$VAR_PATH_DEPLOY/*.sh"
+chmod +x "$VAR_PATH_DEPLOY/disable-remote-service.sh"
 "$VAR_PATH_DEPLOY/disable-remote-service.sh" "$VAR_PATH_WORKSPACE"
 EOF
 then
@@ -309,7 +319,7 @@ log INFO "[*] Disabling service $SERVICE_ID...DONE"
 remove_service() {
 log INFO "[*] Removing service $SERVICE_ID..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
-chmod +x "$VAR_PATH_DEPLOY/*.sh"
+chmod +x "$VAR_PATH_DEPLOY/remove-remote-service.sh"
 "$VAR_PATH_DEPLOY/remove-remote-service.sh" "$VAR_PATH_WORKSPACE"
 EOF
 then

@@ -576,74 +576,6 @@ get_module_file() {
 }
 
 # Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
-create_workspace_serverpaths1(){
-  local workspace_file="$1"
-
-  jq --argjson workspace "$(jq '.' "$workspace_file")" '
-    .servers |= map(
-      . + {
-        paths: (
-          .mounts
-          | map(
-              .type as $type
-              | .disk as $disk
-              | {
-                  type: $type,
-                  path: (
-                    # Replace ${disk} placeholder in mountpoint with the disk number
-                    (.mountpoint // "") | gsub("\\$\\{disk\\}"; ($disk|tostring))
-                    # Append the path from workspace.paths for this type, fallback to just $type if missing
-                    + ("" + (($workspace.paths[] | select(.type == $type) | .path) // $type))
-                  ),
-                  volume: ($workspace.paths[] | select(.type == $type) | .volume // "local")
-                }
-            )
-        )
-      }
-    )
-  ' "$workspace_file"
-}
-
-# Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
-create_workspace_serverpaths2() {
-  local workspace_file="$1"
-
-  if [[ ! -f "$workspace_file" ]]; then
-    echo "[X] Workspace file not found: $workspace_file" >&2
-    return 1
-  fi
-
-  jq '
-    .workspace.paths as $workspace_paths |
-    .workspace.servers |= map(
-      if (.mountpoint // "") == "" then
-        error("[X] Missing or empty mountpoint for server: \(.id)")
-      else
-        . + {
-          paths: (
-            .mounts
-            | map(
-                .type as $type
-                | .disk as $disk
-                | {
-                    type: $type,
-                    path: (
-                      (.mountpoint | gsub("\\$\\{disk\\}"; ($disk|tostring)))
-                      + (($workspace_paths[] | select(.type == $type) | .path) // $type)
-                    ),
-                    volume: (
-                      ($workspace_paths[] | select(.type == $type) | .volume) // "local"
-                    )
-                  }
-              )
-          )
-        }
-      end
-    )
-  ' "$workspace_file"
-}
-
-# Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
 create_workspace_serverpaths() {
   local workspace_file="$1"
 
@@ -687,6 +619,16 @@ create_workspace_serverpaths() {
 create_service_serverpaths() {
   local workspace_file="$1"
   local service_file="$2"
+
+  if [[ ! -f "$workspace_file" ]]; then
+    echo "[X] Workspace file not found: $workspace_file" >&2
+    return 1
+  fi
+
+  if [[ ! -f "$service_file" ]]; then
+    echo "[X] Service file not found: $service_file" >&2
+    return 1
+  fi
 
   jq --argjson workspace "$(jq '.' "$workspace_file")" \
      --argjson service "$(jq '.' "$service_file")" '
