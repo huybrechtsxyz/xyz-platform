@@ -602,7 +602,7 @@ create_workspace_serverpaths() {
             # Generate the final path by replacing ${disk} with actual disk number
             ($server.mountpoint | gsub("\\$\\{disk\\}"; ($mount.disk | tostring))) as $final_mountpoint |
             {
-              name: ($path.type + $path.path),
+              name: ($path.type + ($path.path // "")), 
               type: $path.type,
               volume: $path.volume,
               path: ($final_mountpoint + ($path.path // $path.type))
@@ -617,8 +617,14 @@ create_workspace_serverpaths() {
 # Generates resolved service paths by combining mountpoints with workspace-defined subpaths.
 # target: (if ($smount.path // "") == "" then $smount.type else $smount.path end),
 create_service_serverpaths() {
-  local workspace_file="$1"
-  local service_file="$2"
+  local module_name="$1"
+  local workspace_file="$2"
+  local service_file="$3"
+
+  if [[ -z "$module_name" ]]; then
+    echo "[X] Module ID not bound: $module_name" >&2
+    return 1
+  fi
 
   if [[ ! -f "$workspace_file" ]]; then
     echo "[X] Workspace file not found: $workspace_file" >&2
@@ -631,25 +637,24 @@ create_service_serverpaths() {
   fi
 
   jq --argjson workspace "$(jq '.' "$workspace_file")" \
-     --argjson service "$(jq '.' "$service_file")" '
+     --argjson service "$(jq '.' "$service_file")" \
+     --arg moduleid "$module_name" \ '
     $service + {
       service: (
         $service.service + {
           paths: (
             [
               $workspace.workspace.servers[] as $server |
-              $service.service.mounts[] as $smount |
-              ($workspace.workspace.paths[] | select(.type == $smount.type)) as $wpath |
+              $service.service.mounts[] as $mount |
+              ($server.paths[] | select(.type == $mount.type)) as $wspath |
               {
                 serverid: $server.id,
-                serverrole: $server.role,
-                name: ($smount.type + ($smount.path // "")),
-                type: $smount.type,
-                chmod: $smount.chmod,
-                source: $smount.source,
+                name: ($mount.type + ($mount.path // "")),
+                type: $mount.type,
+                chmod: $mount.chmod,
+                source: $mount.source,
                 path: (
-                  ($server.mountpoint // "" | gsub("\\$\\{disk\\}"; "1")) + "/" +
-                  (if ($smount.path == null or $smount.path == "") then $wpath.path else $smount.path end)
+                  $wspath.path + "/" + moduleid + ($mount.path // $mount.type)
                 )
               }
             ]

@@ -89,7 +89,7 @@ validate_workspace "./deploy/scripts" "$WORKSPACE_FILE"
 
 # The correct workspace file (including paths is on the remote server)
 # But we need to put it in the deploy folder so the remote deployment can find its paths
-create_workspace_serverpaths "$WORKSPACE_FILE" > "./deploy/workspace.json"
+create_workspace_serverpaths "$WORKSPACE_FILE" > "./deploy/$VAR_WORKSPACE.ws.json"
 
 # Get the manager-id from the workspace
 MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
@@ -290,6 +290,16 @@ copy_service_files() {
   log INFO "[*] Copying service files to $REMOTE_IP...DONE"
 }
 
+create_serverpaths() {
+  log INFO "[*] Creating service server paths in $SERVICE_FILE..."
+
+  create_service_serverpaths "$WORKSPACE_FILE" "$SERVICE_FILE" > "./deploy/service.json"
+  cp -f "./deploy/service.json" "$SERVICE_FILE"
+  rm -f "./deploy/service.json"
+
+  log INFO "[*] Creating service server paths in $SERVICE_FILE...DONE"
+}
+
 enable_service() {
 log INFO "[*] Deploying service $SERVICE_ID..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
@@ -333,6 +343,7 @@ main() {
   log INFO "[*] Deploying service $MODULE_ID..."
 
   create_environment_files
+  create_serverpaths
 
   case "$MODULE_STATE" in
     enabled)

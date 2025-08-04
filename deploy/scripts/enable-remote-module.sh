@@ -59,20 +59,44 @@ if [[ ! -d "$PATH_DEPLOY" ]]; then
   exit 1
 fi
 
+#===============================================================================
+# GET FILES
+#===============================================================================
+
 # Get the workspace file that was deployed with the calculated paths
-WORKSPACE_FILE="$PATH_WORKSPACE/workspace.json"
+WORKSPACE_FILE=$(get_workspace_file "$PATH_WORKSPACE" "$WORKSPACE")
 if [[ ! -f "$WORKSPACE_FILE" ]]; then
   log ERROR "[X] Missing workspace definition at $WORKSPACE_FILE"
   exit 1
 fi
 
 # Get the terraform file
-TERRAFORM_FILE="$PATH_WORKSPACE/terraform.json"
+TERRAFORM_FILE=$(get_terraform_file "$PATH_WORKSPACE")
 if [[ ! -f "$TERRAFORM_FILE" ]]; then
   log ERROR "[X] Missing terraform definition at $TERRAFORM_FILE"
   exit 1
 fi
 log INFO "[*] Getting terraform file $TERRAFORM_FILE"
+
+MODULE_FILE="$PATH_DEPLOY/module.json"
+if [[ ! -f "$MODULE_FILE" ]]; then
+  log ERROR "[X] Missing module definition at $MODULE_FILE"
+  exit 1
+fi
+log INFO "[*] Getting module file $MODULE_FILE"
+
+
+
+
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+
+
+
+
+
+
+
 
 # Get the manager id
 MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
