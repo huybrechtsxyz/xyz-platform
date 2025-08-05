@@ -271,20 +271,28 @@ copy_service_files() {
     }
 
   # Copy all paths with defined `source` folders
-  # Do not copy the when the "$source" equals "$MODULE_"
+  # Skip copying if source is empty or equals "$MODULE_DEPLOY"
   for item in "${SERVICEMOUNTS[@]}"; do
     local source=$(jq -r '.source' <<< "$item")
+
+    # Skip if source is null or empty
     [[ -z "$source" ]] && continue
+
+    # Skip if source equals the module deploy folder
     [[ "$source" == "$MODULE_DEPLOY" ]] && continue
+
     local source_path="$SERVICE_PATH/$source"
+
     if [[ -d "$source_path" ]]; then
       log INFO "[*] Copying service source path '$source' to $REMOTE_IP..."
-      scp -r -o StrictHostKeyChecking=no
+
+      scp -r -o StrictHostKeyChecking=no \
         "$source_path/"* \
-        root@"$REMOTE_IP":"$VAR_PATH_MODULE/$source"/ || {
+        "root@$REMOTE_IP:$VAR_PATH_MODULE/$source/" || {
           log ERROR "[X] Failed to copy source folder '$source' to $REMOTE_IP"
           exit 1
         }
+
     else
       log WARN "[!] Source path '$source_path' not found — skipping"
     fi
