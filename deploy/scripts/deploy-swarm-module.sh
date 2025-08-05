@@ -294,11 +294,7 @@ copy_service_files() {
 create_serverpaths() {
   log INFO "[*] Creating service server paths in $SERVICE_FILE..."
 
-  # local module_name="$1"
-  # local workspace_file="$2"
-  # local service_file="$3"
-
-  create_service_serverpaths "$WORKSPACE_FILE" "$SERVICE_FILE" > "./deploy/service.json"
+  create_service_serverpaths "$MODULE_ID" "$WORKSPACE_FILE" "$SERVICE_FILE" > "./deploy/service.json"
   cp -f "./deploy/service.json" "$SERVICE_FILE"
   rm -f "./deploy/service.json"
 
