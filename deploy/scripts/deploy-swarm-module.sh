@@ -87,6 +87,8 @@ validate_workspace "./deploy/scripts" "$WORKSPACE_FILE"
 # The correct workspace file (including paths is on the remote server)
 # But we need to put it in the deploy folder so the remote deployment can find its paths
 create_workspace_serverpaths "$WORKSPACE_FILE" > "./deploy/$VAR_WORKSPACE.ws.json"
+WORKSPACE_FILE="./deploy/$VAR_WORKSPACE.ws.json"
+log INFO "[*] Workspace file with paths created in deploy folder: $WORKSPACE_FILE"
 
 # Get the manager-id from the workspace
 MANAGER_ID=$(get_manager_id "$WORKSPACE_FILE") || exit 1
