@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Service Definition",
+  "type": "object",
+  "required": ["api-version", "service"],
+  "properties": {
+    "api-version": {
+      "type": "number"
+    },
+    "service": {
+      "type": "object",
+      "required": ["id", "name", "description", "deploy"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "meta": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "mounts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "chmod", "path", "source"],
+            "properties": {
+              "type": { "type": "string" },
+              "chmod": { "type": "integer" },
+              "path": { "type": "string" },
+              "source": { "type": "string" }
+            }
+          }
+        },
+        "deploy": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["workspace", "environment"],
+            "properties": {
+              "workspace": { "type": "string" },
+              "environment": { "type": "string" },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["key", "value"],
+                  "properties": {
+                    "key": { "type": "string" },
+                    "value": { "type": "string" }
+                  }
+                }
+              },
+              "secrets": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["key", "source", "id"],
+                  "properties": {
+                    "key": { "type": "string" },
+                    "source": { "type": "string" },
+                    "id": { "type": "string" }
+                  }
+                }
+              },
+              "endpoints": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "addresses": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["address", "port"],
+                  "properties": {
+                    "address": { "type": "string" },
+                    "port": { "type": "integer" }
+                  }
+                }
+              },
+              "checks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["id", "name", "http", "interval", "timeout"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "name": { "type": "string" },
+                    "http": { "type": "string" },
+                    "interval": { "type": "string" },
+                    "timeout": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

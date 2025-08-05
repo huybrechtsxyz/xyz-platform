@@ -60,12 +60,14 @@ jobs:
           echo "================"
           echo "tfoutput=$matrix" >> "$GITHUB_OUTPUT"
 
-      # This step filters service definitions from the registry based on a list of requested service IDs (passed in as `inputs.services`).
-      # The script reads `registry/*.json`, each containing a `.service.id` field, and constructs a GitHub Actions matrix output including only the matched services.
+      # This step filters service definitions from the module based on a list of requested service IDs (passed in as `inputs.services`).
+      # The script reads `modules/*.json`, each containing a `.service.id` field, and constructs a GitHub Actions matrix output including only the matched services.
       # Input: inputs.services: "traefik,site"
       # Outputs: selection: "{ "include": [ { "id": "traefik" }, { "id": "site" } ] }"
       - name: Select Modules
         id: modules
+        env:
+          WORKSPACE: ${{ inputs.workspace }}
         run: |
           echo "[*] Selecting modules ${{ inputs.modules }} ..."
           chmod +x ./deploy/scripts/select-modules.sh
@@ -124,7 +126,7 @@ jobs:
         id: load
         if: matrix.id != ''
         run: |
-          MODULE_FILE="modules/${{ matrix.file }}.json"
+          MODULE_FILE="${{ matrix.file }}"
           echo "Reading $MODULE_FILE"
           MODULE_DATA=$(jq -c . "$MODULE_FILE")
           echo "Reading Repository and Ref"
@@ -154,7 +156,7 @@ jobs:
           path: services/${{ matrix.id }}
 
       # Deploy Module
-      - name: Deploy Module
+      - name: Deploy ${{ matrix.id }}
         if: matrix.id != ''
         env:
           VAR_WORKSPACE: ${{ inputs.workspace }}

@@ -302,8 +302,8 @@ generate_env_file() {
   mapfile -t vars < <(compgen -v | grep "^${prefix}")
 
   if [[ "${#vars[@]}" -eq 0 ]]; then
-    echo "[!] Error: No environment variables found with prefix '$prefix'" >&2
-    return 1
+    echo "[!] Warning: No environment variables found with prefix '$prefix'" >&2
+    return 0
   fi
 
   # Validate all are non-empty
@@ -576,74 +576,6 @@ get_module_file() {
 }
 
 # Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
-create_workspace_serverpaths1(){
-  local workspace_file="$1"
-
-  jq --argjson workspace "$(jq '.' "$workspace_file")" '
-    .servers |= map(
-      . + {
-        paths: (
-          .mounts
-          | map(
-              .type as $type
-              | .disk as $disk
-              | {
-                  type: $type,
-                  path: (
-                    # Replace ${disk} placeholder in mountpoint with the disk number
-                    (.mountpoint // "") | gsub("\\$\\{disk\\}"; ($disk|tostring))
-                    # Append the path from workspace.paths for this type, fallback to just $type if missing
-                    + ("" + (($workspace.paths[] | select(.type == $type) | .path) // $type))
-                  ),
-                  volume: ($workspace.paths[] | select(.type == $type) | .volume // "local")
-                }
-            )
-        )
-      }
-    )
-  ' "$workspace_file"
-}
-
-# Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
-create_workspace_serverpaths2() {
-  local workspace_file="$1"
-
-  if [[ ! -f "$workspace_file" ]]; then
-    echo "[X] Workspace file not found: $workspace_file" >&2
-    return 1
-  fi
-
-  jq '
-    .workspace.paths as $workspace_paths |
-    .workspace.servers |= map(
-      if (.mountpoint // "") == "" then
-        error("[X] Missing or empty mountpoint for server: \(.id)")
-      else
-        . + {
-          paths: (
-            .mounts
-            | map(
-                .type as $type
-                | .disk as $disk
-                | {
-                    type: $type,
-                    path: (
-                      (.mountpoint | gsub("\\$\\{disk\\}"; ($disk|tostring)))
-                      + (($workspace_paths[] | select(.type == $type) | .path) // $type)
-                    ),
-                    volume: (
-                      ($workspace_paths[] | select(.type == $type) | .volume) // "local"
-                    )
-                  }
-              )
-          )
-        }
-      end
-    )
-  ' "$workspace_file"
-}
-
-# Generates resolved server paths by combining mountpoints with workspace-defined subpaths.
 create_workspace_serverpaths() {
   local workspace_file="$1"
 
@@ -670,7 +602,7 @@ create_workspace_serverpaths() {
             # Generate the final path by replacing ${disk} with actual disk number
             ($server.mountpoint | gsub("\\$\\{disk\\}"; ($mount.disk | tostring))) as $final_mountpoint |
             {
-              name: ($path.type + $path.path),
+              name: ($path.type + ($path.path // "")), 
               type: $path.type,
               volume: $path.volume,
               path: ($final_mountpoint + ($path.path // $path.type))
@@ -685,29 +617,44 @@ create_workspace_serverpaths() {
 # Generates resolved service paths by combining mountpoints with workspace-defined subpaths.
 # target: (if ($smount.path // "") == "" then $smount.type else $smount.path end),
 create_service_serverpaths() {
-  local workspace_file="$1"
-  local service_file="$2"
+  local module_name="$1"
+  local workspace_file="$2"
+  local service_file="$3"
+
+  if [[ -z "$module_name" ]]; then
+    echo "[X] Module ID not bound: $module_name" >&2
+    return 1
+  fi
+
+  if [[ ! -f "$workspace_file" ]]; then
+    echo "[X] Workspace file not found: $workspace_file" >&2
+    return 1
+  fi
+
+  if [[ ! -f "$service_file" ]]; then
+    echo "[X] Service file not found: $service_file" >&2
+    return 1
+  fi
 
   jq --argjson workspace "$(jq '.' "$workspace_file")" \
-     --argjson service "$(jq '.' "$service_file")" '
+     --argjson service "$(jq '.' "$service_file")" \
+     --arg moduleid "$module_name" \ '
     $service + {
       service: (
         $service.service + {
           paths: (
             [
               $workspace.workspace.servers[] as $server |
-              $service.service.mounts[] as $smount |
-              ($workspace.workspace.paths[] | select(.type == $smount.type)) as $wpath |
+              $service.service.mounts[] as $mount |
+              ($server.paths[] | select(.type == $mount.type)) as $wspath |
               {
                 serverid: $server.id,
-                serverrole: $server.role,
-                name: ($smount.type + ($smount.path // "")),
-                type: $smount.type,
-                chmod: $smount.chmod,
-                source: $smount.source,
+                name: ($mount.type + ($mount.path // "")),
+                type: $mount.type,
+                chmod: $mount.chmod,
+                source: $mount.source,
                 path: (
-                  ($server.mountpoint // "" | gsub("\\$\\{disk\\}"; "1")) + "/" +
-                  (if ($smount.path == null or $smount.path == "") then $wpath.path else $smount.path end)
+                  $wspath.path + "/" + $moduleid + ($mount.path // $mount.type)
                 )
               }
             ]

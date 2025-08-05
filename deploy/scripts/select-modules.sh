@@ -10,6 +10,8 @@
 set -euo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: `$BASH_COMMAND`"' ERR
 
+: "${WORKSPACE:?Environment variable WORKSPACE not set}"
+
 # Setup
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULE_DIR="$SCRIPT_DIR/../../modules"
@@ -21,6 +23,7 @@ if [[ -f "$SCRIPT_DIR/utilities.sh" ]]; then
   log INFO "[*] Loaded $SCRIPT_DIR/utilities.sh"
 else
   echo "[X] Missing utilities.sh at $SCRIPT_DIR" >&2
+  echo "selection=$(jq -c -n '{include: [{id: "", file: ""}]}')" >> "$GITHUB_OUTPUT"
   exit 1
 fi
 
@@ -68,7 +71,7 @@ fi
 # Extract module matches
 modules=$(jq -n --argjson ids "$selected_set" '
   [inputs
-   | {file: input_filename, id: .module.id}
+   | {id: .module.id, file: input_filename}
    | select(.id != null and (.id | IN($ids[])))]
 ' "${module_files[@]}" 2>/dev/null || true)
 
@@ -78,8 +81,10 @@ if [[ -z "$modules" || "$modules" == "[]" ]]; then
   exit 0
 fi
 
-# Final output
+# Output selected modules
 log INFO "[*] Output selected modules"
 echo "$modules" | jq .
 
-echo "selection=$(jq -c --argjson include "$modules" '{include: $include}')" >> "$GITHUB_OUTPUT"
+# Select for github output
+log INFO "[*] Save selected modules for output"
+echo "selection=$(jq -c -n --argjson mods "$modules" '{include: $mods}')" >> "$GITHUB_OUTPUT"
