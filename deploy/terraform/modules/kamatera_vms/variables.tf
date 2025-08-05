@@ -1,7 +1,3 @@
-#
-# THESE VARIABLES ARE REQUIRED FOR THE DEPLOYMENT
-#
-
 # Kamatera API details
 variable "kamatera_api_key" {
   description = "Kamatera API key"
@@ -12,16 +8,6 @@ variable "kamatera_api_secret" {
   description = "Kamatera API secret"
   type        = string
 }
-
-# Workspace
-variable "workspace" {
-  description = "Workspace: test, staging, production"
-  type        = string  
-}
-
-#
-# THESE VARIABLES ARE COVERED BY THE TERRAFORM VARIABLES FILE
-#
 
 # Virtual Machines Configuration for Terraform
 variable "virtualmachines" {

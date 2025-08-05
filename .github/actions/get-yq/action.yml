@@ -1,0 +1,18 @@
+name: Fetch YQ
+description: Reusable action to install yq (Mike Farah version)
+
+runs:
+  using: composite
+  steps:
+    # Download yq binary
+    - name: Download yq binary
+      shell: bash
+      run: |
+        YQ_VERSION=$(curl -s https://api.github.com/repos/mikefarah/yq/releases/latest | grep tag_name | cut -d '"' -f 4)
+        curl -L "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o /usr/local/bin/yq
+        chmod +x /usr/local/bin/yq
+
+    # Verify version
+    - name: Verify yq version
+      shell: bash
+      run: yq --version

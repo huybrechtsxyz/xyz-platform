@@ -1,0 +1,9 @@
+apiVersion: platform.huybrechts.xyz/v1.0
+kind: module
+metadata:
+  name: traefik
+spec:
+  repository: huybrechtsxyz/xyz-traefik
+  reference: dev-traefik
+  configPath: deploy/service.yaml
+  deployPath: deploy

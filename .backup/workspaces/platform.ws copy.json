@@ -1,0 +1,167 @@
+{
+  "api-version": 1.0,
+  "workspace": {
+    "id": "platform",
+    "name": "Platform Workspace on Kamatera",
+    "version": "1.0.0",
+    "description": "Workspace deployment configuration for the shared Kamatera Platform.",
+    "providers": [
+      {
+        "name": "kamatera",
+        "type": "cloudprovider",
+        "description": "Kamatera Cloud Provider",
+        "properties": {
+          "region": "eu-fr"
+        }
+      }
+    ],
+    "resourceTypes": [
+      {
+        "name": "vm-manager",
+        "type": "virtualmachine",
+        "description": "Virtual Machine",
+        "properties": {
+          "cpu_type": "A",
+          "cpu_cores": 1,
+          "ram_mb": 1024,
+          "unit_cost": 5.00
+        }
+      },
+      {
+        "name": "vm-infra",
+        "type": "virtualmachine",
+        "description": "Infrastructure Virtual Machine",
+        "properties": {
+          "cpu_type": "A",
+          "cpu_cores": 1,
+          "ram_mb": 4096,
+          "unit_cost": 11.00
+        }
+      },
+      {
+        "name": "vm-worker",
+        "type": "virtualmachine",
+        "description": "Worker Virtual Machine",
+        "properties": {
+          "cpu_type": "A",
+          "cpu_cores": 1,
+          "ram_mb": 2048,
+          "unit_cost": 6.00
+        }
+      }
+    ],
+    "mounts": [
+      { "type": "config", "path": "/etc"     , "volume": "replicated" },
+      { "type": "docs",   "path": "/opt/docs", "volume": "replicated" },
+      { "type": "data",   "path": "/var/data", "volume": "local" },
+      { "type": "logs",   "path": "/var/logs", "volume": "local" },
+      { "type": "serve",  "path": "/srv"     , "volume": "distributed" }
+    ],
+    "variables": [
+      { "key": "WORKSPACE", "value": "platform" },
+      { "key": "DATACENTER", "value": "kamatera-eu-fr" },
+      { "key": "DOCKER_WORKER", "value": "worker" },
+      
+      { "key": "DOMAIN_DEV", "value": "huybrechts.dev" },
+      { "key": "DOMAIN_XYZ", "value": "huybrechts.xyz" },
+      { "key": "DOMAIN_LIZARD", "value": "theorderoftheblacklizard.be" },
+      { "key": "DOMAIN_RPG", "value": "alderwyn.xyz" },
+      
+      { "key": "PLATFORM_EMAIL", "value": "webmaster@huybrechts.xyz" },
+      { "key": "PLATFORM_SQL_NAME", "value": "platform-db" }    
+    ],
+    "secrets": [
+      { "key": "PLATFORM_USERNAME", "source": "bitwarden", "id": "09171644-23c8-4b7f-9015-b2e5015a4572" },
+      { "key": "PLATFORM_PASSWORD", "source": "bitwarden", "id": "ffa5e6f9-de6a-47fa-887e-b2e5015ae1a4" }
+    ],
+    "resources": [
+      {
+        "id": "manager-1",
+        "resourceType": "vm-manager",
+        "labels": [],
+        "properties": {
+          "disks": [
+            { "size": 20, "label": "manager-1-os" }
+          ],
+          "mountpoint": "/mnt/data${disk}/app",
+          "mounts": [
+            { "type": "config", "disk": 1 },
+            { "type": "docs", "disk": 1 },
+            { "type": "data", "disk": 1 },
+            { "type": "logs", "disk": 1 },
+            { "type": "serve", "disk": 1 }
+          ]
+        }
+      },
+      {
+        "id": "infra-1",
+        "role": "infra",
+        "labels": [],
+        "disks": [
+          { "size": 20, "label": "infra-1-os" },
+          { "size": 40, "label": "infra-1-data" }
+        ],
+        "mountpoint": "/mnt/data${disk}/app",
+        "mounts": [
+          { "type": "config", "disk": 2 },
+          { "type": "docs", "disk": 2 },
+          { "type": "data", "disk": 2 },
+          { "type": "logs", "disk": 2 },
+          { "type": "serve", "disk": 2 }
+        ]
+      },
+      {
+        "id": "infra-2",
+        "role": "infra",
+        "labels": [],
+        "disks": [
+          { "size": 20, "label": "infra-2-os" },
+          { "size": 40, "label": "infra-2-data" }
+        ],
+        "mountpoint": "/mnt/data${disk}/app",
+        "mounts": [
+          { "type": "config", "disk": 2 },
+          { "type": "docs", "disk": 2 },
+          { "type": "data", "disk": 2 },
+          { "type": "logs", "disk": 2 },
+          { "type": "serve", "disk": 2 }
+        ]
+      },
+      {
+        "id": "worker-1",
+        "role": "worker",
+        "labels": [],
+        "disks": [
+          { "size": 20, "label": "worker-1-os" }
+        ],
+        "mountpoint": "/mnt/data${disk}/app",
+        "mounts": [
+          { "type": "config", "disk": 1 },
+          { "type": "docs", "disk": 1 },
+          { "type": "data", "disk": 1 },
+          { "type": "logs", "disk": 1 },
+          { "type": "serve", "disk": 1 }
+        ]
+      },
+      {
+        "id": "worker-2",
+        "role": "worker",
+        "labels": [],
+        "disks": [
+          { "size": 20, "label": "worker-2-os" }
+        ],
+        "mountpoint": "/mnt/data${disk}/app",
+        "mounts": [
+          { "type": "config", "disk": 1 },
+          { "type": "docs", "disk": 1 },
+          { "type": "data", "disk": 1 },
+          { "type": "logs", "disk": 1 },
+          { "type": "serve", "disk": 1 }
+        ]
+      }
+    ],
+    "modules": [
+      { "id": "traefik", "namespace": "app", "environment": "infra", "priority": 1, "state": "enabled" }
+    ]
+  }
+}

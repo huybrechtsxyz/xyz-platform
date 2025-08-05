@@ -1,12 +1,16 @@
 {
   "api-version": 1.0,
   "workspace": {
-    "deploy": {
-      "id": "platform",
-      "name": "Platform Workspace on Kamatera",
-      "version": "1.0.0",
-      "description": "Workspace deployment configuration for the shared Kamatera Platform."
-    },
+    "id": "platform",
+    "name": "Platform Workspace on Kamatera",
+    "version": "1.0.0",
+    "description": "Workspace deployment configuration for the shared Kamatera Platform."
+    
+
+
+
+
+    
     "roles": {
       "manager": {
         "cpu_type": "A",

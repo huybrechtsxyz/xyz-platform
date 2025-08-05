@@ -1,8 +1,12 @@
-# Example file that will be overwritten by the pipeline in terraform apply
 # Environment configuration file for Terraform
+# Overwritten by the pipeline in terraform apply
+
 # Server roles configuration
-server_roles = {
+virtualmachines = {
   manager = {
+    provider  = "kamatera"
+    publickey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC3..."
+    password  = "securepassword123"
     count     = 1
     cpu_type  = "A"
     cpu_cores = 1
@@ -11,6 +15,9 @@ server_roles = {
     unit_cost = 5.00
   }
   infra = {
+    provider  = "kamatera"
+    publickey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC3..."
+    password  = "securepassword123"
     count     = 2
     cpu_type  = "A"
     cpu_cores = 1
@@ -19,6 +26,9 @@ server_roles = {
     unit_cost = 11.00
   }
   worker = {
+    provider  = "kamatera"
+    publickey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC3..."
+    password  = "securepassword123"
     count     = 2
     cpu_type  = "A"
     cpu_cores = 1
