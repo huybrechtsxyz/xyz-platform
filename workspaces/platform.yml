@@ -1,0 +1,86 @@
+apiVersion: platform.huybrechts.xyz/v1.0
+kind: Workspace
+meta:
+  name: platform
+  description: Platform Workspace on Kamatera
+  version: 1.0.0
+spec:
+  variables:
+    - key: WORKSPACE
+      value: platform
+    - key: DATACENTER
+      value: kamatera-eu-fr
+    - key: DOCKER_WORKER
+      value: worker
+    - key: DOMAIN_DEV
+      value: huybrechts.dev
+    - key: DOMAIN_XYZ
+      value: huybrechts.xyz 
+    - key: DOMAIN_LIZARD
+      value: theorderoftheblacklizard.be
+    - key: DOMAIN_RPG
+      value: alderwyn.xyz
+    - key: PLATFORM_EMAIL
+      value: webmaster@huybrechts.xyz
+    - key: PLATFORM_DATABASE
+      value: platform-db
+
+  secrets:
+    - key: PLATFORM_USERNAME
+      source: bitwarden
+      value: 09171644-23c8-4b7f-9015-b2e5015a4572
+    - key: PLATFORM_PASSWORD
+      source: bitwarden
+      value: ffa5e6f9-de6a-47fa-887e-b2e5015ae1a4
+
+  providers:
+    - name: kamatera
+      tags: [ cloudprovider ]
+      properties:
+        country: Germany
+        region: Frankfurt
+
+  templates:
+    - name: vm-manager
+      file: templates/vm-manager.yml
+    - name: vm-infrastructure
+      file: templates/vm-infrastructure.yml
+    - name: vm-applications
+      file: templates/vm-applications.yml
+
+  mountpaths:
+    - name: config
+      path: /etc
+      volume: replicated
+    - name: docs
+      path: /var/docs
+      volume: replicated
+    - name: data
+      path: /var/data
+      volume: local
+    - name: logs
+      path: /var/logs
+      volume: local
+    - name: serve
+      path: /var/serve
+      volume: distributed
+
+  resources:
+    - name: vm-manager
+      tags: [ vm, management ]
+      properties:
+        template: vm-manager
+        provider: kamatera
+        count: 1
+    - name: vm-infrastructure
+      tags: [ vm, infrastructure ]
+      properties:
+        template: vm-infrastructure
+        provider: kamatera
+        count: 2
+    - name: vm-applications
+      tags: [ vm, applications ]
+      properties:
+        template: vm-applications
+        provider: kamatera
+        count: 2

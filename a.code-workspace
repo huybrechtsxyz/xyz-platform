@@ -14,6 +14,14 @@
       "**/bin": true,
       "**/obj": true
     },
-    "makefile.configureOnOpen": false
+    "makefile.configureOnOpen": false,
+    "vsicons.associations.files": [ 
+
+    ],
+    "vsicons.associations.folders": [
+      { "icon": "azurepipelines", "extensions": ["deploy"], "format": "svg", "light": true },
+      { "icon": "controller", "extensions": ["terraform"], "format": "svg", "light": true },
+      { "icon": "paket", "extensions": ["workspaces"], "format": "svg", "light": true }
+    ]
   }
 }

@@ -30,10 +30,13 @@ locals {
         password    = cfg.password
         full_name   = "${role}-${i + 1}"
         role        = role
+        os_name     = cfg.os_name
+        os_code     = cfg.os_code
         cpu_cores   = cfg.cpu_cores
         cpu_type    = cfg.cpu_type
         ram_mb      = cfg.ram_mb
         disks_gb    = cfg.disks_gb
+        billing     = cfg.billing
         unit_cost   = cfg.unit_cost
       }
     ]
@@ -52,4 +55,6 @@ module "kamatera_vm" {
   virtualmachines = local.kamatera_vms
   kamatera_api_key = var.kamatera_api_key
   kamatera_api_secret = var.kamatera_api_secret
+  kamatera_country = var.kamatera_country
+  kamatera_region = var.kamatera_region
 }

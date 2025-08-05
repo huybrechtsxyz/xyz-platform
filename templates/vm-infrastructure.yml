@@ -1,0 +1,33 @@
+apiVersion: platform.huybrechts.xyz/v1.0
+kind: resourceType
+meta:
+  name: vm-infrastructure
+  description: Infrastructure Virtual Machine
+  version: 1.0.0
+spec:
+  type: virtualmachine
+  properties:
+    osName: Ubuntu
+    osCode: "24.04 64bit"
+    cpuType: A
+    cpuCores: 1
+    ramMb: 4096
+    billing: monthly
+    unitCost: 11.00
+  disks:
+    - size: 20
+      label: "${resourceId}-os"
+    - size: 40
+      label: "${resourceId}-data"
+  mountpoint: "/mnt/data${disk}"
+  mountpaths:
+    - type: config
+      disk: 2
+    - type: docs
+      disk: 2
+    - type: data
+      disk: 2
+    - type: logs
+      disk: 2
+    - type: serve
+      disk: 2

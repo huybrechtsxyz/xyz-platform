@@ -1,0 +1,31 @@
+apiVersion: platform.huybrechts.xyz/v1.0
+kind: resourceType
+meta:
+  name: vm-manager
+  description: Management Virtual Machine
+  version: 1.0.0
+spec:
+  type: virtualmachine
+  properties:
+    osName: Ubuntu
+    osCode: "24.04 64bit"
+    cpuType: A
+    cpuCores: 1
+    ramMb: 1024
+    billing: monthly
+    unitCost: 5.00
+  disks:
+    - size: 20
+      label: "${resourceId}-os"
+  mountpoint: "/mnt/data${disk}"
+  mountpaths:
+    - type: config
+      disk: 1
+    - type: docs
+      disk: 1
+    - type: data
+      disk: 1
+    - type: logs
+      disk: 1
+    - type: serve
+      disk: 1

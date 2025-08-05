@@ -6,18 +6,23 @@ provider "kamatera" {
 
 # define the data center we will create the server and all related resources in
 # see the section below "Listing available data centers" for more details
-data "kamatera_datacenter" "frankfurt" {
-  country = "Germany"
-  name = "Frankfurt"
+data "kamatera_datacenter" "dc1" {
+  country = var.kamatera_country
+  name  = var.kamatera_region
 }
 
 # define the server image we will create the server with
 # see the section below "Listing available public images" for more details
 # also see "Using a private image" if you want to use a private image you created yourself
-data "kamatera_image" "ubuntu" {
-  datacenter_id = data.kamatera_datacenter.frankfurt.id
-  os = "Ubuntu"
-  code = "24.04 64bit"
+data "kamatera_image" "images" {
+  for_each = {
+    for image in local.unique_images :
+    "${image.os_name}-${image.os_code}" => image
+  }
+
+  datacenter_id = data.kamatera_datacenter.dc1.id
+  os            = each.value.os_name
+  code          = each.value.os_code
 }
 
 # Create a random suffix resource
@@ -30,7 +35,7 @@ resource "random_string" "suffix" {
 # Set up private network
 # Name example: vlan-shared-1234
 resource "kamatera_network" "private-lan" {
-  datacenter_id = data.kamatera_datacenter.frankfurt.id
+  datacenter_id = data.kamatera_datacenter.dc1.id
   name = "vlan-${var.workspace}-${random_string.suffix.result}"
 
   subnet {
@@ -47,13 +52,13 @@ resource "kamatera_server" "server" {
   for_each         = { for server in vars.var.virtualmachines : server.full_name => server }
 
   name             = "srv-${var.workspace}-${each.value.full_name}-${random_string.suffix.result}"
-  image_id         = data.kamatera_image.ubuntu.id
-  datacenter_id    = data.kamatera_datacenter.frankfurt.id
+  image_id         = data.kamatera_image.images["${each.value.os_name}-${each.value.os_code}"].id
+  datacenter_id    = data.kamatera_datacenter.dc1.id
   cpu_cores        = each.value.cpu_cores
   cpu_type         = each.value.cpu_type
   ram_mb           = each.value.ram_mb
   disk_sizes_gb    = each.value.disks_gb
-  billing_cycle    = "hourly"
+  billing_cycle    = each.value.billing
   power_on         = true
   password         = each.value.password
   ssh_pubkey       = each.value.publickey
