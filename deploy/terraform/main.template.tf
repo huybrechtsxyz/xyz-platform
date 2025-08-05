@@ -52,6 +52,7 @@ locals {
 # Define the data center we will create the server and all related resources in
 module "kamatera_vm" {
   source = "./modules/kamatera-vm"
+  workspace = var.workspace
   virtualmachines = local.kamatera_vms
   kamatera_api_key = var.kamatera_api_key
   kamatera_api_secret = var.kamatera_api_secret

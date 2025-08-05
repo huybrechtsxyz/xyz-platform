@@ -1,5 +1,5 @@
 apiVersion: platform.huybrechts.xyz/v1.0
-kind: Workspace
+kind: workspace
 meta:
   name: platform
   description: Platform Workspace on Kamatera
@@ -26,6 +26,24 @@ spec:
       value: platform-db
 
   secrets:
+    # Credentials for Terraform
+    - key: TERRAFORM_API_TOKEN
+      source: bitwarden
+      value: d47e736b-2db8-47d5-b46b-b2c8016ece73
+    # Credentials for Kamatera
+    - key: KAMATERA_API_KEY
+      source: bitwarden
+      value: 357068b9-9f5f-4f79-940c-b2c8016cb88f
+    - key: KAMATERA_API_SECRET
+      source: bitwarden
+      value: 6c9295a8-9fa4-4d38-8929-b2c8016d9b43
+    - key: KAMATERA PUBLIC_KEY
+      source: bitwarden
+      value: 6cc5b975-56a9-4d7a-80c7-b2c90151cce0
+    - key: KAMATERA_ROOT_PASSWORD
+      source: bitwarden
+      value: 5083ae32-429d-428b-b7df-b2c901441bbb
+    # Platform credentials    
     - key: PLATFORM_USERNAME
       source: bitwarden
       value: 09171644-23c8-4b7f-9015-b2e5015a4572

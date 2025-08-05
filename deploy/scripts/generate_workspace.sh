@@ -12,23 +12,35 @@
 set -euo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: `$BASH_COMMAND`"' ERR
 
-#WORKSPACE_FILE="${1:-}"
-WORKSPACE_FILE="C:/Users/vince/Sources/xyz-platform/workspaces/platform.yml"
+# Logging function
+log() {
+  local level="$1"; shift
+  local msg="$*"
+  local timestamp
+  timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+  case "$level" in
+    INFO)    echo -e "[\033[1;34mINFO\033[0m]  - $msg" ;;
+    WARN)    echo -e "[\033[1;33mWARN\033[0m]  - $msg" ;;
+    ERROR)   echo -e "[\033[1;31mERROR\033[0m] - $msg" >&2 ;;
+    *)       echo -e "[UNKNOWN] - $msg" ;;
+  esac
+}
+
+WORKSPACE_FILE="${1:-}"
 : "${WORKSPACE_FILE:?Usage: $0 <workspace_file>}"
 if [[ ! -f "$WORKSPACE_FILE" ]]; then
-  echo "[X] Workspace file not found: $WORKSPACE_FILE" >&2
+  log ERROR "[X] Workspace file not found: $WORKSPACE_FILE" >&2
   exit 1
 fi
 
-#OUTPUT_FILE="${2:-workspace_vars.sh}"
-OUTPUT_FILE="C:/Users/vince/Sources/xyz-platform/deploy/workspace.tfvars"
+OUTPUT_FILE="${2:-workspace_vars.sh}"
 if [[ -z "$OUTPUT_FILE" ]]; then
-  echo "[X] Output file not specified" >&2
+  log ERROR "[X] Output file not specified" >&2
   exit 1
 fi
 
 if ! command -v yq &> /dev/null; then
-  echo "[X] yq is required but not installed."
+  log ERROR "[X] yq is required but not installed."
   exit 1
 fi
 
@@ -54,7 +66,7 @@ for (( i=0; i<resource_count; i++ )); do
   # Template file path
   template_file=$(yq ".spec.templates[] | select(.name == \"$template\") | .file" "$WORKSPACE_FILE")
   if [[ -z "$template_file" ]]; then
-    echo "[X] Template file not found for resource: $resource_name" >&2
+    log WARN "[!] Template file not found for resource: $resource_name" >&2
     continue
   fi
 
@@ -86,4 +98,4 @@ done
 echo "}" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
-echo "[+] Generated terraform workspace $OUTPUT_FILE"
+log INFO "[+] Generated terraform workspace $OUTPUT_FILE"

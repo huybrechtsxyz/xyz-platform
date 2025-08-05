@@ -1,3 +1,9 @@
+# Workspace
+variable "workspace" {
+  description = "Workspace: test, staging, production"
+  type        = string  
+}
+
 # Kamatera API details
 variable "kamatera_api_key" {
   description = "Kamatera API key"
