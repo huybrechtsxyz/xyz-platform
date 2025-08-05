@@ -654,7 +654,7 @@ create_service_serverpaths() {
                 chmod: $mount.chmod,
                 source: $mount.source,
                 path: (
-                  $wspath.path + "/" + moduleid + ($mount.path // $mount.type)
+                  $wspath.path + "/" + $moduleid + ($mount.path // $mount.type)
                 )
               }
             ]
