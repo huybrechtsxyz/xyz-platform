@@ -312,7 +312,7 @@ create_serverpaths() {
 }
 
 enable_service() {
-log INFO "[*] Deploying service $SERVICE_ID..."
+log INFO "[*] Deploying service $MODULE_ID..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
 chmod +x "$VAR_PATH_DEPLOY/enable-remote-service.sh"
 "$VAR_PATH_DEPLOY/enable-remote-service.sh" "$VAR_PATH_WORKSPACE"
@@ -321,11 +321,11 @@ then
 log ERROR "[X] Remote deployment failed on $REMOTE_IP"
 exit 1
 fi
-INFO "[*] Deploying service $SERVICE_ID...DONE"
+INFO "[*] Deploying service $MODULE_ID...DONE"
 }
 
 disable_service() {
-log INFO "[*] Disabling service $SERVICE_ID..."
+log INFO "[*] Disabling service $MODULE_ID..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
 chmod +x "$VAR_PATH_DEPLOY/disable-remote-service.sh"
 "$VAR_PATH_DEPLOY/disable-remote-service.sh" "$VAR_PATH_WORKSPACE"
@@ -334,11 +334,11 @@ then
 log ERROR "[X] Remote deployment failed on $REMOTE_IP"
 exit 1
 fi
-log INFO "[*] Disabling service $SERVICE_ID...DONE"
+log INFO "[*] Disabling service $MODULE_ID...DONE"
 }
 
 remove_service() {
-log INFO "[*] Removing service $SERVICE_ID..."
+log INFO "[*] Removing service $MODULE_ID..."
 if ! ssh -o StrictHostKeyChecking=no root@"$REMOTE_IP" << EOF
 chmod +x "$VAR_PATH_DEPLOY/remove-remote-service.sh"
 "$VAR_PATH_DEPLOY/remove-remote-service.sh" "$VAR_PATH_WORKSPACE"
@@ -347,7 +347,7 @@ then
 log ERROR "[X] Remote deployment failed on $REMOTE_IP"
 exit 1
 fi
-log INFO "[*] Removing service $SERVICE_ID...DONE"
+log INFO "[*] Removing service $MODULE_ID...DONE"
 }
 
 main() {
