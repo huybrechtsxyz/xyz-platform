@@ -5,13 +5,18 @@ meta:
   description: Platform Workspace on Kamatera
   version: 1.0.0
 spec:
+  properties:
+    primaryMachine: manager-1
+
   variables:
+    # General variables for the workspace
     - key: WORKSPACE
       value: platform
     - key: DATACENTER
       value: kamatera-eu-fr
     - key: DOCKER_WORKER
       value: worker
+    # Domain variables for the platform
     - key: DOMAIN_DEV
       value: huybrechts.dev
     - key: DOMAIN_XYZ
@@ -20,6 +25,7 @@ spec:
       value: theorderoftheblacklizard.be
     - key: DOMAIN_RPG
       value: alderwyn.xyz
+    # Platform variables
     - key: PLATFORM_EMAIL
       value: webmaster@huybrechts.xyz
     - key: PLATFORM_DATABASE
@@ -59,12 +65,16 @@ spec:
         region: Frankfurt
 
   templates:
+    # Virtual Machine templates for the platform
     - name: vm-manager
       file: templates/vm-manager.yml
     - name: vm-infrastructure
       file: templates/vm-infrastructure.yml
     - name: vm-applications
       file: templates/vm-applications.yml
+    # Firewall templates
+    - name: fw-docker
+      file: templates/fw-docker.yml
 
   mountpaths:
     - name: config
@@ -87,18 +97,27 @@ spec:
     - name: vm-manager
       tags: [ vm, management ]
       properties:
+        type: manager
+        manager: true
         template: vm-manager
+        firewall: fw-docker
         provider: kamatera
         count: 1
     - name: vm-infrastructure
       tags: [ vm, infrastructure ]
       properties:
+        type: infra
+        manager: false
         template: vm-infrastructure
+        firewall: fw-docker
         provider: kamatera
         count: 2
     - name: vm-applications
       tags: [ vm, applications ]
       properties:
+        type: worker
+        manager: false
         template: vm-applications
+        firewall: fw-docker
         provider: kamatera
         count: 2

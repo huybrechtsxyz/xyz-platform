@@ -17,6 +17,7 @@ spec:
   disks:
     - size: 20
       label: "${resourceId}-os"
+  installpoint: "/opt/install/app"
   mountpoint: "/mnt/data${disk}"
   mountpaths:
     - type: config

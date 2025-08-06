@@ -4,6 +4,13 @@ variable "workspace" {
   type        = string  
 }
 
+# Primary machine label for the workspace
+variable "manager_id" {
+  description = "ID of the manager VM, used for control and management"
+  type        = string
+  default     = "manager-1"  # Default value, can be overridden in workspace
+}
+
 # Kamatera API details
 variable "kamatera_api_key" {
   description = "Kamatera API key"

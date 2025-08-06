@@ -5,7 +5,7 @@
 kamatera_country = "Germany"
 kamatera_region = "Frankfurt"
 
-# Server roles configuration
+# Server configuration
 virtualmachines = {
   manager = {
     provider  = "kamatera"

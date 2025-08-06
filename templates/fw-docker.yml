@@ -1,0 +1,156 @@
+apiVersion: platform.huybrechts.xyz/v1.0
+kind: resourceType
+meta:
+  name: vm-applications
+  description: Applications Virtual Machine
+  version: 1.0.0
+spec:
+  reset: true
+  defaults:
+    # Deny all incoming traffic by default
+    - incoming: deny
+      comment: Deny all incoming traffic by default
+    # Deny all outgoing traffic by default
+    - outgoing: deny
+      comment: Deny all outgoing traffic by default
+  deny:
+  allow:
+    # Essential System Services
+    - direction: out
+      proto: udp
+      port: 53
+      comment: DNS (UDP)
+    - direction: out
+      proto: tcp
+      port: 53
+      comment: DNS (TCP)
+    - direction: out
+      proto: udp
+      port: 123
+      comment: NTP
+    - direction: in
+      interface: lo
+      comment: Loopback IN
+    - direction: out
+      interface: lo
+      comment: Loopback OUT
+    # Package Management (Optional)
+    - direction: out
+      proto: tcp
+      port: 20,21
+      comment: FTP
+    - direction: out
+      proto: tcp
+      port: 11371
+      comment: GPG keyserver
+    # SSH and HTTP and HTTPS rules
+    - direction: in
+      proto: tcp
+      port: 22
+      comment: SSH
+    - direction: in
+      proto: tcp
+      port: 80
+      comment: HTTP
+    - direction: in
+      proto: tcp
+      port: 443
+      comment: HTTPS
+    - direction: out
+      proto: tcp
+      port: 80
+      comment: HTTP
+    - direction: out
+      proto: tcp
+      port: 443
+      comment: HTTPS
+    # SSH rules  
+    - direction: out
+      proto: tcp
+      port: 22
+      to: 10.0.0.0/23
+      comment: SSH Outbound to internal nodes
+    # Docker Swarm rules
+    - direction: in
+      proto: tcp
+      port: 2377
+      from: 10.0.0.0/23
+      comment: Swarm Control IN
+    - direction: out
+      proto: tcp
+      port: 2377
+      to: 10.0.0.0/23
+      comment: Swarm Control OUT
+    - direction: in
+      proto: udp
+      port: 4789
+      from: 10.0.0.0/23
+      comment: Swarm Overlay Network IN
+    - direction: out
+      proto: udp
+      port: 4789
+      to: 10.0.0.0/23
+      comment: Swarm Overlay Network OUT
+    - direction: in
+      proto: tcp
+      port: 7946
+      from: 10.0.0.0/23
+      comment: Swarm Discovery TCP
+    - direction: in
+      proto: udp
+      port: 7946
+      from: 10.0.0.0/23
+      comment: Swarm Discovery UDP
+    - direction: out
+      proto: tcp
+      port: 7946
+      to: 10.0.0.0/23
+      comment: Swarm Gossip TCP OUT
+    - direction: out
+      proto: udp
+      port: 7946
+      to: 10.0.0.0/23
+      comment: Swarm Gossip UDP OUT
+    # Database rules
+    - direction: in
+      proto: tcp
+      port: 5432
+      from: 10.0.0.0/23
+      comment: Postgres IN
+    - direction: out
+      proto: tcp
+      port: 5432
+      to: 10.0.0.0/23
+      comment: Postgres OUT
+    # Redis rules
+    - direction: in
+      proto: tcp
+      port: 6379
+      from: 10.0.0.0/23
+      comment: Redis IN
+    - direction: out
+      proto: tcp
+      port: 6379
+      to: 10.0.0.0/23
+      comment: Redis OUT
+    # GlusterFS rules
+    - direction: in
+      proto: tcp
+      port: 24007:24008
+      from: 10.0.0.0/23
+      comment: GlusterFS Management IN
+    - direction: in
+      proto: tcp
+      port: 49152:49251
+      from: 10.0.0.0/23
+      comment: GlusterFS Bricks IN
+    - direction: out
+      proto: tcp
+      port: 24007:24008
+      to: 10.0.0.0/23
+      comment: GlusterFS Management OUT
+    - direction: out
+      proto: tcp
+      port: 49152:49251
+      to: 10.0.0.0/23
+      comment: GlusterFS Bricks OUT

@@ -8,6 +8,13 @@ variable "workspace" {
   type        = string  
 }
 
+# Primary machine label for the workspace
+variable "manager_id" {
+  description = "ID of the manager VM, used for control and management"
+  type        = string
+  default     = "manager-1"  # Default value, can be overridden in workspace
+}
+
 # Kamatera API details
 variable "kamatera_api_key" {
   description = "Kamatera API key"
@@ -50,7 +57,7 @@ variable "virtualmachines" {
     billing   : string
     unit_cost : number
   }))
-  description = "Map of server roles and their hardware specs including list of disk sizes"
+  description = "Map of servers and their hardware specs including list of disk sizes"
 
   validation {
     condition = alltrue([for r in var.virtualmachines : contains(["A", "B", "D", "T"], r.cpu_type) ])
@@ -59,7 +66,7 @@ variable "virtualmachines" {
 
   validation {
     condition     = alltrue([for r in var.virtualmachines : r.ram_mb % 1024 == 0])
-    error_message = "Each role's RAM must be a multiple of 1024 MB."
+    error_message = "Each server's RAM must be a multiple of 1024 MB."
   }
 
   validation {

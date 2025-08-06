@@ -22,14 +22,14 @@ terraform {
 locals {
   # Flatten the virtual machines configuration into a list of server objects.
   virtualservers = flatten([
-    for role, cfg in var.virtualmachines :
+    for type, cfg in var.virtualmachines :
     [
       for i in range(cfg.count) : {
         provider    = cfg.provider
         publickey   = cfg.publickey
         password    = cfg.password
-        full_name   = "${role}-${i + 1}"
-        role        = role
+        full_name   = "${type}-${i + 1}"
+        type        = type
         os_name     = cfg.os_name
         os_code     = cfg.os_code
         cpu_cores   = cfg.cpu_cores
@@ -44,7 +44,7 @@ locals {
 
   # Filter out only Kamatera VMs from the virtual servers
   kamatera_vms = {
-    for role, cfg in local.virtualservers : role => cfg
+    for type, cfg in local.virtualservers : type => cfg
     if cfg.provider == "kamatera"
   }
 }
@@ -53,6 +53,7 @@ locals {
 module "kamatera_vm" {
   source = "./modules/kamatera-vm"
   workspace = var.workspace
+  manager_id = var.manager_id
   virtualmachines = local.kamatera_vms
   kamatera_api_key = var.kamatera_api_key
   kamatera_api_secret = var.kamatera_api_secret

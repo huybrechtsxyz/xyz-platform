@@ -12,6 +12,16 @@
 set -euo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: `$BASH_COMMAND`"' ERR
 
+if ! command -v yq &> /dev/null; then
+  echo "[X] ERROR yq is required but not installed."
+  exit 1
+fi
+
+# Validate workspace parameters and environment variables
+WORKSPACE_NAME=${1:-}
+WORKSPACE_FILE="$SCRIPT_DIR/../../${$2}"
+OUTPUT_FILE="${2:-$SCRIPT_DIR/../terraform/workspace.tfvars}"
+
 # Logging function
 log() {
   local level="$1"; shift
@@ -26,23 +36,13 @@ log() {
   esac
 }
 
-WORKSPACE_FILE="${1:-}"
-: "${WORKSPACE_FILE:?Usage: $0 <workspace_file>}"
-if [[ ! -f "$WORKSPACE_FILE" ]]; then
-  log ERROR "[X] Workspace file not found: $WORKSPACE_FILE" >&2
-  exit 1
-fi
-
-OUTPUT_FILE="${2:-workspace_vars.sh}"
 if [[ -z "$OUTPUT_FILE" ]]; then
   log ERROR "[X] Output file not specified" >&2
   exit 1
 fi
 
-if ! command -v yq &> /dev/null; then
-  log ERROR "[X] yq is required but not installed."
-  exit 1
-fi
+# Get workspace data
+WORKSPACE_DATA=$(get_workspace_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
 
 # Extract region and country
 kamatera_country=$(yq '.spec.providers[] | select(.name == "kamatera") | .properties.country' "$WORKSPACE_FILE")
@@ -58,7 +58,7 @@ echo "virtualmachines = {" >> "$OUTPUT_FILE"
 resource_count=$(yq '.spec.resources | length' "$WORKSPACE_FILE")
 for (( i=0; i<resource_count; i++ )); do
   # Extract resource details
-  name=$(yq ".spec.resources[$i].name" "$WORKSPACE_FILE")
+  name=$(yq ".spec.resources[$i].properties.type" "$WORKSPACE_FILE")
   provider=$(yq ".spec.resources[$i].properties.provider" "$WORKSPACE_FILE")
   template=$(yq ".spec.resources[$i].properties.template" "$WORKSPACE_FILE")
   count=$(yq ".spec.resources[$i].properties.count" "$WORKSPACE_FILE")
@@ -99,3 +99,5 @@ echo "}" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
 log INFO "[+] Generated terraform workspace $OUTPUT_FILE"
+cat "$OUTPUT_FILE"
+log INFO "[+] Generated terraform workspace

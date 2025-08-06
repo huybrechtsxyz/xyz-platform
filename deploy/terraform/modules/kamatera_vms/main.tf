@@ -32,6 +32,15 @@ resource "random_string" "suffix" {
   special = false
 }
 
+locals {
+  unique_images = distinct([
+    for s in var.virtualmachines : {
+      os_name = s.os_name
+      os_code = s.os_code
+    }
+  ])
+}
+
 # Set up private network
 # Name example: vlan-shared-1234
 resource "kamatera_network" "private-lan" {
