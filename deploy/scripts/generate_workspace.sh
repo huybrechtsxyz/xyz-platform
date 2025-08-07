@@ -30,6 +30,7 @@ OUTPUT_FILE={$3}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Load utilities
+source "$SCRIPT_DIR/utilities.sh"
 load_script "$SCRIPT_DIR/utilities.sh"
 load_script "$SCRIPT_DIR/use_workspace.sh"
 

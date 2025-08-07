@@ -26,6 +26,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : ${BITWARDEN_TOKEN?"BITWARDEN_TOKEN is not set. Please set it to the bitwarden api token."}
 
 # Load script utilities
+source "$SCRIPT_DIR/utilities.sh"
 load_script "$SCRIPT_DIR/utilities.sh"
 load_script "$SCRIPT_DIR/use_workspace.sh"
 

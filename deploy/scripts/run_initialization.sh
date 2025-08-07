@@ -28,6 +28,7 @@ WORKSPACE_FILE="./$WORKSPACE_FILE"
 VARI
 
 # Load script utilities
+source "$SCRIPT_DIR/utilities.sh"
 load_script "$SCRIPT_DIR/utilities.sh"
 load_script "$SCRIPT_DIR/use_workspace.sh"
 load_script "$SCRIPT_DIR/use_terraform.sh"

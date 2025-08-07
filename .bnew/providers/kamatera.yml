@@ -1,6 +1,0 @@
-apiVersion: platform.huybrechts.xyz/v1.0
-kind: provider
-metadata:
-  name: kamatera
-  description: Kamatera Cloud Provider
-  tags: [ cloudprovider ]

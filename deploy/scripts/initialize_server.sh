@@ -27,6 +27,7 @@ HOSTNAME=$(hostname)
 :${TERRAFORM_FILE:?ERROR TERRAFORM_FILE variable is not set.}
 
 # Load utility functions and variables
+source "$SCRIPT_DIR/utilities.sh"
 load_script "$SCRIPT_DIR/utilities.sh"
 load_script "$SCRIPT_DIR/use_workspace.sh"
 load_script "$SCRIPT_DIR/use_terraform.sh"
