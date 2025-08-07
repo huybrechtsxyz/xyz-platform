@@ -13,7 +13,7 @@ terraform {
   cloud {
     organization = "huybrechts-xyz"
     workspaces {
-      name = "xyz-$TF_VAR_workspace"
+      name = "huybrechts-xyz-$WORKSPACE"
     }
   }
 }
