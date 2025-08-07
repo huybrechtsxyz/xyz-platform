@@ -27,12 +27,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Load script utilities
 source "$SCRIPT_DIR/utilities.sh"
-load_script "$SCRIPT_DIR/utilities.sh"
+load_script "$SCRIPT_DIR/use_terraform.sh"
 load_script "$SCRIPT_DIR/use_workspace.sh"
 
 # Get workspace data
 WORKSPACE_FILE="$SCRIPT_DIR/../../$WORKSPACE_FILE"
 WORKSPACE_DATA=$(get_ws_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
+
+echo "$WORKSPACE_FILE"
+echo "$WORKSPACE_DATA"
 
 # Primary machine label for the workspace
 # ID of the manager VM, used for control and management

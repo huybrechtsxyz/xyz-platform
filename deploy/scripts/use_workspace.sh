@@ -56,7 +56,7 @@ get_ws_primary_machine() {
     return 1
   fi
 
-  local name=$(yq -p=yaml -r 'spec.properties.primaryMachine' <<< "$workspace_data")
+  local name=$(yq -p=yaml -r '.spec.properties.primaryMachine' <<< "$workspace_data")
   if [[ -z "$name" ]]; then
     log ERROR "[X] No primary machine found in workspace data" >&2
     return 1
