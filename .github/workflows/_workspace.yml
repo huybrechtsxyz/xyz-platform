@@ -31,6 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     if: inputs.infrastructure == true
     steps:
+      # Check out the repo
+      - name: Check Out
+        uses: actions/checkout@v4
+
       # Setup YQ CLI
       - name: Setup YQ
         uses: ./.github/actions/get-yq
@@ -47,10 +51,6 @@ jobs:
         with:
           terraform_version: 1.5.7
           terraform_wrapper: false
-
-      # Check out the repo
-      - name: Check Out
-        uses: actions/checkout@v4
 
       # Run Terraform to create docker swarm cluster
       - name: Run Terraform
@@ -148,13 +148,13 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.restore.outputs.matrix) }}
     steps:
-      # Setup YQ CLI
-      - name: Setup YQ
-        uses: ./.github/actions/get-yq
-
       # Check out the repo
       - name: Check Out
         uses: actions/checkout@v4
+
+      # Setup YQ CLI
+      - name: Setup YQ
+        uses: ./.github/actions/get-yq
 
       # Set up GitHub Secrets
       - name: General Secrets
