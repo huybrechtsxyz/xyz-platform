@@ -57,7 +57,7 @@ for (( i=0; i<resource_count; i++ )); do
 
   # Template file path
   template_path=$(yq ".spec.templates[] | select(.name == \"$template\") | .file" "$WORKSPACE_FILE")
-  template_file ="$SCRIPT_DIR/../../$template_path"
+  template_file="$SCRIPT_DIR/../../$template_path"
   if [[ -z "$template_file" ]]; then
     log WARN "[!] Template file not found for resource: $resource_name" >&2
     continue
