@@ -41,8 +41,8 @@ kamatera_region=$(yq '.spec.providers[] | select(.name == "kamatera") | .propert
 
 echo "# Generated from workspace.yml" > "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
-echo "kamatera_country = \"$country\"" >> "$OUTPUT_FILE"
-echo "kamatera_region  = \"$region\"" >> "$OUTPUT_FILE"
+echo "kamatera_country = \"$kamatera_country\"" >> "$OUTPUT_FILE"
+echo "kamatera_region  = \"$kamatera_region\"" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 echo "virtualmachines = {" >> "$OUTPUT_FILE"
 
