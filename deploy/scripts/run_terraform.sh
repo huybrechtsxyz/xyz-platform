@@ -53,7 +53,7 @@ log INFO "[*] ...Exporting secrets from $WORKSPACE_FILE"
 export_secrets "$WORKSPACE_FILE" ".spec.secrets" "TF_VAR_" "" "lower"
 
 log INFO "[*] ...Exporting fixed environment variables for Terraform"
-export TF_TOKEN_app_terraform_io=$TF_VAR_TERRAFORM_API_TOKEN
+export TF_TOKEN_app_terraform_io=$TF_VAR_terraform_api_token
 export TF_VAR_workspace="$WORKSPACE_NAME"
 export TF_VAR_manager_id="$MANAGER_ID"
 
