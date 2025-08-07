@@ -92,4 +92,4 @@ echo "" >> "$OUTPUT_FILE"
 
 log INFO "[+] Generated terraform workspace $OUTPUT_FILE"
 cat "$OUTPUT_FILE"
-log INFO "[+] Generated terraform workspace
+log INFO "[+] Generated terraform workspace"
