@@ -15,7 +15,7 @@ if ! command -v yq &> /dev/null; then
   exit 1
 fi
 
-SERVER_NAME={$1}
+SERVER_NAME=$1
 :${SERVER_NAME:?ERROR SERVER_NAME variable is not set.}
 :${WORKSPACE_NAME:?ERROR WORKSPACE_NAME variable is not set.}
 :${WORKSPACE_FILE:?ERROR WORKSPACE_FILE variable is not set.}
@@ -25,7 +25,6 @@ SCRIPT_DIR="./deploy/scripts"
 TEMPLATE_DIR="templates"
 WORKSPACE_DIR="workspaces"
 WORKSPACE_FILE="./$WORKSPACE_FILE"
-VARI
 
 # Load script utilities
 source "$SCRIPT_DIR/utilities.sh"

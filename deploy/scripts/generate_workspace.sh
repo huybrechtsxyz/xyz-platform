@@ -18,9 +18,9 @@ if ! command -v yq &> /dev/null; then
 fi
 
 # Validate workspace parameters and environment variables
-WORKSPACE_NAME={$1}
-WORKSPACE_FILE={$2}
-OUTPUT_FILE={$3}
+WORKSPACE_NAME=$1
+WORKSPACE_FILE=$2
+OUTPUT_FILE=$3
 
 : ${WORKSPACE_NAME:?"WORKSPACE_NAME is not set. Please set it to the workspace name."}
 : ${WORKSPACE_FILE:?"WORKSPACE_FILE is not set. Please set it to the workspace file."}
