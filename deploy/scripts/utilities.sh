@@ -24,6 +24,28 @@ log() {
   esac
 }
 
+# Function to check if the actual disk size matches the expected size within a tolerance
+disk_size_matches() {
+  local actual_gb="$1"        # e.g. 39
+  local expected_gb="$2"      # e.g. 40
+  local tolerance_mb="${3:-20}"  # Optional, default to 20 MiB
+
+  local BYTES_PER_GB=1073741824
+  local BYTES_PER_MB=1048576
+
+  local expected_bytes=$(( expected_gb * BYTES_PER_GB ))
+  local actual_bytes=$(( actual_gb * BYTES_PER_GB ))
+  local diff_bytes=$(( actual_bytes - expected_bytes ))
+  local diff_mb=$(( diff_bytes / BYTES_PER_MB ))
+  local abs_diff_mb=${diff_mb#-}
+
+  if (( abs_diff_mb <= tolerance_mb )); then
+    return 0  # Match within tolerance
+  else
+    return 1  # Too far off
+  fi
+}
+
 #===============================================================================
 # Environment variables and secrets
 #===============================================================================
@@ -227,27 +249,7 @@ load_source() {
 
 
 
-# Function to check if the actual disk size matches the expected size within a tolerance
-disk_size_matches() {
-  local actual_gb="$1"        # e.g. 39
-  local expected_gb="$2"      # e.g. 40
-  local tolerance_mb="${3:-20}"  # Optional, default to 20 MiB
 
-  local BYTES_PER_GB=1073741824
-  local BYTES_PER_MB=1048576
-
-  local expected_bytes=$(( expected_gb * BYTES_PER_GB ))
-  local actual_bytes=$(( actual_gb * BYTES_PER_GB ))
-  local diff_bytes=$(( actual_bytes - expected_bytes ))
-  local diff_mb=$(( diff_bytes / BYTES_PER_MB ))
-  local abs_diff_mb=${diff_mb#-}
-
-  if (( abs_diff_mb <= tolerance_mb )); then
-    return 0  # Match within tolerance
-  else
-    return 1  # Too far off
-  fi
-}
 
 
 

@@ -32,45 +32,18 @@ load_script "$SCRIPT_DIR/use_workspace.sh"
 load_script "$SCRIPT_DIR/use_terraform.sh"
 
 # Load workspace variables
-load_source "$SCRIPT_DIR/.variables.$ WORKSPACE_NAME.env"
+load_source "$SCRIPT_DIR/.variables.$WORKSPACE_NAME.env"
 
+# Load workspace and terraform data
+TF_DATA=$(get_tf_data "$TERRAFORM_FILE")
+VM_DATA=$(get_tf_server_by_name "$TF_DATA")
+RESX_NAME=$(get_tf_vm_resourceid "$VM_DATA")
+PRIVATE_IP=$(get_tf_vm_privateip "$VM_DATA")
+MANAGER_IP=$(get_tf_vm_managerip "$VM_DATA")
 
-
-
-
-
-
-
-
-
-
-
-v"
-TERRAFORM_FILE="$SCRIPT_DIR/.terraform.$WORKSPACE_NAME.json"
-WORKSPACE_FILE="$SCRIPT_DIR/.workspace.$WORKSPACE_NAME.yml"
-
-# Load terraform file and data
-TERRAFORM_DATA=$(get_terraform_server_by_hostname "$TERRAFORM_FILE" "$HOSTNAME")
-if [[ -z "$TERRAFORM_DATA" ]]; then
-  log ERROR "[X] No Terraform data found for hostname: $HOSTNAME"
-  exit 1
-fi
-
-# Extract server details from Terraform data
-RESOURCE_NAME=$(get_terraform_server_resourceid "$TERRAFORM_DATA")
-MANAGER_LABEL=$(get_terraform_server_label "$TERRAFORM_DATA")
-PRIVATE_IP=$(get_terraform_server_privateip "$TERRAFORM_DATA")
-MANAGER_IP=$(get_terraform_server_managerip "$TERRAFORM_DATA")
-
-# Get workspace data
-WORKSPACE_DATA=$(get_workspace_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
-if [[ -z "$WORKSPACE_DATA" ]]; then
-  log ERROR "[X] Failed to retrieve workspace data for '$WORKSPACE_NAME' from '$WORKSPACE_FILE'."
-  exit 1
-fi
-
-# Get the resource block
-RESOURCE_DATA=$(get_workspace_resource_from_resourceid "$RESOURCE_NAME" "$WORKSPACE_DATA")
+WS_DATA=$(get_ws_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
+RESX_DATA=$(get_ws_resx_from_name "$RESX_NAME" "$WS_DATA")
+MANAGER_LABEL=$(get_workspace_primary_machine "$WS_DATA")
 
 # Install yq if not already installed
 install_yq() {
@@ -125,14 +98,14 @@ install_gluster() {
 configure_firewall() {
   log INFO "[*] Configuring firewall rules..."
 
-  fw_file=$(get_workspace_resource_template_file "$WORKSPACE_DATA" "$RESOURCE_NAME")
+  fw_tmpl=$(get_ws_resx_firewall "$RESX_DATA")
+  fw_file=$(get_ws_template_file "$WS_DATA" "$fw_tmpl")
   if [[ -z "$fw_file" ]]; then
     log ERROR "[X] No firewall template file found for resource ID: $RESOURCE_NAME" >&2
     return 1
   fi
-  fw_file="$SC
-
-  if [[ validate_template_firewall_file "$fw_file" ]]; then
+  
+  if ! validate_template_firewall_file "$fw_file"; then
     log ERROR "[X] Invalid firewall template file: $fw_file" >&2
     return 1
   fi
@@ -264,15 +237,128 @@ configure_disks() {
   done
 
   # Getting workspace disks
-  local vm_file=$(get_workspace_resource_template_file "$WORKSPACE_DATA" "$RESOURCE_NAME")
-
-
-  local disk_count=$(jq -r --arg id "$server_id" '.workspace.servers[] | select(.id == $id) | .disks | length' "$WORKSPACE_FILE")
+  local vm_tmpl=$(get_ws_resx_template "$RESX_DATA")
+  local vm_file=$(get_ws_template_file "$WS_DATA" "$vm_tmpl")
+  local disk_count=$(get_ws_vm_disks "$vm_tmpl")
   log INFO "[*] ... Found $disk_count disks for $HOSTNAME (including OS disk)"
   if (( ${#disk_names[@]} < disk_count )); then
     log ERROR "[!] Only found ${#disk_names[@]} disks but expected $disk_count"
     return 1
   fi
+
+  # Get mouting template for server
+  local mount_template=$(get_ws_resx_mountpoint "$RESX_DATA")
+  
+  # Loop all disks found
+  log INFO "[*] Looping over all disks"
+  for i in $(seq 0 $((disk_count - 1))); do
+    log INFO "[*] Mounting disk $i for $HOSTNAME"
+
+    local disk="/dev/${disk_names[$i]}"
+    local label=$(get_ws_vm_disk_label "$vm_tmpl")
+    local part=""
+    local fs_type=""
+    local current_label=""
+    local mnt="${mount_template//\$\{disk\}/$((i + 1))}"
+    label=$(resolve_disk_label "$label" "$(( i + 1 ))" "$RESX_DATA")
+
+    if [[ $i -eq 0 ]]; then
+      # OS disk — use the actual root partition, not just first partition
+      part="$os_part"
+      fs_type=$(blkid -s TYPE -o value "$part" 2>/dev/null || echo "")
+      current_label=$(blkid -s LABEL -o value "$part" 2>/dev/null || echo "")
+      log INFO "[*] ... Checking OS disk label on $part (expected label=$label)"
+      if [[ "$fs_type" != "ext4" ]]; then
+        log WARN "[!] OS disk has unexpected FS type ($fs_type), skipping label check"
+        continue
+      elif [[ "$current_label" != "$label" ]]; then
+        log INFO "[*] ... Relabeling OS disk from $current_label to $label"
+        e2label "$part" "$label"
+      else
+        log INFO "[*] ... OS disk label is already correct: $label"
+      fi
+      # Make sure the mountpoint exist
+      mkdir -p "$mnt"
+      continue
+    else
+      # Data disks — expect partition 1 on the disk (e.g., /dev/sdb1)
+      part=$(lsblk -nr -o NAME "$disk" | awk 'NR==2 {print "/dev/" $1}')
+      fs_type=$(blkid -s TYPE -o value "$part" 2>/dev/null || echo "")
+      current_label=$(blkid -s LABEL -o value "$part" 2>/dev/null || echo "")
+    fi
+
+    log INFO "[*] ... Mounting data disk $i for $HOSTNAME"
+    log INFO "[*] ... Preparing disk $disk (label=$label)"
+
+    # Get expected disk size from workspace metadata (in GB)
+    local expected_size_gb=$(get_ws_vm_disk_size "$vm_tmpl")
+
+    # Get actual disk size in bytes and convert to GB (rounding down)
+    local actual_size_bytes=$(lsblk -bn -o SIZE -d "$disk")
+    local actual_size_gb=$(( actual_size_bytes / 1024 / 1024 / 1024 ))
+
+    log INFO "[*] ... Validating size for $disk: expected ${expected_size_gb}GB, found ${actual_size_gb}GB"
+
+    if disk_size_matches "$actual_size_gb" "$expected_size_gb"; then
+      log INFO "[*] ... Disk size for $disk matches expected ${expected_size_gb}GB, found ${actual_size_gb}GB"
+    else
+      log ERROR "[!] Disk size mismatch for $disk — expected ${expected_size_gb}GB, got ${actual_size_gb}GB"
+      continue  # Skip this disk to avoid accidental mount/format
+    fi
+
+    # Check if partition exists (lsblk part)
+    if ! lsblk "$part" &>/dev/null; then
+      log INFO "[*] ... Partitioning $disk"
+      parted -s "$disk" mklabel gpt
+      parted -s -a optimal "$disk" mkpart primary ext4 0% 100%
+      sync
+      sleep 5
+      # refresh fs_type and current_label after new partition creation
+      part="/dev/$(lsblk -nro NAME "$disk" | sed -n '2p')"
+      fs_type=$(blkid -s TYPE -o value "$part" 2>/dev/null || echo "")
+      current_label=$(blkid -s LABEL -o value "$part" 2>/dev/null || echo "")
+    else
+      log INFO "[*] ... Skipping partitioning: $disk already partitioned"
+    fi
+
+    # Formatting and labeling
+    if [[ -z "$fs_type" ]]; then
+      log INFO "[*] ... Formatting $part as ext4 with label $label"
+      mkfs.ext4 -L "$label" "$part"
+    elif [[ "$fs_type" != "ext4" ]]; then
+      log WARN "[!] $part has unexpected FS type ($fs_type), skipping"
+      continue
+    elif [[ "$current_label" != "$label" ]]; then
+      log INFO "[*] ... Relabeling $part from $current_label to $label"
+      e2label "$part" "$label"
+    else
+      log INFO "[*] ... $part already formatted and labeled $label"
+    fi
+
+    # Mount and create the diskmountpoint
+    mkdir -p "$mnt"
+    if ! mountpoint -q "$mnt"; then
+      log INFO "[*] ... Mounting $label to $mnt"
+      mount "/dev/disk/by-label/$label" "$mnt"
+    else
+      log INFO "[+] ... Already mounted: $mnt"
+    fi
+
+    # Ensure persistence in fstab (idempotent)
+    fstab_line="LABEL=$label $mnt ext4 defaults 0 2"
+    if grep -qE "^\s*LABEL=$label\s" /etc/fstab; then
+      if ! grep -Fxq "$fstab_line" /etc/fstab; then
+        log INFO "[*] ... Updating existing fstab entry for $label"
+        sed -i.bak "/^\s*LABEL=$label\s/c\\$fstab_line" /etc/fstab
+      else
+        log INFO "[*] ... fstab entry for $label is already correct"
+      fi
+    else
+      log INFO "[*] ... Adding fstab entry for $label"
+      echo "$fstab_line" >> /etc/fstab
+    fi
+
+  done
 
   log INFO "[+] Preparing and mounting disk volumes...DONE"
 }

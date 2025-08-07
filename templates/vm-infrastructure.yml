@@ -16,9 +16,9 @@ spec:
     unitCost: 11.00
   disks:
     - size: 20
-      label: "${resourceId}-os"
+      label: "${.name}-os"
     - size: 40
-      label: "${resourceId}-data"
+      label: "${.name}-data"
   mountpaths:
     - type: config
       disk: 2

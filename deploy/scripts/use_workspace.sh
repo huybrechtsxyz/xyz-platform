@@ -65,6 +65,8 @@ get_ws_primary_machine() {
   echo "$name"
 }
 
+#===============================================================================
+
 # Function that returns the resourcedata based on the resourcename
 # Usage: get_ws_resx_from_name <RESOURCE_NAME> <WORKSPACE_DATA>
 # Returns: The resource data or an error message
@@ -108,83 +110,81 @@ get_ws_resx_installpoint() {
   echo "$installpoint"
 }
 
+# Function to get the mountpoint from the resource data
+# Usage: get_ws_resx_mountpoint <RESOURCE_DATA>
+# Returns: The mountpoint or an error message
+get_ws_resx_mountpoint() {
+  local resource_data="$1"
+  if [[ -z "$resource_data" ]]; then
+    log ERROR "[X] Usage: get_workspace_mountpoint <RESOURCE_DATA>" >&2
+    return 1
+  fi
 
+  local mountpoint=$(yq -r '.properties.mountpoint' <<< "$resource_data")
+  if [[ -z "$mountpoint" ]]; then
+    log ERROR "[X] No mountpoint found in resource data" >&2
+    return 1
+  fi
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Function to get the template base paths from workspace data
-# Usage: get_workspace_template_basepaths <WORKSPACE_FILE>
-get_workspace_template_uniquepaths() {
-  local workspace_file="$1"
-  yq -r '.spec.templates[].file' "$workspace_file" | \
-    sed 's|/[^/]*$||' | \
-    cut -d'/' -f1 | \
-    sort -u
+  echo "$mountpoint"
 }
 
-# Function to get the template file for a resource
-# Usage: get_workspace_resource_template_file <WORKSPACE_DATA> <RESOURCE_NAME>
-get_workspace_resource_template_file() {
+# Function to get the firewall from the resource data
+# Usage: get_ws_resx_firewall <RESOURCE_DATA>
+# Returns: The firewall or an error message
+get_ws_resx_firewall() {
+  local resource_data="$1"
+  if [[ -z "$resource_data" ]]; then
+    log ERROR "[X] Usage: get_workspace_firewall <RESOURCE_DATA>" >&2
+    return 1
+  fi
+
+  local value=$(yq -r '.properties.firewall' <<< "$resource_data")
+  if [[ -z "$value" ]]; then
+    log ERROR "[X] No firewall found in resource data" >&2
+    return 1
+  fi
+
+  echo "$value"
+}
+
+# Function to get the template from the resource data
+# Usage: get_ws_resx_template <RESOURCE_DATA>
+# Returns: The template or an error message
+get_ws_resx_template() {
+  local resource_data="$1"
+  if [[ -z "$resource_data" ]]; then
+    log ERROR "[X] Usage: get_workspace_template <RESOURCE_DATA>" >&2
+    return 1
+  fi
+
+  local value=$(yq -r '.properties.template' <<< "$resource_data")
+  if [[ -z "$value" ]]; then
+    log ERROR "[X] No template found in resource data" >&2
+    return 1
+  fi
+
+  echo "$value"
+}
+
+#===============================================================================
+
+#  Function to get the template file for a resource
+# Usage: get_ws_template_file <WORKSPACE_DATA> <RESOURCE_NAME>
+get_ws_template_file() {
   local workspace_data="$1"
-  local resource_name="$2"
-  if [[ -z "$workspace_data" ]]; then
-    log ERROR "[X] Usage: get_workspace_managerid <WORKSPACE_DATA>" >&2
-    return 1
-  fi
-
-  # Get firewall name from resource
-  local firewall_name=$(echo "$workspace_data" | yq -r --arg rid "$resource_name" \
-    '.spec.resources[] | select(.name == $rid) | .properties.firewall')
-
-  if [[ -z "$firewall_name" ]]; then
-    log ERROR "[X] No firewall property found for resource: $resource_id" >&2
-    return 1
-  fi
+  local template_name="$2"
 
   # Get file path from templates
-  local fw_file=$(echo "$workspace_data" | yq -r --arg name "$firewall_name" \
+  local file=$(echo "$workspace_data" | yq -r --arg name "$template_name" \
     '.spec.templates[] | select(.name == $name) | .file')
 
-  if [[ -z "$fw_file" ]]; then
-    log ERROR "[X] No template file found for firewall: $firewall_name" >&2
+  if [[ -z "$file" ]]; then
+    log ERROR "[X] No template file found for: $template_name" >&2
     return 1
   fi
 
-  echo "$fw_file"
-}
-
-
-
-
-
-get_workspace_resource_() {
-  echo "$1" | jq -r '.type'
+  echo "$file"
 }
 
 # Check kind and type
@@ -203,5 +203,70 @@ validate_template_firewall_file() {
     echo "[ERROR] Invalid firewall file: not a firewallRules resourceType" >&2
     return 1
   fi
+  
   return 0
+}
+
+#===============================================================================
+
+get_ws_vm_disks() {
+  local template_file="$1"
+
+  if [[ ! -f "$template_file" ]]; then
+    log ERROR "[X] Template file not found: $template_file" >&2
+    return 1
+  fi
+
+  yq '.spec.disks | length' "$template_file"
+}
+
+get_ws_vm_disk_label() {
+  local template_file="$1"
+  local disk_index="$2"
+
+  if [[ ! -f "$template_file" ]]; then
+    log ERROR "[X] Template file not found: $template_file" >&2
+    return 1
+  fi
+
+  yq -r ".spec.disks[$disk_index].label" "$template_file"
+}
+
+get_ws_vm_disk_size() {
+  local template_file="$1"
+  local disk_index="$2"
+
+  if [[ ! -f "$template_file" ]]; then
+    log ERROR "[X] Template file not found: $template_file" >&2
+    return 1
+  fi
+
+  yq -r ".spec.disks[$disk_index].size" "$template_file"
+}
+
+resolve_disk_label() {
+  local label_template="$1"
+  local disk_index="$2"
+  local resx_data="$3"
+  
+  if [[ ! -f "$resx_data" ]]; then
+    echo "[X] Resource data file not found: $resx_data" >&2
+    return 1
+  fi
+
+  # Match exactly one ${...}
+  if [[ "$label_template" =~ \$\{([a-zA-Z0-9_.-]+)\} ]]; then
+    # e.g., resource.name
+    local var_path="${BASH_REMATCH[1]}"  
+    # Convert to yq path: "resource.name" -> ["resource"]["name"]
+    local yq_path=$(awk -F. '{for(i=1;i<=NF;i++) printf "[\"%s\"]", $i}' <<< "$var_path")
+    # Resolve the value from the resource_data YAML
+    local value=$(yq -r "$yq_path" <<< "$resx_data")
+    # Replace only the first match
+    local resolved_label="${label_template/\$\{$var_path\}/$value}"
+    echo "$resolved_label"
+  else
+    # No template to resolve, just return raw label
+    echo "$label_template"
+  fi
 }

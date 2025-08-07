@@ -70,8 +70,8 @@ spec:
       file: templates/vm-manager.yml
     - name: vm-infrastructure
       file: templates/vm-infrastructure.yml
-    - name: vm-applications
-      file: templates/vm-applications.yml
+    - name: vm-workers
+      file: templates/vm-workers.yml
     # Firewall templates
     - name: fw-docker
       file: templates/fw-docker.yml
@@ -114,13 +114,13 @@ spec:
         firewall: fw-docker
         installpoint: /opt/install/app
         mountpoint: /mnt/data${disk}
-    - name: vm-applications
-      tags: [ vm, applications ]
+    - name: vm-workers
+      tags: [ vm, workers ]
       properties:
         type: worker
         count: 2
         provider: kamatera
-        template: vm-applications
+        template: vm-workers
         firewall: fw-docker
         installpoint: /opt/install/app
         mountpoint: /mnt/data${disk}

@@ -2,8 +2,8 @@ apiVersion: platform.huybrechts.xyz/v1.0
 kind: resourceType
 meta:
   type: virtualmachine
-  name: vm-applications
-  description: Applications Virtual Machine
+  name: vm-workers
+  description: Workers Virtual Machine
   version: 1.0.0
 spec:
   properties:
@@ -16,7 +16,7 @@ spec:
     unitCost: 6.00
   disks:
     - size: 20
-      label: "${resourceId}-os"
+      label: "${.name}-os"
   mountpaths:
     - type: config
       disk: 1

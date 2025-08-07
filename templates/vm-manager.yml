@@ -16,7 +16,7 @@ spec:
     unitCost: 5.00
   disks:
     - size: 20
-      label: "${resourceId}-os"
+      label: "${.name}-os"
   mountpaths:
     - type: config
       disk: 1

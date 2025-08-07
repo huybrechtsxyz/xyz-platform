@@ -73,33 +73,3 @@ get_tf_vm_privateip() {
 get_tf_vm_managerip() {
   echo "$1" | jq -r '.manager_ip'
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
