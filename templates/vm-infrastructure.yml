@@ -1,11 +1,11 @@
 apiVersion: platform.huybrechts.xyz/v1.0
 kind: resourceType
 meta:
+  type: virtualmachine
   name: vm-infrastructure
   description: Infrastructure Virtual Machine
   version: 1.0.0
 spec:
-  type: virtualmachine
   properties:
     osName: Ubuntu
     osCode: "24.04 64bit"
@@ -19,8 +19,6 @@ spec:
       label: "${resourceId}-os"
     - size: 40
       label: "${resourceId}-data"
-  installpoint: "/opt/install/app"
-  mountpoint: "/mnt/data${disk}"
   mountpaths:
     - type: config
       disk: 2

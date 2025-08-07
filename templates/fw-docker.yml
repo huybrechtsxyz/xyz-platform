@@ -1,8 +1,9 @@
 apiVersion: platform.huybrechts.xyz/v1.0
 kind: resourceType
 meta:
-  name: vm-applications
-  description: Applications Virtual Machine
+  type: firewallRules
+  name: fw-docker
+  description: Firewall rules for Docker Swarm
   version: 1.0.0
 spec:
   reset: true

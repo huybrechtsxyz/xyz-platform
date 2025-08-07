@@ -3,7 +3,6 @@
 # Script Name   : run_terraform.sh
 # Description   : Applies Terraform configurations using a specified workspace file.
 #                 Terraform must be installed and configured.
-#                 The script expects a workspace file as an argument.
 # Usage         : ./run_terraform.sh <WORKSPACE_FILE>
 # Author        : Vincent Huybrechts
 # Created       : 2025-08-05
@@ -17,38 +16,41 @@ if ! command -v yq &> /dev/null; then
   exit 1
 fi
 
-# Validate workspace parameters and environment variables
-: ${VAR_WORKSPACE_NAME:?"VAR_WORKSPACE_NAME is not set. Please set it to the workspace name."}
-: ${VAR_WORKSPACE_FILE:?"VAR_WORKSPACE_FILE is not set. Please set it to the workspace file."}
-: ${VAR_PATH_INSTALL:?"VAR_PATH_INSTALL is not set. Please set it to the installation path."}
-: ${VAR_PATH_TEMP:?"VAR_PATH_TEMP is not set. Please set it to the temporary variable path."}
-
 # Variable assignments
-WORKSPACE_FILE="$SCRIPT_DIR/../../${$2}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Validate workspace parameters and environment variables
+: ${WORKSPACE_NAME:?"WORKSPACE_NAME is not set. Please set it to the workspace name."}
+: ${WORKSPACE_FILE:?"WORKSPACE_FILE is not set. Please set it to the workspace file."}
+: ${PATH_TEMP:?"PATH_TEMP is not set. Please set it to the temporary path."}
+: ${BITWARDEN_TOKEN?"BITWARDEN_TOKEN is not set. Please set it to the bitwarden api token."}
 
 # Load script utilities
 load_script "$SCRIPT_DIR/utilities.sh"
 load_script "$SCRIPT_DIR/use_workspace.sh"
 
 # Get workspace data
-WORKSPACE_DATA=$(get_workspace_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
+WORKSPACE_FILE="$SCRIPT_DIR/../../$WORKSPACE_FILE"
+WORKSPACE_DATA=$(get_ws_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
 
 # Primary machine label for the workspace
 # ID of the manager VM, used for control and management
-MANAGER_ID=$(get_workspace_managerid "$WORKSPACE_DATA")
+MANAGER_ID=$(get_ws_primary_machine "$WORKSPACE_DATA")
 
 log INFO "[*] ...Validating workspace definition $WORKSPACE_FILE"
 # TO DO: Implement validate_workspace function in utilities.sh
 # validate_workspace "$WORKSPACE_DATA"
 
 # Export secrets from the workspace file
-log INFO "[*] ...Exporting environment variables for Terraform"
-export TF_VAR_workspace="$WORKSPACE_NAME"
-export TF_VAR_manager_id="$MANAGER_ID"
+log INFO "[*] ...Exporting fixed environment variables for Terraform"
+export_variables "$WORKSPACE_FILE" ".spec.variables" "TF_VAR_" "" "lower"
 
 log INFO "[*] ...Exporting secrets from $WORKSPACE_FILE"
 export_secrets "$WORKSPACE_FILE" ".spec.secrets" "TF_VAR_" "" "lower"
+
+log INFO "[*] ...Exporting fixed environment variables for Terraform"
+export TF_VAR_workspace="$WORKSPACE_NAME"
+export TF_VAR_manager_id="$MANAGER_ID"
 
 # Generate the workspace file
 OUTPUT_FILE="$SCRIPT_DIR/../terraform/workspace.tfvars"
@@ -58,7 +60,6 @@ chmod +x "$SCRIPT_DIR/generate_workspace.sh"
 log INFO "[*] ...Generated $OUTPUT_FILE successfully"
 
 # Substitute environment variables in the main.template.tf file
-export WORKSPACE=$WORKSPACE_NAME
 cd "$SCRIPT_DIR/../terraform"
 log INFO "[*] ...Generating main.tf from template"
 envsubst < main.template.tf > main.tf
@@ -69,7 +70,7 @@ cat main.tf
 # Error: Saving a generated plan is currently not supported
 # Terraform Cloud does not support saving the generated execution plan
 log INFO "[*] ...Running terraform...INIT"
-mkdir -p "$VAR_PATH_INSTALL"
+mkdir -p "$PATH_TEMP"
 terraform init
 
 log INFO "[*] ...Running terraform...PLAN"
@@ -80,6 +81,6 @@ log INFO "[*] ...Running terraform...APPLY"
 echo "[*] ...Running terraform...APPLY skipped for safety"
 
 log INFO "[*] ...Reading Terraform output..."
-terraform output -json serverdata | jq -c '.' | tee $VAR_PATH_INSTALL/$WORKSPACE_NAME.tfoutput.json
+terraform output -json serverdata | jq -c '.' | tee $PATH_TEMP/tfoutput.json
 
-log INFO "[+] ...Terraform output saved to tf_output.json and $VAR_PATH_INSTALL/$WORKSPACE_NAME.tfoutput.json"
+log INFO "[+] ...Terraform output saved to tf_output.json and $PATH_TEMP/tfoutput.json"

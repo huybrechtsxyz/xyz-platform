@@ -8,6 +8,20 @@ variable "workspace" {
   type        = string  
 }
 
+# Public key for SSH access to the servers
+variable "kamatera_public_key" {
+  description = "Public key for SSH access to the servers"
+  type        = string
+  sensitive   = true
+}
+
+# Password for the servers
+variable "kamatera_root_password" {
+  description = "Password for the servers"
+  type        = string
+  sensitive   = true
+}
+
 # Primary machine label for the workspace
 variable "manager_id" {
   description = "ID of the manager VM, used for control and management"
@@ -44,18 +58,17 @@ variable "kamatera_region" {
 # Virtual Machines Configuration for Terraform
 variable "virtualmachines" {
   type = map(object({
-    provider  : string
-    publickey : string
-    password  : string
-    count     : number
-    os_name   : string
-    os_code   : string
-    cpu_cores : number
-    cpu_type  : string
-    ram_mb    : number
-    disks_gb  : list(number)
-    billing   : string
-    unit_cost : number
+    provider   : string
+    resourceid : string
+    count      : number
+    os_name    : string
+    os_code    : string
+    cpu_cores  : number
+    cpu_type   : string
+    ram_mb     : number
+    disks_gb   : list(number)
+    billing    : string
+    unit_cost  : number
   }))
   description = "Map of servers and their hardware specs including list of disk sizes"
 

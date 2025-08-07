@@ -1,11 +1,11 @@
 apiVersion: platform.huybrechts.xyz/v1.0
 kind: resourceType
 meta:
+  type: virtualmachine
   name: vm-manager
   description: Management Virtual Machine
   version: 1.0.0
 spec:
-  type: virtualmachine
   properties:
     osName: Ubuntu
     osCode: "24.04 64bit"
@@ -17,8 +17,6 @@ spec:
   disks:
     - size: 20
       label: "${resourceId}-os"
-  installpoint: "/opt/install/app"
-  mountpoint: "/mnt/data${disk}"
   mountpaths:
     - type: config
       disk: 1

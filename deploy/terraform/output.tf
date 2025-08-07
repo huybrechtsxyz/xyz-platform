@@ -1,24 +1,30 @@
 # Output the server details
 # {
-#   "include": [
+#   "virtualmachines": [
 #     {
-#       "index": "1",
-#       "ip": "123...",
-#       "label": "infra-1",
-#       "manager_ip": "10.0.0.1",
 #       "name": "srv-platform-infra-1-random1234",
+#       "resourceid": "vm-infrastructure"
+#       "kind": "virtualmachine"
+#       "type": "infra",
+#
+#       "index": "1",
+#       "label": "infra-1",
+#
+#       "public_ip": "123...",
 #       "private_ip": "10.0.0.4",
-#       "type": "infra"
+#       "manager_ip": "10.0.0.1",
 #     }
 #   ]
 # }
 # Name example: srv-shared-worker-3-1234
 
 # Terraform Output Configuration
-output "serverdata" {
+output "terraform_output" {
   value = {
-    include = concat(
-      module.kamatera_vms.kamatera_serverdata.include
+    # Virtual machines
+    virtualmachines = concat(
+      # Get the kamatera virtual machines
+      module.kamatera_vms.kamatera_output.virtualmachines
     )
   }
 }

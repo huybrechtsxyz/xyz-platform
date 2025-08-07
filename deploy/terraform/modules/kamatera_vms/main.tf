@@ -69,8 +69,12 @@ resource "kamatera_server" "server" {
   disk_sizes_gb    = each.value.disks_gb
   billing_cycle    = each.value.billing
   power_on         = true
-  password         = each.value.password
-  ssh_pubkey       = each.value.publickey
+  password         = var.kamatera_root_password
+  ssh_pubkey       = var.kamatera_public_key
+
+  tags = {
+    resourceid = each.value.resourceid
+  }
 
   network {
     name = "wan"

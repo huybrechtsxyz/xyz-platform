@@ -98,26 +98,29 @@ spec:
       tags: [ vm, management ]
       properties:
         type: manager
-        manager: true
+        count: 1
+        provider: kamatera
         template: vm-manager
         firewall: fw-docker
-        provider: kamatera
-        count: 1
+        installpoint: /opt/install/app
+        mountpoint: /mnt/data${disk}
     - name: vm-infrastructure
       tags: [ vm, infrastructure ]
       properties:
         type: infra
-        manager: false
+        count: 2
+        provider: kamatera
         template: vm-infrastructure
         firewall: fw-docker
-        provider: kamatera
-        count: 2
+        installpoint: /opt/install/app
+        mountpoint: /mnt/data${disk}
     - name: vm-applications
       tags: [ vm, applications ]
       properties:
         type: worker
-        manager: false
+        count: 2
+        provider: kamatera
         template: vm-applications
         firewall: fw-docker
-        provider: kamatera
-        count: 2
+        installpoint: /opt/install/app
+        mountpoint: /mnt/data${disk}

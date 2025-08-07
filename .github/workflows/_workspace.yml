@@ -17,10 +17,9 @@ on:
       BITWARDEN_TOKEN:
         required: true
 
+# Environment variables for the pipeline
 env:
-  # Environment variables for the pipeline
-  VAR_PATH_INSTALL: /opt/install/app
-  VAR_PATH_TEMP: /tmp/app
+  PATH_TEMP: /tmp/app
 
 jobs:
 
@@ -58,10 +57,9 @@ jobs:
         id: tfapply
         working-directory: ./deploy/terraform
         env:
-          VAR_WORKSPACE_NAME: ${{ inputs.workspace_name }}
-          VAR_WORKSPACE_FILE: ${{ inputs.workspace_file }}
-          VAR_PATH_INSTALL: ${{ env.VAR_PATH_INSTALL }}
-          VAR_PATH_TEMP: ${{ env.VAR_PATH_TEMP }}
+          WORKSPACE_NAME: ${{ inputs.workspace_name }}
+          WORKSPACE_FILE: ${{ inputs.workspace_file }}
+          PATH_TEMP: ${{ env.PATH_TEMP }}
           BITWARDEN_TOKEN: ${{ secrets.BITWARDEN_TOKEN }}
         run: |
           echo "[*] Server deployment and configuration ..."
@@ -74,7 +72,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: terraform-output-${{ inputs.workspace_name }}
-          path: ${{ env.VAR_PATH_TEMP }}/tf_output.json
+          path: ${{ env.PATH_TEMP }}/tfoutput.json
           if-no-files-found: error
       
       # Check if Terraform cache exists
@@ -82,7 +80,7 @@ jobs:
         id: check-cache
         uses: actions/cache/restore@v4
         with:
-          path: ${{ env.VAR_PATH_TEMP }}/tf_output.json
+          path: ${{ env.PATH_TEMP }}/tfoutput.json
           key: terraform-output-${{ inputs.workspace_name }}
 
       # Upload the Terraform output as a job output
@@ -90,7 +88,7 @@ jobs:
         if: steps.check-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: ${{ env.VAR_PATH_TEMP }}/tf_output.json
+          path: ${{ env.PATH_TEMP }}/tfoutput.json
           key: terraform-output-${{ inputs.workspace_name }}
 
   # Download the Terraform output artifact and parse it to find Swarm servers
@@ -110,7 +108,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: terraform-output-${{ inputs.workspace_name }}
-          path: ${{ env.VAR_PATH_TEMP }}
+          path: ${{ env.PATH_TEMP }}
 
       # Restore Terraform Cache
       - name: Restore Cache
@@ -118,13 +116,13 @@ jobs:
         if: inputs.infrastructure != true
         uses: actions/cache/restore@v4
         with:
-          path: ${{ env.VAR_PATH_TEMP }}/tf_output.json
+          path: ${{ env.PATH_TEMP }}/tfoutput.json
           key: terraform-output-${{ inputs.workspace_name }}
 
       # Check if the artifact exists
       - name: Validate Output
         run: |
-          if [ ! -f ${{ env.VAR_PATH_TEMP }}/tf_output.json ]; then
+          if [ ! -f ${{ env.PATH_TEMP }}/tfoutput.json ]; then
             echo "[!] Artifact terraform-output-${{ inputs.workspace_name }} not found or tf_output.json missing. Exiting."
             exit 1
           fi
@@ -133,7 +131,7 @@ jobs:
       - name: Parse Servers
         id: parse
         run: |
-          matrix=$(jq -c '.' ${{ env.VAR_PATH_TEMP }}/tf_output.json)
+          matrix=$(jq -c '.' ${{ env.PATH_TEMP }}/tfoutput.json)
           echo "================"
           echo "$matrix"
           echo "================"
@@ -184,9 +182,12 @@ jobs:
       # Step: Initialize the Swarm cluster
       - name: Initialize Cluster
         env:
-          VAR_WORKSPACE: ${{ inputs.workspace_name }}
+          WORKSPACE_NAME: ${{ inputs.workspace_name }}
+          WORKSPACE_FILE: ${{ inputs.workspace_file }}
+          TERRAFORM_FILE: 'deploy/scripts/.${{ inputs.workspace_name }}.tf.json'
         run: |
           echo "[*] Initializing swarm cluster on ${{ matrix.ip }} ..."
-          chmod +x deploy/scripts/apply_initialization.sh
-          ./deploy/scripts/apply_initialization.sh "${{ matrix.ip }}" "${{ matrix.private_ip }}" "${{ matrix.manager_ip }}"
+          echo '${{ needs.restore.outputs.matrix }}' | jq -c '.' > "$TERRAFORM_FILE"
+          chmod +x deploy/scripts/run_initialization.sh
+          ./deploy/scripts/run_initialization.sh ${{ matrix.name }}
           echo "[*] Initializing swarm cluster on ${{ matrix.ip }} ...DONE"

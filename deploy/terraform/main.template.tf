@@ -13,7 +13,7 @@ terraform {
   cloud {
     organization = "huybrechts-xyz"
     workspaces {
-      name = "xyz-$WORKSPACE"
+      name = "xyz-$TF_VAR_workspace"
     }
   }
 }
@@ -26,8 +26,7 @@ locals {
     [
       for i in range(cfg.count) : {
         provider    = cfg.provider
-        publickey   = cfg.publickey
-        password    = cfg.password
+        resourceid  = cfg.resourceid
         full_name   = "${type}-${i + 1}"
         type        = type
         os_name     = cfg.os_name
@@ -53,6 +52,8 @@ locals {
 module "kamatera_vm" {
   source = "./modules/kamatera-vm"
   workspace = var.workspace
+  kamatera_root_password = var.kamatera_root_password
+  kamatera_public_key = var.kamatera_public_key
   manager_id = var.manager_id
   virtualmachines = local.kamatera_vms
   kamatera_api_key = var.kamatera_api_key
