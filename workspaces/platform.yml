@@ -1,9 +1,11 @@
-apiVersion: platform.huybrechts.xyz/v1.0
-kind: workspace
+apiVersion: platform.huybrechts.xyz/v1
+kind: Workspace
 meta:
   name: platform
-  description: Platform Workspace on Kamatera
-  version: 1.0.0
+  annotations:
+    description: Platform Workspace on Kamatera
+  labels:
+    version: '1.0.0'
 spec:
   properties:
     primaryMachine: manager-1
@@ -59,7 +61,7 @@ spec:
 
   providers:
     - name: kamatera
-      tags: [ cloudprovider ]
+      tags: [ cloudprovider , terraform ]
       properties:
         country: Germany
         region: Frankfurt
@@ -97,7 +99,7 @@ spec:
     - name: vm-manager
       tags: [ vm, management ]
       properties:
-        type: manager
+        role: manager
         count: 1
         provider: kamatera
         template: vm-manager
@@ -107,7 +109,7 @@ spec:
     - name: vm-infrastructure
       tags: [ vm, infrastructure ]
       properties:
-        type: infra
+        role: infra
         count: 2
         provider: kamatera
         template: vm-infrastructure
@@ -117,7 +119,7 @@ spec:
     - name: vm-workers
       tags: [ vm, workers ]
       properties:
-        type: worker
+        role: worker
         count: 2
         provider: kamatera
         template: vm-workers

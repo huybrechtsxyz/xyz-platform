@@ -1,10 +1,11 @@
-apiVersion: platform.huybrechts.xyz/v1.0
-kind: resourceType
+apiVersion: platform.huybrechts.xyz/v1
+kind: VirtualMachine
 meta:
-  type: virtualmachine
   name: vm-infrastructure
-  description: Infrastructure Virtual Machine
-  version: 1.0.0
+  annotations:
+    description: Infrastructure Virtual Machine
+  labels:
+    version: '1.0.0'
 spec:
   properties:
     osName: Ubuntu
@@ -20,13 +21,13 @@ spec:
     - size: 40
       label: "${.name}-data"
   mountpaths:
-    - type: config
+    - name: config
       disk: 2
-    - type: docs
+    - name: docs
       disk: 2
-    - type: data
+    - name: data
       disk: 2
-    - type: logs
+    - name: logs
       disk: 2
-    - type: serve
+    - name: serve
       disk: 2

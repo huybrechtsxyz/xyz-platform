@@ -2,17 +2,15 @@
 # {
 #   "virtualmachines": [
 #     {
-#       "name": "srv-platform-infra-1-random1234",
-#       "resourceid": "vm-infrastructure"
-#       "kind": "virtualmachine"
-#       "type": "infra",
-#
-#       "index": "1",
+#       "kind": "VirtualMachine"
+#       "resource": "vm-infrastructure"
 #       "label": "infra-1",
-#
+#       "role": "infra",
+#       "index": "1",
+#       "name": "srv-platform-infra-1-random1234",
 #       "public_ip": "123...",
 #       "private_ip": "10.0.0.4",
-#       "manager_ip": "10.0.0.1",
+#       "manager_ip": "10.0.0.1"
 #     }
 #   ]
 # }

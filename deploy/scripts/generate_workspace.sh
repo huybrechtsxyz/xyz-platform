@@ -33,62 +33,99 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/utilities.sh"
 load_script "$SCRIPT_DIR/use_workspace.sh"
 
-# Get workspace data
+# Get needed workspace data
 log INFO "[*] For workspace $WORKSPACE_NAME in $WORKSPACE_FILE"
 WORKSPACE_DATA=$(get_ws_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
 kamatera_country=$(yq '.spec.providers[] | select(.name == "kamatera") | .properties.country' "$WORKSPACE_FILE")
 kamatera_region=$(yq '.spec.providers[] | select(.name == "kamatera") | .properties.region' "$WORKSPACE_FILE")
 
-echo "# Generated from workspace.yml" > "$OUTPUT_FILE"
+# Map declarations per resource type
+declare -A vm_resources=()
+
+# Build VM map in workspace
+build_vm_entry() {
+  local name="$1"
+  local provider="$2"
+  local count="$3"
+  local template_file="$4"
+
+  local role=$(yq -r '.spec.properties.role' "$template_file")
+  local os_name=$(yq -r '.spec.properties.osName' "$template_file")
+  local os_code=$(yq -r '.spec.properties.osCode' "$template_file")
+  local cpu_type=$(yq -r '.spec.properties.cpuType' "$template_file")
+  local cpu_cores=$(yq -r '.spec.properties.cpuCores' "$template_file")
+  local ram_mb=$(yq -r '.spec.properties.ramMb' "$template_file")
+  local billing=$(yq -r '.spec.properties.billing' "$template_file")
+  local unit_cost=$(yq -r '.spec.properties.unitCost' "$template_file")
+  local disks=$(yq '.spec.disks[].size' "$template_file" | paste -sd ',' -)
+
+  # Use a here-doc with variable substitution
+  cat << EOF
+  "$name" = {
+    provider   = "$provider"
+    role       = "$role"
+    count      = $count
+    os_name    = "$os_name"
+    os_code    = "$os_code"
+    cpu_type   = "$cpu_type"
+    cpu_cores  = $cpu_cores
+    ram_mb     = $ram_mb
+    disks_gb   = [$disks]
+    billing    = "$billing"
+    unit_cost  = $unit_cost
+  },
+EOF
+}
+
+# Export function for VM resources
+export_virtualmachines_map() {
+  local -n map=$1
+  echo "virtualmachines = {" >> "$OUTPUT_FILE"
+  for key in "${!map[@]}"; do
+    echo "${map[$key]}"
+  done
+  echo "}" >> "$OUTPUT_FILE"
+  echo "" >> "$OUTPUT_FILE"
+}
+
+# Main loop to get all the resources to create
+resource_count=$(yq '.spec.resources | length' "$WORKSPACE_FILE")
+for (( i=0; i<resource_count; i++ )); do
+
+  name=$(yq -r ".spec.resources[$i].name" "$WORKSPACE_FILE")
+  provider=$(yq -r ".spec.resources[$i].properties.provider" "$WORKSPACE_FILE")
+  template=$(yq -r ".spec.resources[$i].properties.template" "$WORKSPACE_FILE")
+  count=$(yq -r ".spec.resources[$i].properties.count" "$WORKSPACE_FILE")
+
+  template_path=$(yq -r ".spec.templates[] | select(.name == \"$template\") | .file" "$WORKSPACE_FILE")
+  template_file="$SCRIPT_DIR/../../$template_path"
+  if [[ ! -f "$template_file" ]]; then
+    log WARN "[!] Template file not found for resource: $name"
+    continue
+  fi
+
+  kind=$(yq -r '.kind' "$template_file")
+  case "$kind" in
+    VirtualMachine)
+      vm_resources["$name"]=$(build_vm_entry "$name" "$provider" "$count" "$template_file")
+      ;;
+    # other kinds ...
+  esac
+done
+
+# Export to workspace.tfvars
+echo "# Generated from $WORKSPACE_FILE" > "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 echo "kamatera_country = \"$kamatera_country\"" >> "$OUTPUT_FILE"
 echo "kamatera_region  = \"$kamatera_region\"" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
-echo "virtualmachines = {" >> "$OUTPUT_FILE"
 
-resource_count=$(yq '.spec.resources | length' "$WORKSPACE_FILE")
-for (( i=0; i<resource_count; i++ )); do
-  # Extract resource details
-  name=$(yq ".spec.resources[$i].name" "$WORKSPACE_FILE")
-  type=$(yq ".spec.resources[$i].properties.type" "$WORKSPACE_FILE")
-  provider=$(yq ".spec.resources[$i].properties.provider" "$WORKSPACE_FILE")
-  template=$(yq ".spec.resources[$i].properties.template" "$WORKSPACE_FILE")
-  count=$(yq ".spec.resources[$i].properties.count" "$WORKSPACE_FILE")
+# Export all resource maps:
+export_virtualmachines_map vm_resources
 
-  # Template file path
-  template_path=$(yq ".spec.templates[] | select(.name == \"$template\") | .file" "$WORKSPACE_FILE")
-  template_file="$SCRIPT_DIR/../../$template_path"
-  if [[ -z "$template_file" ]]; then
-    log WARN "[!] Template file not found for resource: $resource_name" >&2
-    continue
-  fi
-
-  # Extract from template file
-  os_name=$(yq ".spec.properties.osName" "$template_file")
-  os_code=$(yq ".spec.properties.osCode" "$template_file")
-  cpu_type=$(yq ".spec.properties.cpuType" "$template_file")
-  cpu_cores=$(yq ".spec.properties.cpuCores" "$template_file")
-  ram_mb=$(yq ".spec.properties.ramMb" "$template_file")
-  billing=$(yq ".spec.properties.billing" "$template_file")
-  unit_cost=$(yq ".spec.properties.unitCost" "$template_file")
-  disks=$(yq ".spec.disks[].size" "$template_file" | sed ':a;N;$!ba;s/\n/, /g')
-  echo "  $type = {" >> "$OUTPUT_FILE"
-  echo "    provider   = \"$provider\"" >> "$OUTPUT_FILE"
-  echo "    resourceid = \"$name\"" >> "$OUTPUT_FILE"
-  echo "    count      = $count" >> "$OUTPUT_FILE"
-  echo "    os_name    = \"$os_name\"" >> "$OUTPUT_FILE"
-  echo "    os_code    = \"$os_code\"" >> "$OUTPUT_FILE"
-  echo "    cpu_type   = \"$cpu_type\"" >> "$OUTPUT_FILE"
-  echo "    cpu_cores  = $cpu_cores" >> "$OUTPUT_FILE"
-  echo "    ram_mb     = $ram_mb" >> "$OUTPUT_FILE"
-  echo "    disks_gb   = [$disks]" >> "$OUTPUT_FILE"
-  echo "    billing    = \"$billing\"" >> "$OUTPUT_FILE"
-  echo "    unit_cost  = $unit_cost" >> "$OUTPUT_FILE"
-  echo "  }," >> "$OUTPUT_FILE"
-done
-
-echo "}" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
+# Done generating
+echo "# Generation complete" > "$OUTPUT_FILE"
+echo "" > "$OUTPUT_FILE"
 
 log INFO "[+] Generated terraform workspace $OUTPUT_FILE"
 cat "$OUTPUT_FILE"

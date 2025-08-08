@@ -1,10 +1,11 @@
-apiVersion: platform.huybrechts.xyz/v1.0
-kind: resourceType
+apiVersion: platform.huybrechts.xyz/v1
+kind: FirewallRules
 meta:
-  type: firewallRules
   name: fw-docker
-  description: Firewall rules for Docker Swarm
-  version: 1.0.0
+  annotations:
+    description: Firewall rules for Docker Swarm
+  labels:
+    version: '1.0.0'
 spec:
   reset: true
   defaults:

@@ -42,7 +42,7 @@ resource "random_string" "suffix" {
 
 locals {
   unique_images = distinct([
-    for s in var.virtualmachines : {
+    for s in var.kamatera_vms : {
       os_name = s.os_name
       os_code = s.os_code
     }
@@ -61,24 +61,22 @@ resource "kamatera_network" "private-lan" {
   }
 }
 
-# Provision servers
+# Provision servers: for each virtual machine on kamatera
 # Name example: srv-shared-manager-1-1234
-# Name example: srv-shared-infra-2-1234
-# Name example: srv-shared-worker-3-1234
 resource "kamatera_server" "server" {
-  for_each         = { for server in var.virtualmachines : server.full_name => server }
+  for_each = var.kamatera_vms
 
-  name             = "srv-${var.workspace}-${each.value.full_name}-${random_string.suffix.result}"
-  image_id         = data.kamatera_image.images["${each.value.os_name}-${each.value.os_code}"].id
-  datacenter_id    = data.kamatera_datacenter.dc1.id
-  cpu_cores        = each.value.cpu_cores
-  cpu_type         = each.value.cpu_type
-  ram_mb           = each.value.ram_mb
-  disk_sizes_gb    = each.value.disks_gb
-  billing_cycle    = each.value.billing
-  power_on         = true
-  password         = var.kamatera_root_password
-  ssh_pubkey       = var.kamatera_public_key
+  name          = "srv-${var.workspace}-${each.key}-${random_string.suffix.result}"
+  image_id      = data.kamatera_image.images["${each.value.os_name}-${each.value.os_code}"].id
+  datacenter_id = data.kamatera_datacenter.dc1.id
+  cpu_cores     = each.value.cpu_cores
+  cpu_type      = each.value.cpu_type
+  ram_mb        = each.value.ram_mb
+  disk_sizes_gb = each.value.disks_gb
+  billing_cycle = each.value.billing
+  power_on      = true
+  password      = var.kamatera_root_password
+  ssh_pubkey    = var.kamatera_public_key
 
   network {
     name = "wan"

@@ -7,9 +7,9 @@ kamatera_region = "Frankfurt"
 
 # Server configuration
 virtualmachines = {
-  manager = {
+  "vm-manager" = {
     provider  = "kamatera"
-    resourceid= "vm-manager"
+    role      = "manager"
     count     = 1
     os_name   = "Ubuntu"
     os_code   = "24.04 64bit"
@@ -20,9 +20,9 @@ virtualmachines = {
     billing   = "monthly"
     unit_cost = 5.00
   }
-  infra = {
+  "vm-infrastructure" = {
     provider  = "kamatera"
-    resourceid= "vm-infrastructure"
+    role      = "infra"
     count     = 2
     os_name   = "Ubuntu"
     os_code   = "24.04 64bit"
@@ -33,9 +33,9 @@ virtualmachines = {
     billing   = "monthly"
     unit_cost = 11.00
   }
-  worker = {
+  "vm-workers" = {
     provider  = "kamatera"
-    resourceid= "vm-applications"
+    role      = "worker"
     count     = 2
     os_name   = "Ubuntu"
     os_code   = "24.04 64bit"

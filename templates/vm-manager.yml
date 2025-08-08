@@ -1,10 +1,11 @@
 apiVersion: platform.huybrechts.xyz/v1.0
-kind: resourceType
-meta:
-  type: virtualmachine
+kind: VirtualMachine
+metadata:
   name: vm-manager
-  description: Management Virtual Machine
-  version: 1.0.0
+  annotations:
+    description: Management Virtual Machine
+  labels:
+    version: 1.0.0
 spec:
   properties:
     osName: Ubuntu
@@ -18,13 +19,13 @@ spec:
     - size: 20
       label: "${.name}-os"
   mountpaths:
-    - type: config
+    - name: config
       disk: 1
-    - type: docs
+    - name: docs
       disk: 1
-    - type: data
+    - name: data
       disk: 1
-    - type: logs
+    - name: logs
       disk: 1
-    - type: serve
+    - name: serve
       disk: 1

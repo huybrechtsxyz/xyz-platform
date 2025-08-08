@@ -59,7 +59,7 @@ variable "kamatera_region" {
 variable "virtualmachines" {
   type = map(object({
     provider   : string
-    resourceid : string
+    role       : string
     count      : number
     os_name    : string
     os_code    : string

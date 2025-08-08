@@ -47,14 +47,13 @@ variable "kamatera_region" {
   type        = string
 }
 
-# Virtual Machines Configuration for Terraform
-variable "virtualmachines" {
+# KAMATERA: Virtual Machines Configuration for Terraform
+variable "kamatera_vms" {
   type = map(object({
     provider   : string
-    resourceid : string
-    publickey  : string
-    password   : string
-    count      : number
+    resource   : string
+    role       : string
+    label      : string
     os_name    : string
     os_code    : string
     cpu_cores  : number
