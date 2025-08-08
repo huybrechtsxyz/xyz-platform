@@ -149,7 +149,7 @@ jobs:
     if: always()
     strategy:
       matrix:
-        vm: ${{ fromJson(needs.restore.outputs.matrix) }}
+        vm: ${{ fromJson(needs.restore.outputs.matrix).virtualmachines }}
     steps:
       # Check out the repo
       - name: Check Out
