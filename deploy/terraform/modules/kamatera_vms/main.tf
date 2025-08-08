@@ -87,8 +87,4 @@ resource "kamatera_server" "server" {
   network {
     name = kamatera_network.private-lan.full_name
   }
-
-  tags = {
-    resourceid = each.value.resourceid
-  }
 }
