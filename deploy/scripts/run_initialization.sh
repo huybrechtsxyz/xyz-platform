@@ -42,8 +42,8 @@ WS_DATA=$(get_ws_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
 RESX_DATA=$(get_ws_resx_from_name "$RESX_NAME" "$WS_DATA")
 RESX_INSTALL=$(get_ws_resx_installpoint "$WS_DATA")
 
-log INFO "[*] RESX_DATA: RESX_DATA"
-log INFO "[*] RESX_INSTALL: RESX_INSTALL"
+log INFO "[*] RESX_DATA: $RESX_DATA"
+log INFO "[*] RESX_INSTALL: $RESX_INSTALL"
 
 exit 0
 
