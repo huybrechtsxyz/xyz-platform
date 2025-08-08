@@ -31,17 +31,15 @@ load_script "$SCRIPT_DIR/use_terraform.sh"
 load_script "$SCRIPT_DIR/use_workspace.sh"
 
 # Get workspace data
+log INFO "[*] ...Workspace $WORKSPACE_NAME with $WORKSPACE_FILE"
 WORKSPACE_FILE="$SCRIPT_DIR/../../$WORKSPACE_FILE"
 WORKSPACE_DATA=$(get_ws_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
-
-echo "$WORKSPACE_FILE"
-echo "$WORKSPACE_DATA"
 
 # Primary machine label for the workspace
 # ID of the manager VM, used for control and management
 MANAGER_ID=$(get_ws_primary_machine "$WORKSPACE_DATA")
 
-log INFO "[*] ...Validating workspace definition $WORKSPACE_FILE"
+log INFO "[*] ...Validating workspace definition $WORKSPACE_FILE for $WORKSPACE_NAME"
 # TO DO: Implement validate_workspace function in utilities.sh
 # validate_workspace "$WORKSPACE_DATA"
 
@@ -59,17 +57,17 @@ export TF_VAR_manager_id="$MANAGER_ID"
 
 # Generate the workspace file
 OUTPUT_FILE="workspace.tfvars"
-log INFO "[*] ...Generating $OUTPUT_FILE from $WORKSPACE_FILE"
+log INFO "[*] ...Generating $OUTPUT_FILE"
 chmod +x "$SCRIPT_DIR/generate_workspace.sh"
 "$SCRIPT_DIR/generate_workspace.sh" "$WORKSPACE_NAME" "$WORKSPACE_FILE" "$OUTPUT_FILE"
-log INFO "[*] ...Generated $OUTPUT_FILE successfully"
+log INFO "[*] ...Generation complete"
 
 # Substitute environment variables in the main.template.tf file
-cd "$SCRIPT_DIR/../terraform"
 log INFO "[*] ...Generating main.tf from template"
 envsubst < main.template.tf > main.tf
 rm -f main.template.tf
 cat main.tf
+log INFO "[*] ...Generation of main.tf complete"
 
 # Reason we do not save the plan
 # Error: Saving a generated plan is currently not supported
