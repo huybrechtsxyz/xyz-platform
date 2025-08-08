@@ -87,7 +87,7 @@ get_ws_resx_installpoint() {
   fi
 
   local installpoint=$(yq -r '.properties.installpoint' <<< "$resource_data")
-  if [[ -z "$installpoint" ]]; then
+  if [[ -z "$installpoint" || "$installpoint" == "null" ]]; then
     log ERROR "[X] No installpoint found in resource data" >&2
     return 1
   fi
