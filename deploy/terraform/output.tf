@@ -2,16 +2,17 @@
 # {
 #   "virtualmachines": [
 #     {
-#       "kind": "VirtualMachine"
-#       "resource": "vm-infrastructure"
+#       "index": 1,
+#       "kind": "VirtualMachine",
 #       "label": "infra-1",
-#       "role": "infra",
-#       "index": "1",
-#       "name": "srv-platform-infra-1-random1234",
-#       "public_ip": "123...",
-#       "private_ip": "10.0.0.4",
-#       "manager_ip": "10.0.0.1"
-#     }
+#       "manager_ip": "10.0.0.4",
+#       "name": "srv-platform-infra-1-5jwb",
+#       "private_ip": "10.0.0.3",
+#       "public_ip": "185.0.0.1",
+#       "resource": "vm-infrastructure",
+#       "role": "infra"
+#     },
+#     ...
 #   ]
 # }
 # Name example: srv-shared-worker-3-1234
