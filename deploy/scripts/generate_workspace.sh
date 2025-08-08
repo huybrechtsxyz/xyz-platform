@@ -38,6 +38,7 @@ log INFO "[*] ...For workspace: $WORKSPACE_NAME in $WORKSPACE_FILE"
 WORKSPACE_DATA=$(get_ws_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
 kamatera_country=$(yq '.spec.providers[] | select(.name == "kamatera") | .properties.country' "$WORKSPACE_FILE")
 kamatera_region=$(yq '.spec.providers[] | select(.name == "kamatera") | .properties.region' "$WORKSPACE_FILE")
+manager_id=$(yq '.spec.properties.primaryMachine' "$WORKSPACE_FILE")
 
 # Map declarations per resource type
 vm_resources=()
@@ -119,6 +120,8 @@ done
 
 # Export to workspace.tfvars
 echo "# Generated from $WORKSPACE_FILE" > "$OUTPUT_FILE"
+echo "" >> "$OUTPUT_FILE"
+echo "manager_id = \"$manager_id\"" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 echo "kamatera_country = \"$kamatera_country\"" >> "$OUTPUT_FILE"
 echo "kamatera_region  = \"$kamatera_region\"" >> "$OUTPUT_FILE"

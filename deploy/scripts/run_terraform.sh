@@ -33,15 +33,10 @@ load_script "$SCRIPT_DIR/use_workspace.sh"
 # Get workspace data
 log INFO "[*] ...Workspace $WORKSPACE_NAME with $WORKSPACE_FILE"
 WORKSPACE_FILE="$SCRIPT_DIR/../../$WORKSPACE_FILE"
-WORKSPACE_DATA=$(get_ws_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
-
-# Primary machine label for the workspace
-# ID of the manager VM, used for control and management
-MANAGER_ID=$(get_ws_primary_machine "$WORKSPACE_DATA")
 
 log INFO "[*] ...Validating workspace definition $WORKSPACE_FILE for $WORKSPACE_NAME"
 # TO DO: Implement validate_workspace function in utilities.sh
-# validate_workspace "$WORKSPACE_DATA"
+# validate_workspace "$WORKSPACE_FILE"
 
 # Generate the workspace file
 OUTPUT_FILE="./workspace.tfvars"
@@ -60,10 +55,7 @@ export_secrets "$WORKSPACE_FILE" ".spec.secrets" "TF_VAR_" "" "lower"
 log INFO "[*] ...Exporting fixed environment variables for Terraform"
 export TF_TOKEN_app_terraform_io=$TF_VAR_terraform_api_token
 export TF_VAR_workspace="$WORKSPACE_NAME"
-export TF_VAR_manager_id="$MANAGER_ID"
 
-log INFO "[*] ...TF_VAR_workspace: $TF_VAR_workspace"
-log INFO "[*] ...TF_VAR_manager_id: $TF_VAR_manager_id"
 log INFO "[*] ...Generating main.tf from template"
 envsubst < main.template.tf > main.tf
 rm -f main.template.tf
