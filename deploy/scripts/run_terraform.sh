@@ -57,7 +57,7 @@ export TF_VAR_manager_id="$MANAGER_ID"
 
 # Generate the workspace file
 OUTPUT_FILE="workspace.tfvars"
-log INFO "[*] ...Generating $OUTPUT_FILE"
+log INFO "[*] ...Generating workspace variables $OUTPUT_FILE"
 chmod +x "$SCRIPT_DIR/generate_workspace.sh"
 "$SCRIPT_DIR/generate_workspace.sh" "$WORKSPACE_NAME" "$WORKSPACE_FILE" "$OUTPUT_FILE"
 log INFO "[*] ...Generation complete"

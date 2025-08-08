@@ -34,7 +34,7 @@ source "$SCRIPT_DIR/utilities.sh"
 load_script "$SCRIPT_DIR/use_workspace.sh"
 
 # Get needed workspace data
-log INFO "[*] For workspace $WORKSPACE_NAME in $WORKSPACE_FILE"
+log INFO "[*] ...For workspace $WORKSPACE_NAME in $WORKSPACE_FILE"
 WORKSPACE_DATA=$(get_ws_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
 kamatera_country=$(yq '.spec.providers[] | select(.name == "kamatera") | .properties.country' "$WORKSPACE_FILE")
 kamatera_region=$(yq '.spec.providers[] | select(.name == "kamatera") | .properties.region' "$WORKSPACE_FILE")
@@ -81,7 +81,7 @@ EOF
 # Export function for VM resources as Terraform map
 export_virtualmachines() {
   # Export all collected VM entries at once, properly indented
-  echo "virtualmachines = {" > "$OUTPUT_FILE"
+  echo "virtualmachines = {" >> "$OUTPUT_FILE"
   for entry in "${vm_resources[@]}"; do
     # indent every line by two spaces
     printf '%s\n' "$entry" | sed 's/^/  /' >> "$OUTPUT_FILE"
@@ -128,9 +128,11 @@ echo "" >> "$OUTPUT_FILE"
 export_virtualmachines vm_resources
 
 # Done generating
-echo "# Generation complete" > "$OUTPUT_FILE"
-echo "" > "$OUTPUT_FILE"
+echo "# Generation complete" >> "$OUTPUT_FILE"
+echo "" >> "$OUTPUT_FILE"
 
-log INFO "[+] Generated terraform workspace $OUTPUT_FILE"
+log INFO "[+] ...Generated terraform workspace $OUTPUT_FILE"
+echo ==========================================
 cat "$OUTPUT_FILE"
-log INFO "[+] Generated terraform workspace"
+echo ==========================================
+log INFO "[+] ...Generated terraform workspace"
