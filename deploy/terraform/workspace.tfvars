@@ -17,7 +17,7 @@ virtualmachines = {
     cpu_cores = 1
     ram_mb    = 1024
     disks_gb  = [20]  # root only
-    billing   = "monthly"
+    billing   = "hourly"
     unit_cost = 5.00
   }
   "vm-infrastructure" = {
@@ -30,7 +30,7 @@ virtualmachines = {
     cpu_cores = 1
     ram_mb    = 4096
     disks_gb  = [20,40]  # root + block
-    billing   = "monthly"
+    billing   = "hourly"
     unit_cost = 11.00
   }
   "vm-workers" = {
@@ -43,7 +43,7 @@ virtualmachines = {
     cpu_cores = 1
     ram_mb    = 2048
     disks_gb  = [20]
-    billing   = "monthly"
+    billing   = "hourly"
     unit_cost = 6.00
   }
 }

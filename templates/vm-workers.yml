@@ -13,7 +13,7 @@ spec:
     cpuType: A
     cpuCores: 1
     ramMb: 2048
-    billing: monthly
+    billing: hourly
     unitCost: 6.00
   disks:
     - size: 20
