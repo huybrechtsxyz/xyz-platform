@@ -49,7 +49,6 @@ get_ws_data() {
   echo "$ws_data"
 }
 
-
 #===============================================================================
 
 # Function that returns the resourcedata based on the resourcename
@@ -66,11 +65,11 @@ get_ws_resx_from_name() {
 
   local resource_data=$(
     DATA="$resource_name" \
-    yq -r '.spec.resources[] | select(.resourceid == strenv(DATA))' <<< "$workspace_data"
+    yq -r '.spec.resources[] | select(.name == strenv(DATA))' <<< "$workspace_data"
   )
 
   if [[ -z "$resource_data" ]]; then
-    log ERROR "[X] No resource found with resource ID '$resource_name' in workspace data."
+    log ERROR "[X] No resource found with resource name '$resource_name' in workspace data."
     exit 1
   fi
 

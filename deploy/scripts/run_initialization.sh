@@ -39,8 +39,6 @@ REMOTE_IP=$(get_tf_vm_publicip "$VM_DATA")
 RESX_NAME=$(get_tf_vm_resource "$VM_DATA")
 
 WS_DATA=$(get_ws_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
-log INFO "[*] WS_DATA: $WS_DATA"
-
 RESX_DATA=$(get_ws_resx_from_name "$RESX_NAME" "$WS_DATA")
 RESX_INSTALL=$(get_ws_resx_installpoint "$WS_DATA")
 
