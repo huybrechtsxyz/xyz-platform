@@ -78,7 +78,7 @@ mkdir -p "$PATH_TEMP"
 terraform init
 
 log INFO "[*] ...Running terraform...PLAN"
-terraform plan -var-file=$OUTPUT_FILE" -input=false
+terraform plan -var-file="$OUTPUT_FILE" -input=false
 
 log INFO "[*] ...Running terraform...APPLY"
 #terraform apply -auto-approve -var-file="$OUTPUT_FILE" -input=false
