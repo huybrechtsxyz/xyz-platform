@@ -74,9 +74,9 @@ terraform plan -var-file="workspace.tfvars" -input=false
 
 log INFO "[*] ...Running terraform...APPLY"
 terraform apply -auto-approve -var-file="workspace.tfvars" -input=false
-echo "[*] ...Running terraform...APPLY skipped for safety"
+log INFO "[*] ...Running terraform...DONE"
 
 log INFO "[*] ...Reading Terraform output..."
-terraform output -json serverdata | jq -c '.' | tee $PATH_TEMP/tfoutput.json
+terraform output -json terraform_output | jq -c '.' | tee $PATH_TEMP/tfoutput.json
 
 log INFO "[+] ...Terraform output saved to tf_output.json and $PATH_TEMP/tfoutput.json"
