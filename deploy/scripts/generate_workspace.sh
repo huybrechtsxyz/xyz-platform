@@ -40,16 +40,17 @@ kamatera_country=$(yq '.spec.providers[] | select(.name == "kamatera") | .proper
 kamatera_region=$(yq '.spec.providers[] | select(.name == "kamatera") | .properties.region' "$WORKSPACE_FILE")
 
 # Map declarations per resource type
-declare -A vm_resources=()
+vm_resources=()
 
 # Build VM map in workspace
 build_vm_entry() {
   local name="$1"
-  local provider="$2"
-  local count="$3"
-  local template_file="$4"
+  local role="$2"
+  local provider="$3"
+  local count="$4"
+  local template_file="$5"
 
-  local role=$(yq -r '.spec.properties.role' "$template_file")
+  # Extract values from the template YAML file
   local os_name=$(yq -r '.spec.properties.osName' "$template_file")
   local os_code=$(yq -r '.spec.properties.osCode' "$template_file")
   local cpu_type=$(yq -r '.spec.properties.cpuType' "$template_file")
@@ -59,30 +60,31 @@ build_vm_entry() {
   local unit_cost=$(yq -r '.spec.properties.unitCost' "$template_file")
   local disks=$(yq '.spec.disks[].size' "$template_file" | paste -sd ',' -)
 
-  # Use a here-doc with variable substitution
+  # Output the Terraform map entry as a multiline string
   cat << EOF
-  "$name" = {
-    provider   = "$provider"
-    role       = "$role"
-    count      = $count
-    os_name    = "$os_name"
-    os_code    = "$os_code"
-    cpu_type   = "$cpu_type"
-    cpu_cores  = $cpu_cores
-    ram_mb     = $ram_mb
-    disks_gb   = [$disks]
-    billing    = "$billing"
-    unit_cost  = $unit_cost
-  },
+"$name" = {
+  provider   = "$provider"
+  role       = "$role"
+  count      = $count
+  os_name    = "$os_name"
+  os_code    = "$os_code"
+  cpu_type   = "$cpu_type"
+  cpu_cores  = $cpu_cores
+  ram_mb     = $ram_mb
+  disks_gb   = [$disks]
+  billing    = "$billing"
+  unit_cost  = $unit_cost
+},
 EOF
 }
 
-# Export function for VM resources
-export_virtualmachines_map() {
-  local -n map=$1
-  echo "virtualmachines = {" >> "$OUTPUT_FILE"
-  for key in "${!map[@]}"; do
-    echo "${map[$key]}"
+# Export function for VM resources as Terraform map
+export_virtualmachines() {
+  # Export all collected VM entries at once, properly indented
+  echo "virtualmachines = {" > "$OUTPUT_FILE"
+  for entry in "${vm_resources[@]}"; do
+    # indent every line by two spaces
+    printf '%s\n' "$entry" | sed 's/^/  /' >> "$OUTPUT_FILE"
   done
   echo "}" >> "$OUTPUT_FILE"
   echo "" >> "$OUTPUT_FILE"
@@ -93,6 +95,7 @@ resource_count=$(yq '.spec.resources | length' "$WORKSPACE_FILE")
 for (( i=0; i<resource_count; i++ )); do
 
   name=$(yq -r ".spec.resources[$i].name" "$WORKSPACE_FILE")
+  role=$(yq -r ".spec.resources[$i].role" "$WORKSPACE_FILE")
   provider=$(yq -r ".spec.resources[$i].properties.provider" "$WORKSPACE_FILE")
   template=$(yq -r ".spec.resources[$i].properties.template" "$WORKSPACE_FILE")
   count=$(yq -r ".spec.resources[$i].properties.count" "$WORKSPACE_FILE")
@@ -106,8 +109,9 @@ for (( i=0; i<resource_count; i++ )); do
 
   kind=$(yq -r '.kind' "$template_file")
   case "$kind" in
+    # Append the built VM entry (multi-line string) to the array
     VirtualMachine)
-      vm_resources["$name"]=$(build_vm_entry "$name" "$provider" "$count" "$template_file")
+      vm_resources+=("$(build_vm_entry "$name" "$role" "$provider" "$count" "$template_file")")
       ;;
     # other kinds ...
   esac
