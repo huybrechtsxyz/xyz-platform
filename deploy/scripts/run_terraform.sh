@@ -56,7 +56,7 @@ export TF_VAR_workspace="$WORKSPACE_NAME"
 export TF_VAR_manager_id="$MANAGER_ID"
 
 # Generate the workspace file
-OUTPUT_FILE="workspace.tfvars"
+OUTPUT_FILE="./workspace.tfvars"
 log INFO "[*] ...Generating workspace variables $OUTPUT_FILE"
 chmod +x "$SCRIPT_DIR/generate_workspace.sh"
 "$SCRIPT_DIR/generate_workspace.sh" "$WORKSPACE_NAME" "$WORKSPACE_FILE" "$OUTPUT_FILE"
@@ -78,10 +78,10 @@ mkdir -p "$PATH_TEMP"
 terraform init
 
 log INFO "[*] ...Running terraform...PLAN"
-terraform plan -var-file=$OUTPUT_FILE -input=false
+terraform plan -var-file="workspace.tfvars" -input=false
 
 log INFO "[*] ...Running terraform...APPLY"
-#terraform apply -auto-approve -var-file=$OUTPUT_FILE -input=false
+#terraform apply -auto-approve -var-file="workspace.tfvars" -input=false
 echo "[*] ...Running terraform...APPLY skipped for safety"
 
 log INFO "[*] ...Reading Terraform output..."
