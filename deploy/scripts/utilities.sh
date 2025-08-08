@@ -56,9 +56,7 @@ safe_rm_rf() {
     return 1
   fi
 
-  local real_path
-  real_path=$(realpath -m "$path")
-
+  local real_path=$(realpath -m "$path")
   if [[ "$real_path" == "/" ]]; then
     log ERROR "[X] Refusing to remove root directory"
     return 1

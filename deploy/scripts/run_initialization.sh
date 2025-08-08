@@ -53,7 +53,7 @@ create_environment_files() {
   generate_env_file "VAR_" "$VARIABLE_FILE" 
 
   log INFO "[*] ...Exporting secrets from $WORKSPACE_FILE"
-  export_secrets "$WORKSPACE_FILE" ".spec.secrets" "TF_VAR_" "" ""
+  export_secrets "$WORKSPACE_FILE" ".spec.secrets" "SECRET_" "" ""
   generate_env_file "SECRET_" "$SECRET_FILE"
 
   log INFO "[*] Creating environment files for workspace '$WORKSPACE_NAME'...DONE"

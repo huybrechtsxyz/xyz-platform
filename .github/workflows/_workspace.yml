@@ -160,6 +160,12 @@ jobs:
       - name: Setup YQ
         uses: ./.github/actions/get-yq
 
+      # Setup Bitwarden CLI
+      - name: Setup Bitwarden
+        uses: ./.github/actions/get-bitwarden
+        with:
+          bitwarden_token: ${{ secrets.BITWARDEN_TOKEN }}
+
       # Set up GitHub Secrets
       - name: General Secrets
         uses: bitwarden/sm-action@v2
