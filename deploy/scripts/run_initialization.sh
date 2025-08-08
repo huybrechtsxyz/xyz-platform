@@ -52,10 +52,13 @@ copy_initialization_files() {
 
 log INFO "[*] Copying initialization script to remote server $REMOTE_IP..."
 
-log INFO "[*] Creating installation path..."
+log INFO "[*] Creating installation path...$RESX_INSTALL"
 ssh -o StrictHostKeyChecking=no root@$REMOTE_IP << EOF
+  echo "[*] Creating installation paths..."
   mkdir -p "$RESX_INSTALL" "$RESX_INSTALL/$TEMPLATE_DIR" "$RESX_INSTALL/$WORKSPACE_DIR"
   chmod 777 "$RESX_INSTALL" "$RESX_INSTALL/$TEMPLATE_DIR" "$RESX_INSTALL/$WORKSPACE_DIR"
+  echo "[*] Listing installation paths..."
+  ls -lRa "$RESX_INSTALL"
 EOF
 
 log INFO "[*] Copying initialization scripts and config files to remote server..."
