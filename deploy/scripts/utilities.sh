@@ -46,6 +46,38 @@ disk_size_matches() {
   fi
 }
 
+# Save force removal function
+# As a safety precaution, check that the path you're about to wipe isn't / or empty
+safe_rm_rf() {
+  local path="$1"
+
+  if [[ -z "$path" || "$path" == "/" ]]; then
+    log WARN "[!] Skipped unsafe or empty path: '$path'"
+    return 1
+  fi
+
+  local real_path
+  real_path=$(realpath -m "$path")
+
+  if [[ "$real_path" == "/" ]]; then
+    log ERROR "[X] Refusing to remove root directory"
+    return 1
+  fi
+
+  if [[ -f "$real_path" ]]; then
+    log INFO "[*] Removing file: $real_path"
+    rm -f "$real_path"
+  elif [[ -d "$real_path" ]]; then
+    log INFO "[*] Removing directory contents: $real_path"
+    shopt -s nullglob dotglob
+    rm -rf "$real_path"/*
+    shopt -u nullglob dotglob
+  else
+    log WARN "[!] Skipped non-existent path: $real_path"
+    return 0
+  fi
+}
+
 #===============================================================================
 # Environment variables and secrets
 #===============================================================================
@@ -224,35 +256,6 @@ load_source() {
   fi
 }
 
-#===============================================================================
-
-
-
-
-
-
-#===============================================================================
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Generate an environment file only taking env vars with specific prefix
 # Usage: generate_env_file <PREFIX> <OUTPUT_FILE>
 # Example: generate_env_file MYAPP_ /path/to/output.env
@@ -297,6 +300,37 @@ generate_env_file() {
 
   log INFO "[+] Environment file generated at '$output_file'"
 }
+
+#===============================================================================
+
+
+
+
+
+
+#===============================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -348,37 +382,7 @@ merge_env_file() {
   fi
 }
 
-# Save force removal function
-# As a safety precaution, check that the path you're about to wipe isn't / or empty
-safe_rm_rf() {
-  local path="$1"
 
-  if [[ -z "$path" || "$path" == "/" ]]; then
-    log WARN "[!] Skipped unsafe or empty path: '$path'"
-    return 1
-  fi
-
-  local real_path
-  real_path=$(realpath -m "$path")
-
-  if [[ "$real_path" == "/" ]]; then
-    log ERROR "[X] Refusing to remove root directory"
-    return 1
-  fi
-
-  if [[ -f "$real_path" ]]; then
-    log INFO "[*] Removing file: $real_path"
-    rm -f "$real_path"
-  elif [[ -d "$real_path" ]]; then
-    log INFO "[*] Removing directory contents: $real_path"
-    shopt -s nullglob dotglob
-    rm -rf "$real_path"/*
-    shopt -u nullglob dotglob
-  else
-    log WARN "[!] Skipped non-existent path: $real_path"
-    return 0
-  fi
-}
 
 #================================================================================
 # Docker utility functions

@@ -25,6 +25,8 @@ SCRIPT_DIR="./deploy/scripts"
 TEMPLATE_DIR="templates"
 WORKSPACE_DIR="workspaces"
 WORKSPACE_FILE="./$WORKSPACE_FILE"
+VARIABLE_FILE="$SCRIPT_DIR/vars.$WORKSPACE_NAME.ws.env"
+SECRET_FILE="$SCRIPT_DIR/secrets.$WORKSPACE_NAME.ws.env"
 
 # Load script utilities
 source "$SCRIPT_DIR/utilities.sh"
@@ -44,8 +46,17 @@ RESX_INSTALL=$(get_ws_resx_installpoint "$RESX_DATA")
 
 # Create a temporary directory for the initialization scripts
 create_environment_files() {
-  log INFO "[*] Creating environment file for workspace '$WORKSPACE_NAME'..."
-  generate_env_file "VAR_" "$SCRIPT_DIR/.variables.$WORKSPACE_NAME.env"
+  log INFO "[*] Creating environment files for workspace '$WORKSPACE_NAME'..."
+
+  log INFO "[*] ...Exporting fixed environment variables for Terraform"
+  export_variables "$WORKSPACE_FILE" ".spec.variables" "VAR_" "" ""
+  generate_env_file "VAR_" "$VARIABLE_FILE" 
+
+  log INFO "[*] ...Exporting secrets from $WORKSPACE_FILE"
+  export_secrets "$WORKSPACE_FILE" ".spec.secrets" "TF_VAR_" "" ""
+  generate_env_file "SECRET_" "$SECRET_FILE"
+
+  log INFO "[*] Creating environment files for workspace '$WORKSPACE_NAME'...DONE"
 }
 
 copy_initialization_files() {
@@ -63,8 +74,7 @@ EOF
 
 log INFO "[*] Copying initialization scripts and config files to remote server..."
 scp -o StrictHostKeyChecking=no \
-  ./deploy/ \
-  ./deploy/scripts/ \
+  ./deploy/scripts/* \
   root@"$REMOTE_IP":"$RESX_INSTALL"/ || {
     log ERROR "[X] Failed to transfer initialization scripts to remote server"
     exit 1
