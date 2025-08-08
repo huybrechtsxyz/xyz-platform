@@ -46,25 +46,6 @@ get_ws_data() {
   echo "$(jq '.[0]' <<< "$matches")"
 }
 
-# Function to get the manager ID from workspace data
-# Usage: get_workspace_primary_machine <WORKSPACE_DATA>
-# Returns: The manager ID or an error message
-get_ws_primary_machine() {
-  local workspace_data="$1"
-  if [[ -z "$workspace_data" ]]; then
-    log ERROR "[X] Usage: get_workspace_managerid <WORKSPACE_DATA>" >&2
-    return 1
-  fi
-
-  local name=$(yq -p=yaml -r '.spec.properties.primaryMachine' <<< "$workspace_data")
-  if [[ -z "$name" ]]; then
-    log ERROR "[X] No primary machine found in workspace data" >&2
-    return 1
-  fi
-
-  echo "$name"
-}
-
 #===============================================================================
 
 # Function that returns the resourcedata based on the resourcename
@@ -79,9 +60,10 @@ get_ws_resx_from_name() {
     return 1
   fi
 
-  local resource_data=$(yq eval -r --arg resxname "$resource_name" '
-    .spec.resources[] | select(.resourceid == $resxname)
-  ' <<< "$workspace_data")
+  local resource_data=$(
+    DATA="$resource_name" \
+    yq -r '.spec.resources[] | select(.resourceid == strenv(DATA))' <<< "$workspace_data"
+  )
 
   if [[ -z "$resource_data" ]]; then
     log ERROR "[X] No resource found with resource ID '$resource_name' in workspace data."
