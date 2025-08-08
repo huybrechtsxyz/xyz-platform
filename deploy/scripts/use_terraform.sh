@@ -27,7 +27,7 @@ get_tf_server_by_name() {
 
   # Extract matching elements
   local matches=$(echo "$data" | jq -c --arg hostname "$hostname" '
-    .include[] | select(.name | contains($hostname))
+    .virtualmachines[] | select(.name | contains($hostname))
   ')
 
   # Count matches

@@ -11,6 +11,6 @@ jobs:
     with:
       workspace_name: platform
       workspace_file: workspaces/platform.yml
-      infrastructure: true
+      infrastructure: false
     secrets:
       BITWARDEN_TOKEN: ${{ secrets.BITWARDEN_TOKEN }}

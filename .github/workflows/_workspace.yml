@@ -127,7 +127,8 @@ jobs:
             exit 1
           fi
 
-      - name: Parse Servers
+      # Parse the terraform output
+      - name: Parse Output
         id: parse
         run: |
           matrix=$(jq -c '.' ${{ env.PATH_TEMP }}/tfoutput.json)

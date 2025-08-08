@@ -34,7 +34,7 @@ load_script "$SCRIPT_DIR/use_terraform.sh"
 
 # Load workspace and terraform data
 TF_DATA=$(get_tf_data "$TERRAFORM_FILE")
-VM_DATA=$(get_tf_server_by_name "$TF_DATA")
+VM_DATA=$(get_tf_server_by_name "$TF_DATA" "$SERVER_NAME")
 REMOTE_IP=$(get_tf_vm_publicip "$VM_DATA")
 RESX_NAME=$(get_tf_vm_resourceid "$VM_DATA")
 
