@@ -35,6 +35,10 @@ variable "kamatera_api_secret" {
   sensitive   = true
 }
 
+#
+# THESE VARIABLES ARE COVERED BY THE TERRAFORM VARIABLES FILE
+#
+
 # Primary machine label for the workspace
 variable "manager_id" {
   description = "ID of the manager VM, used for control and management"
@@ -51,10 +55,6 @@ variable "kamatera_region" {
   description = "Kamatera Region"
   type        = string
 }
-
-#
-# THESE VARIABLES ARE COVERED BY THE TERRAFORM VARIABLES FILE
-#
 
 # Virtual Machines Configuration for Terraform
 variable "virtualmachines" {

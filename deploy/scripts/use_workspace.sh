@@ -7,7 +7,7 @@
 #                 Assumption is that uttilities.sh is already sourced
 # Author        : Vincent Huybrechts
 # Created       : 2025-08-05
-# Last Modified : 2025-08-05
+# Last Modified : 2025-08-08
 #===============================================================================
 set -euo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: `$BASH_COMMAND`"' ERR
@@ -106,7 +106,7 @@ get_ws_resx_mountpoint() {
   fi
 
   local mountpoint=$(yq -r '.properties.mountpoint' <<< "$resource_data")
-  if [[ -z "$mountpoint" ]]; then
+  if [[ -z "$mountpoint" || "$mountpoint" == "null" ]]; then
     log ERROR "[X] No mountpoint found in resource data" >&2
     return 1
   fi
@@ -125,7 +125,7 @@ get_ws_resx_firewall() {
   fi
 
   local value=$(yq -r '.properties.firewall' <<< "$resource_data")
-  if [[ -z "$value" ]]; then
+  if [[ -z "$value" || "$value" == "null" ]]; then
     log ERROR "[X] No firewall found in resource data" >&2
     return 1
   fi
@@ -144,13 +144,31 @@ get_ws_resx_template() {
   fi
 
   local value=$(yq -r '.properties.template' <<< "$resource_data")
-  if [[ -z "$value" ]]; then
+  if [[ -z "$value" || "$value" == "null" ]]; then
     log ERROR "[X] No template found in resource data" >&2
     return 1
   fi
 
   echo "$value"
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #===============================================================================
 

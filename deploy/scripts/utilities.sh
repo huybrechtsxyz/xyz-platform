@@ -5,7 +5,7 @@
 # Usage         : n.a.
 # Author        : Vincent Huybrechts
 # Created       : 2025-07-23
-# Last Modified : 2025-07-23
+# Last Modified : 2025-08-08
 #===============================================================================
 set -euo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: \`$BASH_COMMAND\`"' ERR
@@ -299,39 +299,6 @@ generate_env_file() {
   log INFO "[+] Environment file generated at '$output_file'"
 }
 
-#===============================================================================
-
-
-
-
-
-
-#===============================================================================
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Merge two environment files
 # This function preserves the values from the first file, duplicate keys in the second file are ignored.
 # If OUTPUT_FILE is provided (even same as FILE1), merged result is written to it.
@@ -379,8 +346,6 @@ merge_env_file() {
     rm "$TMP_OUTPUT"
   fi
 }
-
-
 
 #================================================================================
 # Docker utility functions

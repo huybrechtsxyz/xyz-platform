@@ -5,7 +5,7 @@
 # Usage         : ./run_initialization.sh <MATRIX - NAME>
 # Author        : Vincent Huybrechts
 # Created       : 2025-08-05
-# Last Modified : 2025-08-05
+# Last Modified : 2025-08-08
 #===============================================================================
 set -euo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: `$BASH_COMMAND`"' ERR

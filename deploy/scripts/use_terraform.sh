@@ -7,11 +7,12 @@
 #                 Assumption is that uttilities.sh is already sourced
 # Author        : Vincent Huybrechts
 # Created       : 2025-08-05
-# Last Modified : 2025-08-05
+# Last Modified : 2025-08-08
 #===============================================================================
 set -euo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: `$BASH_COMMAND`"' ERR
 
+# Get the terraform data as variable
 get_tf_data() {
   local file="$1"
   if [[ ! -f "$file" ]]; then
@@ -21,6 +22,7 @@ get_tf_data() {
   cat "$file"
 }
 
+# Get the correct virtual machine from terraform output
 get_tf_server_by_name() {
   local data="$1"
   local hostname="${2:-$(hostname)}"
@@ -56,18 +58,22 @@ get_tf_vm_resource() {
   echo "$1" | jq -r '.resource'
 }
 
+#"kind":"VirtualMachine"
 get_tf_vm_kind() {
   echo "$1" | jq -r '.kind'
 }
 
+#"public_ip":"185.0.0.1"
 get_tf_vm_publicip() {
   echo "$1" | jq -r '.public_ip'
 }
 
+#"private_ip":"10.0.0.1"
 get_tf_vm_privateip() {
   echo "$1" | jq -r '.private_ip'
 }
 
+#"private_ip":"10.0.0.1"
 get_tf_vm_managerip() {
   echo "$1" | jq -r '.manager_ip'
 }

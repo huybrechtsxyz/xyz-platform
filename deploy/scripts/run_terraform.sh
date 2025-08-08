@@ -6,7 +6,7 @@
 # Usage         : ./run_terraform.sh <WORKSPACE_FILE>
 # Author        : Vincent Huybrechts
 # Created       : 2025-08-05
-# Last Modified : 2025-08-05
+# Last Modified : 2025-08-08
 #===============================================================================
 set -euo pipefail
 trap 'echo "ERROR Script failed at line $LINENO: `$BASH_COMMAND`"' ERR
@@ -63,7 +63,7 @@ cat main.tf
 log INFO "[*] ...Generation of main.tf complete"
 
 # Reason we do not save the plan
-# Error: Saving a generated plan is currently not supported
+# Error: Saving a generated plan is currently not supported in cloud
 # Terraform Cloud does not support saving the generated execution plan
 log INFO "[*] ...Running terraform...INIT"
 mkdir -p "$PATH_TEMP"
