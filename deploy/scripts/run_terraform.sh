@@ -58,7 +58,7 @@ export TF_VAR_workspace="$WORKSPACE_NAME"
 export TF_VAR_manager_id="$MANAGER_ID"
 
 # Generate the workspace file
-OUTPUT_FILE="$SCRIPT_DIR/../terraform/workspace.tfvars"
+OUTPUT_FILE="workspace.tfvars"
 log INFO "[*] ...Generating $OUTPUT_FILE from $WORKSPACE_FILE"
 chmod +x "$SCRIPT_DIR/generate_workspace.sh"
 "$SCRIPT_DIR/generate_workspace.sh" "$WORKSPACE_NAME" "$WORKSPACE_FILE" "$OUTPUT_FILE"
@@ -86,6 +86,6 @@ log INFO "[*] ...Running terraform...APPLY"
 echo "[*] ...Running terraform...APPLY skipped for safety"
 
 log INFO "[*] ...Reading Terraform output..."
-terraform output -json serverdata | jq -c '.' | tee $PATH_TEMP/tfoutput.json
+#terraform output -json serverdata | jq -c '.' | tee $PATH_TEMP/tfoutput.json
 
 log INFO "[+] ...Terraform output saved to tf_output.json and $PATH_TEMP/tfoutput.json"
