@@ -28,24 +28,19 @@ WORKSPACE_FILE="./$WORKSPACE_FILE"
 
 # Load script utilities
 source "$SCRIPT_DIR/utilities.sh"
-load_script "$SCRIPT_DIR/utilities.sh"
 load_script "$SCRIPT_DIR/use_workspace.sh"
 load_script "$SCRIPT_DIR/use_terraform.sh"
 
-# Load workspace and terraform data
+# Load terraform data
 TF_DATA=$(get_tf_data "$TERRAFORM_FILE")
 VM_DATA=$(get_tf_server_by_name "$TF_DATA" "$SERVER_NAME")
 REMOTE_IP=$(get_tf_vm_publicip "$VM_DATA")
 RESX_NAME=$(get_tf_vm_resource "$VM_DATA")
 
+# Load workspace data
 WS_DATA=$(get_ws_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
 RESX_DATA=$(get_ws_resx_from_name "$RESX_NAME" "$WS_DATA")
 RESX_INSTALL=$(get_ws_resx_installpoint "$RESX_DATA")
-
-log INFO "[*] RESX_DATA: $RESX_DATA"
-log INFO "[*] RESX_INSTALL: $RESX_INSTALL"
-
-exit 0
 
 # Create a temporary directory for the initialization scripts
 create_environment_files() {
@@ -126,10 +121,10 @@ main() {
     exit 1
   fi
 
-  if ! execute_initialization; then
-    log ERROR "[X] Remote initialization failed."
-    exit 1
-  fi
+  #if ! execute_initialization; then
+  #  log ERROR "[X] Remote initialization failed."
+  #  exit 1
+  #fi
 
   log INFO "[+] Initializing swarm cluster $REMOTE_IP... DONE"
 }
