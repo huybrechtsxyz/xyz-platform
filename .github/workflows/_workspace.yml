@@ -146,7 +146,8 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ inputs.infrastructure == true }}
     strategy:
-      matrix: ${{ fromJson(needs.restore.outputs.matrix).virtualmachines }}
+      matrix:
+        vm: ${{ fromJson(needs.restore.outputs.matrix).virtualmachines }}
     steps:
       # Check out the repo
       - name: Check Out
@@ -177,7 +178,7 @@ jobs:
       # Step: Copy the key securely to the remote server using scp
       - name: Private Key
         run: |
-          scp -o StrictHostKeyChecking=no ~/.ssh/id_rsa root@${{ matrix.public_ip }}:/root/.ssh/id_rsa_temp || { echo "[x] Failed to transfer private key to remote server"; exit 1; }
+          scp -o StrictHostKeyChecking=no ~/.ssh/id_rsa root@${{ matrix.vm.public_ip }}:/root/.ssh/id_rsa_temp || { echo "[x] Failed to transfer private key to remote server"; exit 1; }
 
       # Step: Initialize the Swarm cluster
       - name: Initialize Cluster
@@ -186,8 +187,8 @@ jobs:
           WORKSPACE_FILE: ${{ inputs.workspace_file }}
           TERRAFORM_FILE: 'deploy/scripts/.${{ inputs.workspace_name }}.tf.json'
         run: |
-          echo "[*] Initializing swarm cluster on ${{ matrix.public_ip }} ..."
+          echo "[*] Initializing swarm cluster on ${{ matrix.vm.public_ip }} ..."
           echo '${{ needs.restore.outputs.matrix }}' | jq -c '.' > "$TERRAFORM_FILE"
           #chmod +x deploy/scripts/run_initialization.sh
-          #./deploy/scripts/run_initialization.sh ${{ matrix.name }}
-          echo "[*] Initializing swarm cluster on ${{ matrix.public_ip }} ...DONE"
+          #./deploy/scripts/run_initialization.sh ${{ matrix.vm.name }}
+          echo "[*] Initializing swarm cluster on ${{ matrix.vm.public_ip }} ...DONE"
