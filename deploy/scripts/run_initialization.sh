@@ -63,15 +63,15 @@ EOF
 
 log INFO "[*] Copying initialization scripts and config files to remote server..."
 scp -o StrictHostKeyChecking=no \
-  ./deploy/*.* \
-  ./deploy/scripts/*.* \
+  ./deploy/ \
+  ./deploy/scripts/ \
   root@"$REMOTE_IP":"$RESX_INSTALL"/ || {
     log ERROR "[X] Failed to transfer initialization scripts to remote server"
     exit 1
   }
 
 log INFO "[*] Copying template files files to remote server..."
-scp -ro StrictHostKeyChecking=no \
+scp -r -o StrictHostKeyChecking=no \
   ./$TEMPLATE_DIR/ \
   root@"$REMOTE_IP":"$RESX_INSTALL/$TEMPLATE_DIR"/ || {
     log ERROR "[X] Failed to transfer template files to remote server"
@@ -79,7 +79,7 @@ scp -ro StrictHostKeyChecking=no \
   }
 
 log INFO "[*] Copying workspaces files files to remote server..."
-scp -ro StrictHostKeyChecking=no \
+scp -r -o StrictHostKeyChecking=no \
   ./$WORKSPACE_DIR/ \
   root@"$REMOTE_IP":"$RESX_INSTALL/$WORKSPACE_DIR"/ || {
     log ERROR "[X] Failed to transfer workspaces files to remote server"
