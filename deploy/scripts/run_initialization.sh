@@ -16,10 +16,10 @@ if ! command -v yq &> /dev/null; then
 fi
 
 SERVER_NAME=$1
-:${SERVER_NAME:?ERROR SERVER_NAME variable is not set.}
-:${WORKSPACE_NAME:?ERROR WORKSPACE_NAME variable is not set.}
-:${WORKSPACE_FILE:?ERROR WORKSPACE_FILE variable is not set.}
-:${TERRAFORM_FILE:?ERROR TERRAFORM_FILE variable is not set.}
+: "${SERVER_NAME:?ERROR SERVER_NAME variable is not set.}"
+: "${WORKSPACE_NAME:?ERROR WORKSPACE_NAME variable is not set.}"
+: "${WORKSPACE_FILE:?ERROR WORKSPACE_FILE variable is not set.}"
+: "${TERRAFORM_FILE:?ERROR TERRAFORM_FILE variable is not set.}"
 
 SCRIPT_DIR="./deploy/scripts"
 TEMPLATE_DIR="templates"
