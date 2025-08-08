@@ -193,5 +193,5 @@ jobs:
           echo "[*] Initializing swarm cluster on ${{ matrix.vm.public_ip }} ..."
           echo '${{ needs.restore.outputs.matrix }}' | jq -c '.' > "$TERRAFORM_FILE"
           chmod +x deploy/scripts/run_initialization.sh
-          ./deploy/scripts/run_initialization.sh ${{ matrix.vm.name }}
+          ./deploy/scripts/run_initialization.sh "${{ matrix.vm.name }}"
           echo "[*] Initializing swarm cluster on ${{ matrix.vm.public_ip }} ...DONE"

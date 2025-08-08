@@ -16,35 +16,37 @@ trap 'echo "ERROR Script failed at line $LINENO: `$BASH_COMMAND`"' ERR
 # Usage: get_ws_data <WORKSPACE_NAME> <WORKSPACE_FILE>
 # Example: get_ws_data "my_workspace" "workspaces/workspace.yml"
 get_ws_data() {
-  local search_name="$1"
-  local file="$2"
+  local ws_name="$1"
+  local ws_file="$2"
 
-  if [[ -z "$search_name" || -z "$file" ]]; then
+  if [[ -z "$ws_name" || -z "$ws_file" ]]; then
     log ERROR "[X] Usage: get_ws_data <WORKSPACE_NAME> <WORKSPACE_FILE>" >&2
     return 1
   fi
 
-  if [[ ! -f "$file" ]]; then
-    log ERROR "[X] Workspace file not found: $file" >&2
+  if [[ ! -f "$ws_file" ]]; then
+    log ERROR "[X] Workspace file not found: $ws_file" >&2
     return 1
   fi
 
-  # Convert YAML → JSON array of documents
-  local json_array=$(yq -o=json '.' "$file")
-
-  # Find matching workspace object
-  local match=$(echo "$json_array" | jq --arg name "$search_name" '
-    map(select((.kind == "Workspace") and (.meta.name == $name))) | .[0]
-  ')
-
-  # Check if match is null
-  if [[ "$match" == "null" ]]; then
-    log ERROR "[X] No workspace found with name '$search_name'" >&2
+  # Read the kind field
+  local kind=$(yq e '.kind' "$ws_file")
+  if [[ "$kind" != "Workspace" ]]; then
+    log ERROR "[X] YAML kind is not 'Workspace', got: $kind" >&2
     return 1
   fi
 
-  # Output the matched workspace JSON (or convert back to YAML if you prefer)
-  echo "$match"
+  # Read the meta.name field
+  local name=$(yq e '.meta.name' "$ws_file")
+  if [[ "$name" != "$ws_name" ]]; then
+    log ERROR "[X] Workspace name in file ($name) does not match input name ($ws_name)" >&2
+    return 1
+  fi
+
+  # If you want to save the whole workspace data in a variable, do:
+  local ws_data=$(cat "$ws_file")
+  # Export or echo ws_data as needed
+  echo "$ws_data"
 }
 
 
