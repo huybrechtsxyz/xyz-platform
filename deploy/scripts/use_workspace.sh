@@ -16,10 +16,10 @@ trap 'echo "ERROR Script failed at line $LINENO: `$BASH_COMMAND`"' ERR
 # Usage: get_ws_data <WORKSPACE_NAME> <WORKSPACE_FILE>
 # Example: get_ws_data "my_workspace" "workspaces/workspace.yml"
 get_ws_data() {
-  local name="$1"
+  local search_name="$1"
   local file="$2"
 
-  if [[ -z "$name" || -z "$file" ]]; then
+  if [[ -z "$search_name" || -z "$file" ]]; then
     log ERROR "[X] Usage: get_ws_data <WORKSPACE_NAME> <WORKSPACE_FILE>" >&2
     return 1
   fi
@@ -29,11 +29,24 @@ get_ws_data() {
     return 1
   fi
 
-  # Convert YAML → JSON and select matches
-  NAME="$name" \
-    yq eval-all -o=json '[.[] | select(.kind == "Workspace" and .meta.name == strenv(NAME))]' "$file" \
-    | jq '.[0]'
+  # Convert YAML → JSON array of documents
+  local json_array=$(yq -o=json '.' "$file")
+
+  # Find matching workspace object
+  local match=$(echo "$json_array" | jq --arg name "$search_name" '
+    map(select((.kind == "Workspace") and (.meta.name == $name))) | .[0]
+  ')
+
+  # Check if match is null
+  if [[ "$match" == "null" ]]; then
+    log ERROR "[X] No workspace found with name '$search_name'" >&2
+    return 1
+  fi
+
+  # Output the matched workspace JSON (or convert back to YAML if you prefer)
+  echo "$match"
 }
+
 
 #===============================================================================
 
@@ -59,13 +72,7 @@ get_ws_resx_from_name() {
     exit 1
   fi
 
-  yq -o=json '.' "$file" \
-    | jq --arg name "$name" '
-        map(select(
-          (.kind | ascii_downcase) == "workspace" and
-          (.meta.name == $name)
-        )) | .[0]
-      '
+  echo "$resource_data"
 }
 
 # Function to get the installpoint from the resource data
