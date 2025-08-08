@@ -42,6 +42,17 @@ WS_DATA=$(get_ws_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
 RESX_DATA=$(get_ws_resx_from_name "$RESX_NAME" "$WS_DATA")
 RESX_INSTALL=$(get_ws_resx_installpoint "$WS_DATA")
 
+log INFO "[*] WORKSPACE_FILE: WORKSPACE_FILE"
+log INFO "[*] TF_DATA: TF_DATA"
+log INFO "[*] VM_DATA: VM_DATA"
+log INFO "[*] REMOTE_IP: REMOTE_IP"
+log INFO "[*] RESX_NAME: RESX_NAME"
+log INFO "[*] WS_DATA: WS_DATA"
+log INFO "[*] RESX_DATA: RESX_DATA"
+log INFO "[*] RESX_INSTALL: RESX_INSTALL"
+
+exit 0
+
 # Create a temporary directory for the initialization scripts
 create_environment_files() {
   log INFO "[*] Creating environment file for workspace '$WORKSPACE_NAME'..."
