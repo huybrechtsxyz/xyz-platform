@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    kamatera = {
+      source = "Kamatera/kamatera"
+    }
+  }
+}
+
 # Provider configuration for Kamatera
 provider "kamatera" {
   api_client_id = var.kamatera_api_key
