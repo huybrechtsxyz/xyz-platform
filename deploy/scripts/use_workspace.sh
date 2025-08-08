@@ -20,7 +20,7 @@ get_ws_data() {
   local file="$2"
 
   if [[ -z "$name" || -z "$file" ]]; then
-    log ERROR "[X] Usage: get_workspace_data <WORKSPACE_NAME> <WORKSPACE_FILE>" >&2
+    log ERROR "[X] Usage: get_ws_data <WORKSPACE_NAME> <WORKSPACE_FILE>" >&2
     return 1
   fi
 
@@ -29,21 +29,11 @@ get_ws_data() {
     return 1
   fi
 
-  local matches=$(yq eval-all \
-    "select(.kind == \"Workspace\" and .metadata.name == \"$name\")" \
-    "$file" | yq eval -o=json '.' - | jq -s '.')
+  # Capture all matching workspaces
+  local matches=$(NAME="$name" yq eval-all '. | select(.kind == "Workspace" and .meta.name == strenv(NAME))' "$file")
 
-  local count=$(jq length <<< "$matches")
-
-  if (( count == 0 )); then
-    log ERROR "[X]  No Workspace found with name '$name'" >&2
-    return 1
-  elif (( count > 1 )); then
-    log ERROR "[X]  Multiple Workspaces found with name '$name'" >&2
-    return 1
-  fi
-
-  echo "$(jq '.[0]' <<< "$matches")"
+  # If you only want the first match
+  echo "$matches" | yq eval '.[0]' -
 }
 
 #===============================================================================
