@@ -142,6 +142,7 @@ jobs:
   # Initialize the Swarm Cluster
   # This job will run if the cache is not hit or if the initialize input is set to true
   # Initializes the Swarm cluster by setting up keys, firewalls, disks, docker, gluster
+  # if inputs.infrastructure == true should replace if always
   initialization:
     name: Initialize Cluster
     needs: [restore]

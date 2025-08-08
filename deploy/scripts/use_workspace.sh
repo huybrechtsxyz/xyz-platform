@@ -79,12 +79,12 @@ get_ws_resx_from_name() {
     return 1
   fi
 
-  local resource_data=$(yq -r --arg resxname "$resource_name" '
+  local resource_data=$(yq eval -r --arg resxname "$resource_name" '
     .spec.resources[] | select(.resourceid == $resxname)
   ' <<< "$workspace_data")
 
   if [[ -z "$resource_data" ]]; then
-    log ERROR "[X] No resource found with resource ID '$RESOURCE_ID' in workspace data."
+    log ERROR "[X] No resource found with resource ID '$resource_name' in workspace data."
     exit 1
   fi
 
