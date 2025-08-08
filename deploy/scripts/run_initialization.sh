@@ -64,7 +64,7 @@ EOF
 log INFO "[*] Copying initialization scripts and config files to remote server..."
 scp -o StrictHostKeyChecking=no \
   ./deploy/*.* \
-  ./deploy/scripts/*
+  ./deploy/scripts/*.* \
   root@"$REMOTE_IP":"$RESX_INSTALL"/ || {
     log ERROR "[X] Failed to transfer initialization scripts to remote server"
     exit 1
