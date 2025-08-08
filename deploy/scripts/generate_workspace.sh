@@ -125,7 +125,7 @@ echo "kamatera_region  = \"$kamatera_region\"" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
 # Export all resource maps:
-export_virtualmachines_map vm_resources
+export_virtualmachines vm_resources
 
 # Done generating
 echo "# Generation complete" > "$OUTPUT_FILE"
