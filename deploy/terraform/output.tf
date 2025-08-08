@@ -22,7 +22,7 @@ output "terraform_output" {
     # Virtual machines
     virtualmachines = concat(
       # Get the kamatera virtual machines
-      module.kamatera_vms.kamatera_output.virtualmachines
+      values(module.kamatera_vms.kamatera_output.virtualmachines)
     )
   }
 }
