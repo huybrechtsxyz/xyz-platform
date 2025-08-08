@@ -31,7 +31,8 @@ get_ws_data() {
 
   # Capture all matching workspaces
   local matches=$(NAME="$name" yq eval-all '. | select(.kind == "Workspace" and .meta.name == strenv(NAME))' "$file")
-
+  echo "$matches"  >&2
+  
   # If you only want the first match
   echo "$matches" | yq eval '.[0]' -
 }
