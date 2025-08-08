@@ -29,12 +29,10 @@ get_ws_data() {
     return 1
   fi
 
-  # Capture all matching workspaces
-  local matches=$(NAME="$name" yq eval-all '. | select(.kind == "Workspace" and .meta.name == strenv(NAME))' "$file")
-  echo "$matches"  >&2
-  
-  # If you only want the first match
-  echo "$matches" | yq eval '.[0]' -
+  # Convert YAML → JSON and select matches
+  NAME="$name" \
+    yq eval-all -o=json '[.[] | select(.kind == "Workspace" and .meta.name == strenv(NAME))]' "$file" \
+    | jq '.[0]'
 }
 
 #===============================================================================
@@ -61,7 +59,13 @@ get_ws_resx_from_name() {
     exit 1
   fi
 
-  echo "$resource_data"
+  yq -o=json '.' "$file" \
+    | jq --arg name "$name" '
+        map(select(
+          (.kind | ascii_downcase) == "workspace" and
+          (.meta.name == $name)
+        )) | .[0]
+      '
 }
 
 # Function to get the installpoint from the resource data

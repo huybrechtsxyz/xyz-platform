@@ -32,8 +32,6 @@ load_script "$SCRIPT_DIR/utilities.sh"
 load_script "$SCRIPT_DIR/use_workspace.sh"
 load_script "$SCRIPT_DIR/use_terraform.sh"
 
-log INFO "[*] WORKSPACE_FILE: WORKSPACE_FILE"
-
 # Load workspace and terraform data
 TF_DATA=$(get_tf_data "$TERRAFORM_FILE")
 VM_DATA=$(get_tf_server_by_name "$TF_DATA" "$SERVER_NAME")
