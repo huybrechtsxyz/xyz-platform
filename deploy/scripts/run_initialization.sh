@@ -40,14 +40,14 @@ VM_DATA=$(get_tf_server_by_name "$TF_DATA" "$SERVER_NAME")
 REMOTE_IP=$(get_tf_vm_publicip "$VM_DATA")
 RESX_NAME=$(get_tf_vm_resourceid "$VM_DATA")
 
-log INFO "[*] TF_DATA: TF_DATA"
-log INFO "[*] VM_DATA: VM_DATA"
-log INFO "[*] REMOTE_IP: REMOTE_IP"
-log INFO "[*] RESX_NAME: RESX_NAME"
+log INFO "[*] TF_DATA: $TF_DATA"
+log INFO "[*] VM_DATA: $VM_DATA"
+log INFO "[*] REMOTE_IP: $REMOTE_IP"
+log INFO "[*] RESX_NAME: $RESX_NAME"
 
 WS_DATA=$(get_ws_data "$WORKSPACE_NAME" "$WORKSPACE_FILE")
 
-log INFO "[*] WS_DATA: WS_DATA"
+log INFO "[*] WS_DATA: $WS_DATA"
 
 RESX_DATA=$(get_ws_resx_from_name "$RESX_NAME" "$WS_DATA")
 RESX_INSTALL=$(get_ws_resx_installpoint "$WS_DATA")
