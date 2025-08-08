@@ -189,6 +189,7 @@ jobs:
           WORKSPACE_NAME: ${{ inputs.workspace_name }}
           WORKSPACE_FILE: ${{ inputs.workspace_file }}
           TERRAFORM_FILE: 'deploy/scripts/.${{ inputs.workspace_name }}.tf.json'
+          BITWARDEN_TOKEN: ${{ secrets.BITWARDEN_TOKEN }}
         run: |
           echo "[*] Initializing swarm cluster on ${{ matrix.vm.public_ip }} ..."
           echo '${{ needs.restore.outputs.matrix }}' | jq -c '.' > "$TERRAFORM_FILE"
