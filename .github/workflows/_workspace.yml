@@ -127,7 +127,6 @@ jobs:
             exit 1
           fi
 
-      # Parse Terraform Output to find Swarm Servers
       - name: Parse Servers
         id: parse
         run: |
@@ -135,7 +134,9 @@ jobs:
           echo "================"
           echo "$matrix"
           echo "================"
-          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "matrix<<EOF" >> $GITHUB_OUTPUT
+          echo "$matrix" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
   # Initialize the Swarm Cluster
   # This job will run if the cache is not hit or if the initialize input is set to true
