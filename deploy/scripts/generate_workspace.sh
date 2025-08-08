@@ -95,7 +95,7 @@ resource_count=$(yq '.spec.resources | length' "$WORKSPACE_FILE")
 for (( i=0; i<resource_count; i++ )); do
 
   name=$(yq -r ".spec.resources[$i].name" "$WORKSPACE_FILE")
-  role=$(yq -r ".spec.resources[$i].role" "$WORKSPACE_FILE")
+  role=$(yq -r ".spec.resources[$i].properties.role" "$WORKSPACE_FILE")
   provider=$(yq -r ".spec.resources[$i].properties.provider" "$WORKSPACE_FILE")
   template=$(yq -r ".spec.resources[$i].properties.template" "$WORKSPACE_FILE")
   count=$(yq -r ".spec.resources[$i].properties.count" "$WORKSPACE_FILE")

@@ -63,6 +63,7 @@ chmod +x "$SCRIPT_DIR/generate_workspace.sh"
 log INFO "[*] ...Generation complete"
 
 # Substitute environment variables in the main.template.tf file
+export WORKSPACE="$WORKSPACE_NAME"
 log INFO "[*] ...Generating main.tf from template"
 envsubst < main.template.tf > main.tf
 rm -f main.template.tf
