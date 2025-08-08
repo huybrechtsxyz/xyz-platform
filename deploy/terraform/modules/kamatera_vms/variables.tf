@@ -18,22 +18,24 @@ variable "kamatera_root_password" {
   sensitive   = true
 }
 
-# Primary machine label for the workspace
-variable "manager_id" {
-  description = "ID of the manager VM, used for control and management"
-  type        = string
-  default     = "manager-1"  # Default value, can be overridden in workspace
-}
-
 # Kamatera API details
 variable "kamatera_api_key" {
   description = "Kamatera API key"
   type        = string
+  sensitive   = true
 }
 
 variable "kamatera_api_secret" {
   description = "Kamatera API secret"
   type        = string
+  sensitive   = true
+}
+
+# Primary machine label for the workspace
+variable "manager_id" {
+  description = "ID of the manager VM, used for control and management"
+  type        = string
+  default     = "manager-1"  # Default value, can be overridden in workspace
 }
 
 # Kamatera Datacenter Cariables
