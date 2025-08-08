@@ -68,12 +68,6 @@ rm -f main.template.tf
 cat main.tf
 log INFO "[*] ...Generation of main.tf complete"
 
-log INFO "[*] ...Variables"
-env | grep TF_VAR_
-
-log INFO "[*] ...Workspace file"
-cat workspace.tfvars
-
 # Reason we do not save the plan
 # Error: Saving a generated plan is currently not supported
 # Terraform Cloud does not support saving the generated execution plan
@@ -85,10 +79,10 @@ log INFO "[*] ...Running terraform...PLAN"
 terraform plan -var-file="workspace.tfvars" -input=false
 
 log INFO "[*] ...Running terraform...APPLY"
-#terraform apply -auto-approve -var-file="workspace.tfvars" -input=false
+terraform apply -auto-approve -var-file="workspace.tfvars" -input=false
 echo "[*] ...Running terraform...APPLY skipped for safety"
 
 log INFO "[*] ...Reading Terraform output..."
-#terraform output -json serverdata | jq -c '.' | tee $PATH_TEMP/tfoutput.json
+terraform output -json serverdata | jq -c '.' | tee $PATH_TEMP/tfoutput.json
 
 log INFO "[+] ...Terraform output saved to tf_output.json and $PATH_TEMP/tfoutput.json"
