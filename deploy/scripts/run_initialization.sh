@@ -38,7 +38,7 @@ log INFO "[*] WORKSPACE_FILE: WORKSPACE_FILE"
 TF_DATA=$(get_tf_data "$TERRAFORM_FILE")
 VM_DATA=$(get_tf_server_by_name "$TF_DATA" "$SERVER_NAME")
 REMOTE_IP=$(get_tf_vm_publicip "$VM_DATA")
-RESX_NAME=$(get_tf_vm_resourceid "$VM_DATA")
+RESX_NAME=$(get_tf_vm_resource "$VM_DATA")
 
 log INFO "[*] TF_DATA: $TF_DATA"
 log INFO "[*] VM_DATA: $VM_DATA"

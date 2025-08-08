@@ -46,20 +46,18 @@ get_tf_server_by_name() {
   echo "$matches"
 }
 
+#name":"srv-platform-infra-1-5jwb"
 get_tf_vm_name() {
   echo "$1" | jq -r '.name'
 }
 
-get_tf_vm_resourceid() {
-  echo "$1" | jq -r '.resourceid'
+#"resource":"vm-infrastructure"
+get_tf_vm_resource() {
+  echo "$1" | jq -r '.resource'
 }
 
 get_tf_vm_kind() {
   echo "$1" | jq -r '.kind'
-}
-
-get_tf_vm_type() {
-  echo "$1" | jq -r '.type'
 }
 
 get_tf_vm_publicip() {
