@@ -43,6 +43,13 @@ log INFO "[*] ...Validating workspace definition $WORKSPACE_FILE for $WORKSPACE_
 # TO DO: Implement validate_workspace function in utilities.sh
 # validate_workspace "$WORKSPACE_DATA"
 
+# Generate the workspace file
+OUTPUT_FILE="./workspace.tfvars"
+log INFO "[*] ...Generating workspace variables $OUTPUT_FILE"
+chmod +x "$SCRIPT_DIR/generate_workspace.sh"
+"$SCRIPT_DIR/generate_workspace.sh" "$WORKSPACE_NAME" "$WORKSPACE_FILE" "$OUTPUT_FILE"
+log INFO "[*] ...Generation complete"
+
 # Export secrets from the workspace file
 log INFO "[*] ...Exporting fixed environment variables for Terraform"
 export_variables "$WORKSPACE_FILE" ".spec.variables" "TF_VAR_" "" "lower"
@@ -55,20 +62,17 @@ export TF_TOKEN_app_terraform_io=$TF_VAR_terraform_api_token
 export TF_VAR_workspace="$WORKSPACE_NAME"
 export TF_VAR_manager_id="$MANAGER_ID"
 
-# Generate the workspace file
-OUTPUT_FILE="./workspace.tfvars"
-log INFO "[*] ...Generating workspace variables $OUTPUT_FILE"
-chmod +x "$SCRIPT_DIR/generate_workspace.sh"
-"$SCRIPT_DIR/generate_workspace.sh" "$WORKSPACE_NAME" "$WORKSPACE_FILE" "$OUTPUT_FILE"
-log INFO "[*] ...Generation complete"
-
-# Substitute environment variables in the main.template.tf file
-export WORKSPACE="$WORKSPACE_NAME"
 log INFO "[*] ...Generating main.tf from template"
 envsubst < main.template.tf > main.tf
 rm -f main.template.tf
 cat main.tf
 log INFO "[*] ...Generation of main.tf complete"
+
+log INFO "[*] ...Variables"
+env | grep TF_VAR_
+
+log INFO "[*] ...Workspace file"
+cat workspace.tfvars
 
 # Reason we do not save the plan
 # Error: Saving a generated plan is currently not supported

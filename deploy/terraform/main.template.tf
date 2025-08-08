@@ -13,9 +13,15 @@ terraform {
   cloud {
     organization = "huybrechts-xyz"
     workspaces {
-      name = "huybrechts-xyz-$WORKSPACE"
+      name = "huybrechts-xyz-$TF_VAR_workspace"
     }
   }
+}
+
+# Provider configuration for Kamatera
+provider "kamatera" {
+  api_client_id = var.kamatera_api_key
+  api_secret = var.kamatera_api_secret
 }
 
 # Local variables
