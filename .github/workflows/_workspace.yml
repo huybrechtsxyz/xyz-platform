@@ -146,6 +146,7 @@ jobs:
     name: Initialize Cluster
     needs: [restore]
     runs-on: ubuntu-latest
+    if: always()
     strategy:
       matrix:
         vm: ${{ fromJson(needs.restore.outputs.matrix) }}
