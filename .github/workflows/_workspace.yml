@@ -148,7 +148,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        vm: ${{ fromJson(needs.restore.outputs.matrix).virtualmachines }}
+        vm: ${{ fromJson(needs.restore.outputs.matrix) }}
     steps:
       # Check out the repo
       - name: Check Out
