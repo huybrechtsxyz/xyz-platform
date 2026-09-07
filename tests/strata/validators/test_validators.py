@@ -298,6 +298,64 @@ class TestPlatformValidatorValidate:
 
 
 # ---------------------------------------------------------------------------
+# PlatformValidator — partial deployments with --deep (configuration_service set)
+# ---------------------------------------------------------------------------
+
+
+class TestPlatformValidatorPartialDeploymentDeepCheck:
+    """Regression tests: --deep skips full Phase 2 semantic validation for
+    `spec.partial: true` deployments, but a lighter-weight check should still
+    catch an `environments[]` entry that doesn't resolve to a file on disk."""
+
+    def _write_partial_deployment(self, tmp_path: Path, environments: list) -> Path:
+        import yaml
+
+        data = {
+            "apiVersion": "strata.huybrechts.xyz/v1",
+            "kind": "deployment",
+            "meta": {"name": "base"},
+            "spec": {"partial": True, "environments": environments},
+        }
+        f = tmp_path / "base.yaml"
+        f.write_text(yaml.dump(data), encoding="utf-8")
+        return f
+
+    def test_dangling_environments_ref_fails_with_deep(self, tmp_path):
+        from unittest.mock import MagicMock
+
+        f = self._write_partial_deployment(tmp_path, ["missing.yaml"])
+        config_svc = MagicMock()
+        config_svc.model = None
+        v = PlatformValidator(f, configuration_service=config_svc)
+        assert v.before_validate(tmp_path) is True
+        result = v.validate(tmp_path)
+        assert result is False
+        assert any("missing.yaml" in e for e in v.get_errors())
+
+    def test_present_environments_ref_passes_with_deep(self, tmp_path):
+        from unittest.mock import MagicMock
+
+        (tmp_path / "env.yaml").write_text("# placeholder\n", encoding="utf-8")
+        f = self._write_partial_deployment(tmp_path, ["env.yaml"])
+        config_svc = MagicMock()
+        config_svc.model = None
+        v = PlatformValidator(f, configuration_service=config_svc)
+        assert v.before_validate(tmp_path) is True
+        result = v.validate(tmp_path)
+        assert result is True
+        assert v.has_errors() is False
+
+    def test_dangling_environments_ref_not_checked_without_deep(self, tmp_path):
+        """Without --deep (no configuration_service), the lightweight check is
+        skipped too — matches the scope of Phase 2 (only runs under --deep)."""
+        f = self._write_partial_deployment(tmp_path, ["missing.yaml"])
+        v = PlatformValidator(f, configuration_service=None)
+        assert v.before_validate(tmp_path) is True
+        result = v.validate(tmp_path)
+        assert result is True
+
+
+# ---------------------------------------------------------------------------
 # PlatformValidator — after_validate
 # ---------------------------------------------------------------------------
 

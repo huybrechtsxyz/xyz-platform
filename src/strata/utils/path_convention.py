@@ -33,6 +33,27 @@ if TYPE_CHECKING:
     from strata.models.deployment_model import LayersModel
 
 
+def _dir_only(rel_path: str) -> str:
+    """Return *rel_path* with its final path component (the file itself) stripped.
+
+    Layer/segment derivation (:func:`resolve_layers`) only ever derives segment
+    values from *directories* a deployment file lives under — its own filename is
+    never a meaningful segment value. :func:`match_pattern`'s "trailing path parts
+    are ignored" contract normally absorbs the filename as an extra trailing part
+    beyond the deepest matched segment (the common case: the file sits one level
+    deeper than the convention's full segment depth). But when a deployment
+    happens to sit exactly one directory shallower than that (its real directory
+    depth is exactly segment-count − 1), the path has no extra trailing part — the
+    filename itself lines up with the last placeholder position instead of being
+    trailing, and gets captured as if it were that segment's real directory value.
+    Stripping the filename before matching removes the ambiguity entirely: only
+    real directories are ever considered as segment values.
+    """
+    parent = Path(rel_path).parent
+    parent_str = parent.as_posix()
+    return "" if parent_str == "." else parent_str
+
+
 def match_pattern(rel_path: str, pattern: str) -> Optional[Dict[str, str]]:
     """Match a file path against a convention pattern, returning captured segment values.
 
@@ -173,7 +194,7 @@ def resolve_layers(
         matches = [
             c
             for c in layer_conventions
-            if fnmatch(rel_path, c.scope) and match_pattern(rel_path, c.pattern) is not None
+            if fnmatch(rel_path, c.scope) and match_pattern(_dir_only(rel_path), c.pattern) is not None
         ]
         if len(matches) > 1:
             return LayerResolution(
@@ -208,7 +229,7 @@ def resolve_layers(
         # free-form pass-through data, exactly as today's graceful "no scope match".
         return LayerResolution(values=explicit_segments)
 
-    captures = match_pattern(rel_path, convention.pattern) or {}
+    captures = match_pattern(_dir_only(rel_path), convention.pattern) or {}
 
     values: Dict[str, str] = {}
     for segment in convention.segments or []:

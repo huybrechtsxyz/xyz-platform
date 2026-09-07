@@ -202,6 +202,26 @@ class TestLayerAgreementPolicyEvaluate:
         assert result.passed is True
         assert result.violations == []
 
+    def test_shortfall_one_explicit_deepest_segment_not_falsely_flagged(self):
+        """Regression: at shortfall == 1 (the file sits directly in the 'hub'
+        directory, with no 'ring' subdirectory — the deployment's real directory
+        depth is exactly segment-count - 1), an explicit 'ring' value must not be
+        compared against the deployment's own filename. Previously match_pattern()
+        incorrectly captured the filename as 'ring's derived value (since path
+        length happened to equal pattern length), producing a false disagreement
+        violation whenever the explicit value didn't coincidentally equal the
+        deployment's own filename."""
+        policy = LayerAgreementPolicy(_make_policy())
+        layers = LayersModel(follows="hub-scheme", segments={"hub": "hub1", "ring": "prd"})
+        context = _make_context(
+            file_path=WORK_PATH / "deploy/hubs/hub1/deploy.yaml",
+            layers=layers,
+            config_model=_make_config_model(paths=[_make_convention()]),
+        )
+        result = policy.evaluate(context)
+        assert result.passed is True
+        assert result.violations == []
+
     def test_auto_detected_convention_agrees(self):
         """follows omitted — convention auto-detected from the path; still checked."""
         policy = LayerAgreementPolicy(_make_policy())

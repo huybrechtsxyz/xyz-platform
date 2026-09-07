@@ -125,3 +125,86 @@ class TestSilentNoOpDetection:
         r = resolve_layers(REL, LayersModel(segments={"environment": "prd"}), [])
         assert r.convention is None and r.error is None
         assert r.values == {"environment": "prd"}
+
+
+class TestFilenameNeverCapturedAsSegmentValue:
+    """Regression: a deployment file's own filename must never be captured as a
+    layer segment's derived value.
+
+    Bug: when a deployment's real directory depth was exactly
+    (segment-count - 1) — i.e. every segment except the deepest one has a real
+    directory — the deepest, genuinely-not-applicable segment resolved to the
+    deployment file's own filename instead of being omitted. Root cause:
+    match_pattern()'s "trailing path parts are ignored" contract only absorbs the
+    filename as a trailing part when the path is *deeper* than the pattern; at
+    exactly that depth, path length == pattern length, so the filename lines up
+    with the last placeholder instead of being trailing.
+    """
+
+    def _hub_conv(self, name="hub-path"):
+        return PathConventionModel(
+            name=name,
+            scope="deploy/hubs/**",
+            pattern="deploy/hubs/{hub}/{spoke}/{customer}/{ring}/{environment}",
+            resolves="layers",
+            segments=[
+                ConfigurationLayerModel(name="hub"),
+                ConfigurationLayerModel(name="spoke"),
+                ConfigurationLayerModel(name="customer"),
+                ConfigurationLayerModel(name="ring"),
+                ConfigurationLayerModel(name="environment"),
+            ],
+        )
+
+    def test_shortfall_one_omits_deepest_segment_instead_of_filename(self):
+        """4 real directories for a 5-segment convention (shortfall == 1) —
+        'environment' must be omitted entirely, never resolve to 'deployment.yaml'."""
+        rel_path = "deploy/hubs/z01/s01/c0062/dev/deployment.yaml"
+        layers = LayersModel(
+            follows="hub-path", segments={"hub": "z01", "spoke": "s01", "customer": "c0062", "ring": "dev"}
+        )
+        r = resolve_layers(rel_path, layers, [self._hub_conv()])
+        assert r.error is None
+        assert r.values == {"hub": "z01", "spoke": "s01", "customer": "c0062", "ring": "dev"}
+        assert "environment" not in r.values
+
+    def test_shortfall_zero_still_derives_deepest_segment_from_real_directory(self):
+        """5 real directories (full depth) — environment IS derivable, from the
+        real 'prd' directory, not from the trailing filename."""
+        rel_path = "deploy/hubs/z01/s01/c0062/dev/prd/deployment.yaml"
+        layers = LayersModel(
+            follows="hub-path", segments={"hub": "z01", "spoke": "s01", "customer": "c0062", "ring": "dev"}
+        )
+        r = resolve_layers(rel_path, layers, [self._hub_conv()])
+        assert r.error is None
+        assert r.values["environment"] == "prd"
+
+    def test_shortfall_two_and_three_still_omit_deeper_segments(self):
+        """Shallower depths (shortfall 2 and 3) already worked before the fix —
+        guard against a regression at those depths too."""
+        conv = self._hub_conv()
+
+        r2 = resolve_layers(
+            "deploy/hubs/z01/s01/c0062/deployment.yaml",
+            LayersModel(follows="hub-path", segments={"hub": "z01", "spoke": "s01", "customer": "c0062"}),
+            [conv],
+        )
+        assert r2.error is None
+        assert "ring" not in r2.values and "environment" not in r2.values
+
+        r3 = resolve_layers(
+            "deploy/hubs/z01/s01/deployment.yaml",
+            LayersModel(follows="hub-path", segments={"hub": "z01", "spoke": "s01"}),
+            [conv],
+        )
+        assert r3.error is None
+        assert "customer" not in r3.values and "ring" not in r3.values and "environment" not in r3.values
+
+    def test_auto_detect_at_full_depth_unaffected(self):
+        """Level 1 auto-detect (no explicit follows) still works at full depth —
+        stripping the filename only removes the false trailing-part match, it
+        doesn't break the legitimate one."""
+        rel_path = "deploy/hubs/z01/s01/c0062/dev/prd/deployment.yaml"
+        r = resolve_layers(rel_path, LayersModel(), [self._hub_conv()])
+        assert r.convention is not None and r.convention.name == "hub-path"
+        assert r.values["environment"] == "prd"

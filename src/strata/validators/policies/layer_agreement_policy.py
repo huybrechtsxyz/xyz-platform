@@ -70,7 +70,7 @@ class LayerAgreementPolicy(BasePolicy):
         config_spec = getattr(config_model, "spec", None)
         conventions = getattr(config_spec, "paths", None) or []
 
-        from strata.utils.path_convention import match_pattern, resolve_layers
+        from strata.utils.path_convention import _dir_only, match_pattern, resolve_layers
 
         resolution = resolve_layers(rel_path, layers, conventions)
         if resolution.convention is None:
@@ -80,7 +80,7 @@ class LayerAgreementPolicy(BasePolicy):
             # nothing to compare an explicit value against.
             return self._skip("no resolves: layers convention applies to this file")
 
-        derived = match_pattern(rel_path, resolution.convention.pattern) or {}
+        derived = match_pattern(_dir_only(rel_path), resolution.convention.pattern) or {}
 
         violations: List[str] = []
         for name, explicit_value in sorted(explicit_segments.items()):
