@@ -33,6 +33,34 @@ if TYPE_CHECKING:
     from strata.models.deployment_model import LayersModel
 
 
+def _dir_only(rel_path: str) -> str:
+    """Return *rel_path* with its final path component (the file itself) stripped.
+
+    Used only for deriving segment *values* (Level 2 of :func:`resolve_layers`,
+    and the equivalent comparison in ``LayerAgreementPolicy``) — never for Level 1
+    "which convention applies" matching, which intentionally keeps using the full
+    path (a file's own name is allowed to satisfy a convention's overall shape,
+    e.g. a single-segment convention matching a deployment file at the workspace
+    root; that's a structural "does it belong" check, not a segment value).
+
+    Segment *values* must only ever come from real *directories* a deployment file
+    lives under — its own filename is never a meaningful segment value.
+    :func:`match_pattern`'s "trailing path parts are ignored" contract normally
+    absorbs the filename as an extra trailing part beyond the deepest matched
+    segment (the common case: the file sits one level deeper than the
+    convention's full segment depth). But when a deployment happens to sit
+    exactly one directory shallower than that (its real directory depth is
+    exactly segment-count − 1), the path has no extra trailing part — the
+    filename itself lines up with the last placeholder position instead of being
+    trailing, and gets captured as if it were that segment's real directory
+    value. Stripping the filename before matching removes the ambiguity
+    entirely: only real directories are ever considered as segment values.
+    """
+    parent = Path(rel_path).parent
+    parent_str = parent.as_posix()
+    return "" if parent_str == "." else parent_str
+
+
 def match_pattern(rel_path: str, pattern: str) -> Optional[Dict[str, str]]:
     """Match a file path against a convention pattern, returning captured segment values.
 
@@ -208,7 +236,7 @@ def resolve_layers(
         # free-form pass-through data, exactly as today's graceful "no scope match".
         return LayerResolution(values=explicit_segments)
 
-    captures = match_pattern(rel_path, convention.pattern) or {}
+    captures = match_pattern(_dir_only(rel_path), convention.pattern) or {}
 
     values: Dict[str, str] = {}
     for segment in convention.segments or []:

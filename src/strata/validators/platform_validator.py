@@ -356,8 +356,10 @@ class PlatformValidator(BaseValidator):
         self._service = service
 
         # Phase 2: dynamic validation against configuration (optional).
-        # Skipped entirely for partial deployments (spec.partial: true) — they are
-        # base files not intended to be validated as complete deploy targets.
+        # Full Phase 2 is skipped entirely for partial deployments (spec.partial: true)
+        # — they are base files not intended to be validated as complete deploy
+        # targets, and may legitimately omit required leaf-only fields such as
+        # 'workspace'. A lighter-weight check still runs for them below.
         if self._configuration_service is not None and not skip_phase2_partial:
             is_valid, dynamic_errors = service.validate(
                 configuration_model=self._configuration_service.model,
@@ -393,6 +395,32 @@ class PlatformValidator(BaseValidator):
                     self.add_validation_warning(msg)
                 if d_errors:
                     return False
+
+        # Lightweight partial-file check: even though full Phase 2 semantic
+        # validation is skipped for `spec.partial: true` deployments, any
+        # `environments[]` entry that IS already present should still point at
+        # a file that exists on disk. This only runs with --deep (i.e. when a
+        # configuration service was loaded), matching the scope of Phase 2.
+        elif (
+            self._configuration_service is not None
+            and skip_phase2_partial
+            and hasattr(service, "check_environment_refs_exist")
+        ):
+            env_ref_errors = service.check_environment_refs_exist(
+                work_path=str(work_path),
+                configuration_model=self._configuration_service.model,
+                repo_map=self._repo_map,
+            )
+            if env_ref_errors:
+                for msg in env_ref_errors:
+                    self.add_validation_error("PARTIAL_ENVIRONMENT_FILE_NOT_FOUND", msg, phase=2)
+                self.logger.warning(
+                    "Partial deployment environment file check failed",
+                    service=service_class.__name__,
+                    error_count=len(env_ref_errors),
+                    path=str(self._file_path),
+                )
+                return False
 
         return True
 

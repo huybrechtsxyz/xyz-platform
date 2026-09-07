@@ -94,6 +94,50 @@ class TestDeploymentService:
         assert is_valid
         assert errors == []
 
+    def test_check_environment_refs_exist_before_validate_returns_empty(self):
+        """No model loaded yet (Phase 1 not run) -> no crash, empty list."""
+        svc = DeploymentService(data={})
+        assert svc.check_environment_refs_exist(work_path="/nonexistent") == []
+
+    def test_check_environment_refs_exist_no_environments_entries(self, tmp_path):
+        """Partial deployment with no environments[] at all -> nothing to check."""
+        data = {
+            "apiVersion": "strata.huybrechts.xyz/v1",
+            "kind": "deployment",
+            "meta": {"name": "base"},
+            "spec": {"partial": True},
+        }
+        svc = DeploymentService(data=data)
+        svc.validate()
+        assert svc.check_environment_refs_exist(work_path=str(tmp_path)) == []
+
+    def test_check_environment_refs_exist_missing_file_reports_error(self, tmp_path):
+        """Partial deployment whose environments[] entry doesn't exist on disk."""
+        data = {
+            "apiVersion": "strata.huybrechts.xyz/v1",
+            "kind": "deployment",
+            "meta": {"name": "base"},
+            "spec": {"partial": True, "environments": ["missing.yaml"]},
+        }
+        svc = DeploymentService(data=data)
+        svc.validate()
+        errors = svc.check_environment_refs_exist(work_path=str(tmp_path))
+        assert len(errors) == 1
+        assert "missing.yaml" in errors[0]
+
+    def test_check_environment_refs_exist_present_file_passes(self, tmp_path):
+        """Partial deployment whose environments[] entry exists on disk -> no errors."""
+        (tmp_path / "env.yaml").write_text("# placeholder\n")
+        data = {
+            "apiVersion": "strata.huybrechts.xyz/v1",
+            "kind": "deployment",
+            "meta": {"name": "base"},
+            "spec": {"partial": True, "environments": ["env.yaml"]},
+        }
+        svc = DeploymentService(data=data)
+        svc.validate()
+        assert svc.check_environment_refs_exist(work_path=str(tmp_path)) == []
+
     def test_tenant_field_absent_phase2_passes(self, tmp_path):
         """When tenant is not set, Phase 2 adds no tenant-related errors."""
         data = {

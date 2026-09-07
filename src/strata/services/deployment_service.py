@@ -51,6 +51,38 @@ class DeploymentService(BaseService["DeploymentModel"]):
         """Return the DeploymentModel class for validation."""
         return DeploymentModel
 
+    def check_environment_refs_exist(
+        self,
+        work_path: str,
+        configuration_model: Optional["ConfigurationModel"] = None,
+        repo_map: Optional[Dict[str, str]] = None,
+    ) -> List[str]:
+        """Lightweight file-existence check for ``spec.environments[]`` entries.
+
+        Unlike :meth:`validate` (Phase 2), this does not reject partial deployments
+        and does not run any other cross-reference checks — it only verifies that
+        each already-present ``environments[]`` file reference resolves to a file
+        that exists on disk. Intended for ``spec.partial: true`` deployments, where
+        full Phase 2 semantic validation is otherwise skipped entirely, so that a
+        dangling reference doesn't sit undetected until a leaf that extends the
+        partial file is built or deployed.
+
+        Args:
+            work_path: Workspace root path for resolving relative paths
+            configuration_model: Optional ConfigurationModel, used only for its remote map
+            repo_map: Optional solution-level repo map for resolving @repo_name/... refs
+
+        Returns:
+            List[str]: Error messages for any missing environment files. Empty if
+            there are no ``environments[]`` entries or all of them exist.
+        """
+        if not self.model or not self.model.spec.environments:
+            return []
+        config_repo_map = configuration_model.get_remote_map() if configuration_model else {}
+        merged_repo_map = {**config_repo_map, **(repo_map or {})}
+        file_refs = [(f"Environment[{i}]", env_ref.file) for i, env_ref in enumerate(self.model.spec.environments)]
+        return self._validate_file_refs(work_path, merged_repo_map, file_refs)
+
     def _merged_repo_map(self, configuration_model: Optional["ConfigurationModel"]) -> Dict[str, str]:
         """Return the merged repo_map: config-level remotes + solution-level repos.
 
@@ -1120,8 +1152,11 @@ class DeploymentService(BaseService["DeploymentModel"]):
             tenant_env_paths: List[str] = []
             if self.model.spec.tenant:
                 from strata.services.tenant_service import TenantService as _TenantService
+                from strata.utils.path_convention import resolve_tenant_file_path
 
-                tenant_file = Path(objects_path) / "tenants" / f"{self.model.spec.tenant}.yaml"
+                tenant_file = resolve_tenant_file_path(
+                    Path(objects_path), str(self.model.spec.tenant), ConfigurationService.get_instance().model
+                )
                 if tenant_file.exists():
                     tenant_svc = _TenantService(str(tenant_file))
                     is_valid_t, _ = tenant_svc.validate()
@@ -1271,8 +1306,11 @@ class DeploymentService(BaseService["DeploymentModel"]):
             tenant_env_paths: List[str] = []
             if self.model.spec.tenant:
                 from strata.services.tenant_service import TenantService as _TenantService
+                from strata.utils.path_convention import resolve_tenant_file_path
 
-                tenant_file = Path(objects_path) / "tenants" / f"{self.model.spec.tenant}.yaml"
+                tenant_file = resolve_tenant_file_path(
+                    Path(objects_path), str(self.model.spec.tenant), ConfigurationService.get_instance().model
+                )
                 if tenant_file.exists():
                     tenant_svc = _TenantService(str(tenant_file))
                     is_valid_t, _ = tenant_svc.validate()
