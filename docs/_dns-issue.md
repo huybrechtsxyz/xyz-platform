@@ -80,7 +80,7 @@ records:
 ## 3. Future enhancement: promote a deployment stage's output to a durable `variable:`/`secret:`/`feature:`
 
 **Not implemented yet.** Now tracked formally as [ADR-0068 — Cross-pipeline output
-promotion](decisions/0068-cross-pipeline-output-promotion.md). Originally recorded as the
+publishing](decisions/0068-cross-pipeline-output-publishing.md). Originally recorded as the
 natural follow-up to point 2's same-invocation limitation; expanded into the real-world
 scenario that actually forces the issue: **two independent pipelines** (e.g.
 `bootstrap_customer` and `deploy_environment`) that need to share data across pipeline
