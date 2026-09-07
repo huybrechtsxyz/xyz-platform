@@ -36,18 +36,25 @@ if TYPE_CHECKING:
 def _dir_only(rel_path: str) -> str:
     """Return *rel_path* with its final path component (the file itself) stripped.
 
-    Layer/segment derivation (:func:`resolve_layers`) only ever derives segment
-    values from *directories* a deployment file lives under — its own filename is
-    never a meaningful segment value. :func:`match_pattern`'s "trailing path parts
-    are ignored" contract normally absorbs the filename as an extra trailing part
-    beyond the deepest matched segment (the common case: the file sits one level
-    deeper than the convention's full segment depth). But when a deployment
-    happens to sit exactly one directory shallower than that (its real directory
-    depth is exactly segment-count − 1), the path has no extra trailing part — the
+    Used only for deriving segment *values* (Level 2 of :func:`resolve_layers`,
+    and the equivalent comparison in ``LayerAgreementPolicy``) — never for Level 1
+    "which convention applies" matching, which intentionally keeps using the full
+    path (a file's own name is allowed to satisfy a convention's overall shape,
+    e.g. a single-segment convention matching a deployment file at the workspace
+    root; that's a structural "does it belong" check, not a segment value).
+
+    Segment *values* must only ever come from real *directories* a deployment file
+    lives under — its own filename is never a meaningful segment value.
+    :func:`match_pattern`'s "trailing path parts are ignored" contract normally
+    absorbs the filename as an extra trailing part beyond the deepest matched
+    segment (the common case: the file sits one level deeper than the
+    convention's full segment depth). But when a deployment happens to sit
+    exactly one directory shallower than that (its real directory depth is
+    exactly segment-count − 1), the path has no extra trailing part — the
     filename itself lines up with the last placeholder position instead of being
-    trailing, and gets captured as if it were that segment's real directory value.
-    Stripping the filename before matching removes the ambiguity entirely: only
-    real directories are ever considered as segment values.
+    trailing, and gets captured as if it were that segment's real directory
+    value. Stripping the filename before matching removes the ambiguity
+    entirely: only real directories are ever considered as segment values.
     """
     parent = Path(rel_path).parent
     parent_str = parent.as_posix()
@@ -194,7 +201,7 @@ def resolve_layers(
         matches = [
             c
             for c in layer_conventions
-            if fnmatch(rel_path, c.scope) and match_pattern(_dir_only(rel_path), c.pattern) is not None
+            if fnmatch(rel_path, c.scope) and match_pattern(rel_path, c.pattern) is not None
         ]
         if len(matches) > 1:
             return LayerResolution(

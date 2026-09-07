@@ -208,3 +208,17 @@ class TestFilenameNeverCapturedAsSegmentValue:
         r = resolve_layers(rel_path, LayersModel(), [self._hub_conv()])
         assert r.convention is not None and r.convention.name == "hub-path"
         assert r.values["environment"] == "prd"
+
+    def test_auto_detect_at_shortfall_one_still_finds_convention_but_not_filename(self):
+        """Level 1 (which convention applies) is unaffected by the filename fix —
+        it still recognizes this file belongs to the hub-path family even at
+        shortfall == 1 (matching existing behavior relied on elsewhere, e.g. a
+        single-segment convention matching a deployment file sitting at the
+        workspace root). Level 2 (segment *values*) still must never leak the
+        filename — 'environment' stays omitted."""
+        rel_path = "deploy/hubs/z01/s01/c0062/dev/deployment.yaml"
+        layers = LayersModel(follows=None, segments={"hub": "z01", "spoke": "s01", "customer": "c0062", "ring": "dev"})
+        r = resolve_layers(rel_path, layers, [self._hub_conv()])
+        assert r.error is None
+        assert r.convention is not None and r.convention.name == "hub-path"
+        assert "environment" not in r.values
