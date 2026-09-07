@@ -8,9 +8,13 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+## [1.9.4] - 2026-09-07
+
 ### Fixed
 
 - **Every CLI invocation crashed on Windows** (`SystemError: ConsoleRenderer with colors=True ... requires colorama`) — `colorama` wasn't declared as a dependency. Added it (Windows-only); the console formatter also now falls back to uncolored output instead of crashing if it's still missing.
+- **Partial deployments (`spec.partial: true`) never checked whether their `environments[]` file references existed**, since full Phase 2 validation is intentionally skipped for them — dangling references went undetected until a leaf deployment extending the partial file was built/deployed. A lightweight existence-only check now runs for partial files under `--deep` validation.
+- **Layer segment values could capture a deployment file's own filename as a directory segment** when the file sat exactly one level shallower than its convention's segment depth — segment value extraction now strips the filename first. See ADR-0072.
 
 ## [1.9.3] - 2026-09-04
 
