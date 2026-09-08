@@ -8,6 +8,8 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+## [1.9.5] - 2026-09-08
+
 ### Added
 
 - **Deployment change-reference tracking (ADR-0074)** — `deploy run`/`deploy destroy` accept `--change-id`/`--reason`/`--change-system`/`--change-title`/`--change-url`/`--change-classification` (or `STRATA_CHANGE_*` env vars), recorded on the deployment manifest/log; a new `change_reference_required` policy can enforce it before any deploy or destroy.

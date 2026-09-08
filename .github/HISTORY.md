@@ -7,6 +7,8 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+## [1.9.5] - 2026-09-08
+
 ### Added
 
 #### **Deployment change-reference tracking (ADR-0074)**
