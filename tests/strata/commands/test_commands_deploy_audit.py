@@ -38,6 +38,7 @@ def _make_command(
     cmd._output_format = "console"
     cmd._output_quiet = False
     cmd._execution_id = "12345678-1234-1234-1234-123456789abc"
+    cmd._change_reference = None
     cmd.logger = MagicMock()
     return cmd
 
@@ -624,6 +625,7 @@ class TestManifestPushToRemote:
         cmd._policy_results = []
         cmd._lock_ref = None
         cmd._audit_log_path = None
+        cmd._change_reference = None
         cmd.logger = MagicMock()
 
         mock_deployment_service = MagicMock()
@@ -688,6 +690,7 @@ class TestManifestPushToRemote:
         cmd._policy_results = []
         cmd._lock_ref = None
         cmd._audit_log_path = None
+        cmd._change_reference = None
         cmd.logger = MagicMock()
 
         mock_deployment_service = MagicMock()
@@ -741,6 +744,7 @@ class TestManifestRecordedEvent:
         cmd._lock_ref = None
         cmd._audit_log_path = None
         cmd._execution_id = "exec-abc-123"
+        cmd._change_reference = None
         cmd.logger = MagicMock()
 
         mock_deployment_service = MagicMock()

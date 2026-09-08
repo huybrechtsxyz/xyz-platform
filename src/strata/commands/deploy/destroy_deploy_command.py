@@ -38,6 +38,12 @@ class DestroyDeployCommand(BaseDeployCommand):
         dry_run: bool = False,
         force_lock: bool = False,
         timeout: int = 0,
+        change_id: Optional[str] = None,
+        change_system: Optional[str] = None,
+        change_title: Optional[str] = None,
+        change_url: Optional[str] = None,
+        change_classification: Optional[str] = None,
+        change_reason: Optional[str] = None,
         output: Optional[str] = None,
         verbose: Optional[bool] = None,
         quiet: Optional[bool] = None,
@@ -48,6 +54,12 @@ class DestroyDeployCommand(BaseDeployCommand):
             output=output,
             verbose=verbose,
             quiet=quiet,
+            change_id=change_id,
+            change_system=change_system,
+            change_title=change_title,
+            change_url=change_url,
+            change_classification=change_classification,
+            change_reason=change_reason,
         )
         self._stage = stage
         self._scope = scope
@@ -186,6 +198,15 @@ class DestroyDeployCommand(BaseDeployCommand):
                     f"Available scopes: {[s.scope for s in all_stages if s.scope]}"
                 )
                 return False
+
+        # ADR-0074 Phase 2 — 'destroy_before' policies (e.g. change_reference_required)
+        # evaluate once per run, before any stage executes — same fail-fast spot and
+        # shared implementation RunDeployCommand uses for 'deploy_before'. A distinct
+        # phase (not a reuse of 'deploy_before') so a workspace can require a change
+        # reference under different strictness for destroy vs. deploy. Not evaluated
+        # for --dry-run: nothing is changed, so nothing to require a reference for.
+        if not self._dry_run and not self._evaluate_preflight_policies("destroy_before"):
+            return False
 
         if self._is_console_output():
             action = "Planning destroy for" if self._dry_run else "Destroying"

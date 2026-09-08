@@ -503,7 +503,7 @@ Always returns `True`. A namespace that contains no compose modules is not an er
 
 Generates `values.yaml` and `meta.yaml` artifacts for each module with `spec.type: helm`, ready for use with `helm install --values`.
 
-> **Security note:** `HelmBuilder` NEVER writes resolved variable, secret, or feature values. References are emitted as `${KEY}` substitution tokens and injected by the deployer via `helm install --set` flags or a secrets values file at deploy time.
+> **Security note:** `HelmBuilder` NEVER writes resolved variable, secret, or feature values. References are emitted as typed `${var:KEY}` / `${secret:KEY}` / `${feature:KEY}` substitution expressions (ADR-0075) — the same syntax `TerraformDeployer` uses for backend config. The deployer resolves them at deploy time: secret-shaped values via `helm upgrade --set-string` (never written to disk), var/feature-only values via a rewritten values file passed with `-f`.
 
 ### Output Location
 
@@ -525,12 +525,14 @@ Service keys in `values.yaml` follow the same prefix rule as `ComposeBuilder`:
 
 ### Environment Variable Sources
 
-| YAML source field | Value emitted in `values.yaml`        |
-| ----------------- | ------------------------------------- |
-| `value: "foo"`    | `KEY: foo` (literal string)           |
-| `var: MY_VAR`     | `KEY: ${MY_VAR}` (injected at deploy) |
-| `secret: MY_SEC`  | `KEY: ${MY_SEC}` (injected at deploy) |
-| `feature: MY_FLG` | `KEY: ${MY_FLG}` (injected at deploy) |
+| YAML source field | Value emitted in `values.yaml`                     |
+| ----------------- | -------------------------------------------------- |
+| `value: "foo"`    | `KEY: foo` (literal string)                        |
+| `var: MY_VAR`     | `KEY: ${var:MY_VAR}` (resolved at deploy time)     |
+| `secret: MY_SEC`  | `KEY: ${secret:MY_SEC}` (resolved at deploy time)  |
+| `feature: MY_FLG` | `KEY: ${feature:MY_FLG}` (resolved at deploy time) |
+
+These typed references may appear anywhere in the rendered values document — not just under an `env:` key — and are cross-checked at build time against declared variables/secrets/features (an undeclared name blocks the build). An unresolved reference also fails loud at deploy time; see ADR-0075.
 
 ### PVC Persistence
 

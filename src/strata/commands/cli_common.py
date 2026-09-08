@@ -253,3 +253,63 @@ def click_refresh_cache(func):
         help="Force re-warm the resolved-model cache even if it is still fresh.",
     )(func)
     return func
+
+
+# --change-id / --change-system / --change-title / --change-url / --change-classification / --reason
+# -> External change/ticket reference justifying this deploy (ADR-0074 Phase 1: capture only)
+def click_change_reference(func):
+    func = click.option(
+        "--reason",
+        "change_reason",
+        default=None,
+        envvar="STRATA_CHANGE_REASON",
+        metavar="TEXT",
+        help="Justification for this deployment. Required if --change-id is supplied. [env: STRATA_CHANGE_REASON]",
+    )(func)
+    func = click.option(
+        "--change-classification",
+        "change_classification",
+        default=None,
+        envvar="STRATA_CHANGE_CLASSIFICATION",
+        metavar="VALUE",
+        help=(
+            "Change classification, e.g. 'emergency'/'normal'/'standard'. Validated against configuration's "
+            "change_tracking.classifications when that allowlist is set. [env: STRATA_CHANGE_CLASSIFICATION]"
+        ),
+    )(func)
+    func = click.option(
+        "--change-url",
+        "change_url",
+        default=None,
+        envvar="STRATA_CHANGE_URL",
+        metavar="URL",
+        help="Link to the change record. Resolved from configuration's change_tracking.url_template if omitted. [env: STRATA_CHANGE_URL]",
+    )(func)
+    func = click.option(
+        "--change-title",
+        "change_title",
+        default=None,
+        envvar="STRATA_CHANGE_TITLE",
+        metavar="TEXT",
+        help="Snapshot of the change record's title, for offline audit review. [env: STRATA_CHANGE_TITLE]",
+    )(func)
+    func = click.option(
+        "--change-system",
+        "change_system",
+        default=None,
+        envvar="STRATA_CHANGE_SYSTEM",
+        metavar="NAME",
+        help=(
+            "Tracker identifier, e.g. 'jira', 'azure_devops', 'servicenow'. "
+            "Defaults to configuration's change_tracking.system. [env: STRATA_CHANGE_SYSTEM]"
+        ),
+    )(func)
+    func = click.option(
+        "--change-id",
+        "change_id",
+        default=None,
+        envvar="STRATA_CHANGE_ID",
+        metavar="ID",
+        help="External change/ticket identifier, e.g. 'OPS-1234'. [env: STRATA_CHANGE_ID]",
+    )(func)
+    return func

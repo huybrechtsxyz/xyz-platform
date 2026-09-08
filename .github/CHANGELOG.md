@@ -8,6 +8,14 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+### Added
+
+- **Deployment change-reference tracking (ADR-0074)** — `deploy run`/`deploy destroy` accept `--change-id`/`--reason`/`--change-system`/`--change-title`/`--change-url`/`--change-classification` (or `STRATA_CHANGE_*` env vars), recorded on the deployment manifest/log; a new `change_reference_required` policy can enforce it before any deploy or destroy.
+
+### Fixed
+
+- **Terraform backend config could silently deploy with an unresolved `${var:}`/`${secret:}` reference, and Helm value substitution only matched inside `env:`-keyed dicts with an exact whole-value match** — both provisioners now share one typed `${var:}`/`${secret:}`/`${feature:}` resolver (ADR-0075) that fails loud on any unresolved reference and works anywhere in the document, plus a matching build-time check. **Breaking:** removes Helm's old untyped `${KEY}` syntax.
+
 ## [1.9.4] - 2026-09-07
 
 ### Fixed

@@ -113,6 +113,15 @@ environment override file name collides with a workspace-level definition.
 backends that accept literal `${...}` strings (e.g. HCL-native backends) are not
 broken.
 
+> **Update (2026-09-08):** [ADR-0075](0075-unify-terraform-helm-value-expression-syntax.md)
+> reverses the "left as-is" behavior described above — an unresolved
+> `${var:}`/`${secret:}`/`${feature:}` expression now hard-fails the deploy
+> step instead of silently passing through as literal text. Re-examined
+> because no real Terraform backend provider field is meant to receive that
+> literal placeholder text; the original rationale (avoid breaking backends
+> that "accept" literal `${...}` strings) does not correspond to any actual
+> backend behavior. See ADR-0075 for the full reasoning.
+
 ## Consequences
 
 ### Positive

@@ -17,7 +17,7 @@ spec:
   services:
     - name: aws-load-balancer-controller
       configuration:
-        clusterName: "${EKS_CLUSTER_NAME}"
+        clusterName: "${var:EKS_CLUSTER_NAME}"
         serviceAccount:
           create: true
           name: aws-load-balancer-controller

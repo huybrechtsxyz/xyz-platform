@@ -5,6 +5,7 @@ from typing import Optional
 import click
 
 from strata.commands.cli_common import (
+    click_change_reference,
     click_file,
     click_no_cache,
     click_output_format,
@@ -155,6 +156,7 @@ def deploy():
     metavar="ID",
     help="Resume a paused deployment after gate resolution. Provide the work-item ID printed when the deploy was paused.",
 )
+@click_change_reference
 @click_work_path
 @click_output_format
 @click_output_verbose
@@ -177,6 +179,12 @@ def deploy_run(
     ai: bool = False,
     strict_ai_review: Optional[str] = None,
     resume_id: Optional[str] = None,
+    change_id: Optional[str] = None,
+    change_system: Optional[str] = None,
+    change_title: Optional[str] = None,
+    change_url: Optional[str] = None,
+    change_classification: Optional[str] = None,
+    change_reason: Optional[str] = None,
     output: Optional[str] = None,
     verbose: Optional[bool] = None,
     quiet: Optional[bool] = None,
@@ -200,6 +208,12 @@ def deploy_run(
         ai=ai,
         strict_ai_review=strict_ai_review,
         resume_id=resume_id,
+        change_id=change_id,
+        change_system=change_system,
+        change_title=change_title,
+        change_url=change_url,
+        change_classification=change_classification,
+        change_reason=change_reason,
         output=output,
         verbose=verbose,
         quiet=quiet,
@@ -259,6 +273,7 @@ def deploy_run(
     metavar="SECONDS",
     help="Abort if the command does not complete within N seconds (0 = no timeout).",
 )
+@click_change_reference
 @click_work_path
 @click_output_format
 @click_output_verbose
@@ -272,6 +287,12 @@ def deploy_destroy(
     dry_run: bool = False,
     force_lock: bool = False,
     timeout: int = 0,
+    change_id: Optional[str] = None,
+    change_system: Optional[str] = None,
+    change_title: Optional[str] = None,
+    change_url: Optional[str] = None,
+    change_classification: Optional[str] = None,
+    change_reason: Optional[str] = None,
     output: Optional[str] = None,
     verbose: Optional[bool] = None,
     quiet: Optional[bool] = None,
@@ -290,6 +311,12 @@ def deploy_destroy(
         dry_run=dry_run,
         force_lock=force_lock,
         timeout=timeout,
+        change_id=change_id,
+        change_system=change_system,
+        change_title=change_title,
+        change_url=change_url,
+        change_classification=change_classification,
+        change_reason=change_reason,
         output=output,
         verbose=verbose,
         quiet=quiet,

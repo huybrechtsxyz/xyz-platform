@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import Field
 
+from strata.models.change_reference_model import ChangeReferenceModel
 from strata.models.common_models import PlatformBaseModel, PlatformName
 
 
@@ -86,6 +87,9 @@ class DeployLogModel(PlatformBaseModel):
     stages: List[DeployLogStageModel] = Field(default_factory=list, description="Per-stage results")
     pull_request: Optional[DeployLogPullRequestModel] = Field(
         default=None, description="PR enrichment data (null if unavailable)"
+    )
+    change_reference: Optional[ChangeReferenceModel] = Field(
+        default=None, description="External change/ticket record justifying this deployment, when supplied (ADR-0074)"
     )
     errors: List[str] = Field(default_factory=list, description="Top-level errors")
     messages: List[str] = Field(default_factory=list, description="Top-level messages")

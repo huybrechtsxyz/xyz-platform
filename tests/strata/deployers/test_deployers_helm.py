@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
+import yaml
+
 from strata.deployers.base_deployer import (
     STEP_APPLY,
     STEP_CHECK,
@@ -19,8 +21,8 @@ from strata.deployers.helm_deployer import (
     HelmModuleTarget,
     _build_value_overrides,
     _escape_set_value,
-    _find_env_tokens,
-    _resolve_token,
+    _find_expr_leaves,
+    _format_set_path,
     _sanitize_repo_name,
 )
 from strata.models.common_models import ServiceDeployerType
@@ -732,120 +734,63 @@ class TestSanitizeRepoName:
 
 
 # ---------------------------------------------------------------------------
-# _find_env_tokens
+# _find_expr_leaves
 # ---------------------------------------------------------------------------
 
 
-class TestFindEnvTokens:
-    def test_finds_token_under_env(self):
-        doc = {"nginx": {"env": {"DB_PASSWORD": "${DB_PASSWORD}"}}}
-        tokens = _find_env_tokens(doc)
-        assert tokens == [("nginx.env.DB_PASSWORD", "DB_PASSWORD")]
+class TestFindExprLeaves:
+    def test_finds_var_leaf(self):
+        doc = {"nginx": {"env": {"APP_VERSION": "${var:APP_VERSION}"}}}
+        leaves = _find_expr_leaves(doc)
+        assert leaves == [(["nginx", "env", "APP_VERSION"], "${var:APP_VERSION}")]
 
-    def test_ignores_non_token_env_values(self):
+    def test_finds_secret_leaf(self):
+        doc = {"nginx": {"env": {"DB_PASSWORD": "${secret:DB_PASSWORD}"}}}
+        leaves = _find_expr_leaves(doc)
+        assert leaves == [(["nginx", "env", "DB_PASSWORD"], "${secret:DB_PASSWORD}")]
+
+    def test_ignores_plain_values(self):
         doc = {"nginx": {"env": {"TZ": "Europe/Brussels"}}}
-        assert _find_env_tokens(doc) == []
+        assert _find_expr_leaves(doc) == []
 
-    def test_ignores_tokens_outside_env(self):
-        """Tokens outside any dict literally keyed 'env' (raw pass-through
-        configuration, or a plain top-level string) are deliberately not scanned."""
-        doc = {"nginx": {"configuration": {"image": "${SOME_TAG}"}}, "topLevel": "${OTHER}"}
-        assert _find_env_tokens(doc) == []
+    def test_not_scoped_to_env_keys_unlike_old_bare_token_shape(self):
+        """Unlike the retired untyped ${KEY} shape, the typed prefix makes an
+        unrestricted full-tree walk safe — references outside 'env' dicts are
+        found too (e.g. raw pass-through configuration)."""
+        doc = {"nginx": {"configuration": {"image": "${var:IMAGE_TAG}"}}, "topLevel": "${feature:SOME_FLAG}"}
+        leaves = _find_expr_leaves(doc)
+        assert (["nginx", "configuration", "image"], "${var:IMAGE_TAG}") in leaves
+        assert (["topLevel"], "${feature:SOME_FLAG}") in leaves
+        assert len(leaves) == 2
 
-    def test_ignores_partial_token_match(self):
-        doc = {"nginx": {"env": {"URL": "postgres://user:${DB_PASSWORD}@host"}}}
-        assert _find_env_tokens(doc) == []
+    def test_ignores_bare_untyped_token(self):
+        """The old ${KEY} (no kind prefix) shape is retired — not matched."""
+        doc = {"nginx": {"env": {"DB_PASSWORD": "${DB_PASSWORD}"}}}
+        assert _find_expr_leaves(doc) == []
 
-    def test_handles_empty_and_non_dict_input(self):
-        assert _find_env_tokens({}) == []
-        assert _find_env_tokens(None) == []  # type: ignore[arg-type]
-
-    def test_finds_multiple_tokens_across_entries(self):
+    def test_finds_multiple_leaves(self):
         doc = {
-            "nginx": {"env": {"DB_PASSWORD": "${DB_PASSWORD}"}},
-            "redis": {"env": {"API_KEY": "${API_KEY}", "TZ": "UTC"}},
+            "nginx": {"env": {"DB_PASSWORD": "${secret:DB_PASSWORD}"}},
+            "redis": {"env": {"API_KEY": "${secret:API_KEY}", "TZ": "UTC"}},
         }
-        tokens = _find_env_tokens(doc)
-        assert ("nginx.env.DB_PASSWORD", "DB_PASSWORD") in tokens
-        assert ("redis.env.API_KEY", "API_KEY") in tokens
-        assert len(tokens) == 2
+        leaves = _find_expr_leaves(doc)
+        assert (["nginx", "env", "DB_PASSWORD"], "${secret:DB_PASSWORD}") in leaves
+        assert (["redis", "env", "API_KEY"], "${secret:API_KEY}") in leaves
+        assert len(leaves) == 2
 
-    def test_finds_token_under_deeply_nested_env(self):
-        """Off-the-shelf/registry charts with chart-mandated deep nesting, e.g.
-        Immich's controllers.main.containers.main.env.DB_PASSWORD."""
-        doc = {"controllers": {"main": {"containers": {"main": {"env": {"DB_PASSWORD": "${DB_PASSWORD}"}}}}}}
-        tokens = _find_env_tokens(doc)
-        assert tokens == [("controllers.main.containers.main.env.DB_PASSWORD", "DB_PASSWORD")]
+    def test_walks_list_indices(self):
+        doc = {"args": ["--flag", "${var:REGION}"]}
+        leaves = _find_expr_leaves(doc)
+        assert leaves == [(["args", 1], "${var:REGION}")]
 
-    def test_finds_token_under_top_level_env_key(self):
-        """A flat {env: {...}, image: {...}} shape — env IS the top-level key."""
-        doc = {"env": {"DB_PASSWORD": "${DB_PASSWORD}"}, "image": {"tag": "1.0"}}
-        tokens = _find_env_tokens(doc)
-        assert tokens == [("env.DB_PASSWORD", "DB_PASSWORD")]
+    def test_finds_leaf_with_multiple_refs(self):
+        doc = {"url": "postgres://${var:DB_HOST}:${secret:DB_PASSWORD}@host"}
+        leaves = _find_expr_leaves(doc)
+        assert leaves == [(["url"], "postgres://${var:DB_HOST}:${secret:DB_PASSWORD}@host")]
 
-    def test_does_not_recurse_inside_matched_env_dict(self):
-        """env maps are flat KEY: value — a nested dict inside env is not walked further."""
-        doc = {"nginx": {"env": {"NESTED": {"DB_PASSWORD": "${DB_PASSWORD}"}}}}
-        assert _find_env_tokens(doc) == []
-
-    def test_non_dict_env_key_is_not_treated_as_env_block(self):
-        """A key literally named 'env' whose value is a plain string (not a dict)
-        is not a strata env map and must not be scanned."""
-        doc = {"nginx": {"env": "production"}}
-        assert _find_env_tokens(doc) == []
-
-    def test_multiple_env_dicts_at_different_depths(self):
-        doc = {
-            "nginx": {"env": {"A": "${A}"}},
-            "controllers": {"main": {"containers": {"main": {"env": {"B": "${B}"}}}}},
-            "env": {"C": "${C}"},
-        }
-        tokens = _find_env_tokens(doc)
-        assert ("nginx.env.A", "A") in tokens
-        assert ("controllers.main.containers.main.env.B", "B") in tokens
-        assert ("env.C", "C") in tokens
-        assert len(tokens) == 3
-
-
-# ---------------------------------------------------------------------------
-# _resolve_token
-# ---------------------------------------------------------------------------
-
-
-class TestResolveToken:
-    def test_resolves_secret(self):
-        resolved = ResolvedValues(secrets={"DB_PASSWORD": "hunter2"})
-        value, error = _resolve_token("DB_PASSWORD", resolved)
-        assert value == "hunter2"
-        assert error is None
-
-    def test_resolves_variable(self):
-        resolved = ResolvedValues(variables={"APP_VERSION": "1.2.3"})
-        value, error = _resolve_token("APP_VERSION", resolved)
-        assert value == "1.2.3"
-        assert error is None
-
-    def test_resolves_feature_as_lowercase_bool_string(self):
-        resolved = ResolvedValues(features={"ENABLE_METRICS": True})
-        value, error = _resolve_token("ENABLE_METRICS", resolved)
-        assert value == "true"
-        assert error is None
-
-    def test_unresolved_token_returns_error(self):
-        resolved = ResolvedValues()
-        value, error = _resolve_token("MISSING", resolved)
-        assert value is None
-        assert error is not None
-        assert "no matching" in error
-
-    def test_ambiguous_token_across_namespaces_returns_error(self):
-        """Same name declared as both a secret and a variable must fail loudly
-        rather than silently pick one — the ${KEY} token carries no type prefix."""
-        resolved = ResolvedValues(secrets={"DB_PASSWORD": "s3cr3t"}, variables={"DB_PASSWORD": "not-a-secret"})
-        value, error = _resolve_token("DB_PASSWORD", resolved)
-        assert value is None
-        assert error is not None
-        assert "ambiguous" in error
+    def test_handles_empty_and_none_input(self):
+        assert _find_expr_leaves({}) == []
+        assert _find_expr_leaves(None) == []
 
 
 # ---------------------------------------------------------------------------
@@ -871,98 +816,157 @@ class TestEscapeSetValue:
 
 
 # ---------------------------------------------------------------------------
+# _format_set_path
+# ---------------------------------------------------------------------------
+
+
+class TestFormatSetPath:
+    def test_dotted_path(self):
+        assert _format_set_path(["nginx", "env", "DB_PASSWORD"]) == "nginx.env.DB_PASSWORD"
+
+    def test_list_index(self):
+        assert _format_set_path(["args", 1]) == "args[1]"
+
+
+# ---------------------------------------------------------------------------
 # _build_value_overrides
 # ---------------------------------------------------------------------------
 
 
 class TestBuildValueOverrides:
-    def test_no_tokens_returns_empty(self, tmp_path):
+    def test_no_expressions_returns_original_file_unchanged(self, tmp_path):
         values_file = tmp_path / "values.yaml"
         values_file.write_text("nginx:\n  env:\n    TZ: UTC\n", encoding="utf-8")
-        args, errors = _build_value_overrides(values_file, ResolvedValues(variables={}), "prod", "nginx")
+        effective_file, args, errors = _build_value_overrides(
+            values_file, ResolvedValues(variables={}), "prod", "nginx"
+        )
+        assert effective_file == values_file
         assert args == []
         assert errors == []
 
-    def test_resolved_token_produces_set_string_arg(self, tmp_path):
+    def test_secret_leaf_produces_set_string_and_leaves_file_unchanged(self, tmp_path):
         values_file = tmp_path / "values.yaml"
-        values_file.write_text("nginx:\n  env:\n    DB_PASSWORD: ${DB_PASSWORD}\n", encoding="utf-8")
+        values_file.write_text("nginx:\n  env:\n    DB_PASSWORD: ${secret:DB_PASSWORD}\n", encoding="utf-8")
         resolved = ResolvedValues(secrets={"DB_PASSWORD": "hunter2"})
-        args, errors = _build_value_overrides(values_file, resolved, "prod", "nginx")
+        effective_file, args, errors = _build_value_overrides(values_file, resolved, "prod", "nginx")
         assert errors == []
+        assert effective_file == values_file
         assert args == ["--set-string", "nginx.env.DB_PASSWORD=hunter2"]
 
-    def test_unresolved_token_produces_error_and_no_arg(self, tmp_path):
+    def test_var_leaf_is_written_to_resolved_values_file(self, tmp_path):
         values_file = tmp_path / "values.yaml"
-        values_file.write_text("nginx:\n  env:\n    DB_PASSWORD: ${DB_PASSWORD}\n", encoding="utf-8")
-        args, errors = _build_value_overrides(values_file, ResolvedValues(), "prod", "nginx")
+        values_file.write_text("nginx:\n  env:\n    APP_VERSION: ${var:APP_VERSION}\n", encoding="utf-8")
+        resolved = ResolvedValues(variables={"APP_VERSION": "1.2.3"})
+        effective_file, args, errors = _build_value_overrides(values_file, resolved, "prod", "nginx")
+        assert errors == []
+        assert args == []
+        assert effective_file == tmp_path / "values.resolved.yaml"
+        assert effective_file.exists()
+        written = yaml.safe_load(effective_file.read_text(encoding="utf-8"))
+        assert written == {"nginx": {"env": {"APP_VERSION": "1.2.3"}}}
+
+    def test_feature_leaf_is_written_to_resolved_values_file(self, tmp_path):
+        values_file = tmp_path / "values.yaml"
+        values_file.write_text("nginx:\n  env:\n    ENABLE_TLS: ${feature:enable_tls}\n", encoding="utf-8")
+        resolved = ResolvedValues(features={"enable_tls": True})
+        effective_file, args, errors = _build_value_overrides(values_file, resolved, "prod", "nginx")
+        assert errors == []
+        assert args == []
+        written = yaml.safe_load(effective_file.read_text(encoding="utf-8"))
+        assert written == {"nginx": {"env": {"ENABLE_TLS": "true"}}}
+
+    def test_leaf_mixing_var_and_secret_routes_as_secret_shaped(self, tmp_path):
+        """A leaf containing both a var: and a secret: reference is treated as a
+        whole as secret-shaped — routed entirely via --set-string, never written
+        to the resolved values file on disk."""
+        values_file = tmp_path / "values.yaml"
+        values_file.write_text(
+            "nginx:\n  env:\n    URL: postgres://${var:DB_HOST}:${secret:DB_PASSWORD}@host\n", encoding="utf-8"
+        )
+        resolved = ResolvedValues(variables={"DB_HOST": "db.local"}, secrets={"DB_PASSWORD": "hunter2"})
+        effective_file, args, errors = _build_value_overrides(values_file, resolved, "prod", "nginx")
+        assert errors == []
+        assert effective_file == values_file
+        assert args == ["--set-string", "nginx.env.URL=postgres://db\\.local:hunter2@host"]
+
+    def test_unresolved_reference_produces_error_and_no_arg(self, tmp_path):
+        values_file = tmp_path / "values.yaml"
+        values_file.write_text("nginx:\n  env:\n    DB_PASSWORD: ${secret:DB_PASSWORD}\n", encoding="utf-8")
+        _effective_file, args, errors = _build_value_overrides(values_file, ResolvedValues(), "prod", "nginx")
         assert args == []
         assert len(errors) == 1
         assert "DB_PASSWORD" in errors[0]
 
     def test_missing_resolved_values_produces_error(self, tmp_path):
         values_file = tmp_path / "values.yaml"
-        values_file.write_text("nginx:\n  env:\n    DB_PASSWORD: ${DB_PASSWORD}\n", encoding="utf-8")
-        args, errors = _build_value_overrides(values_file, None, "prod", "nginx")
+        values_file.write_text("nginx:\n  env:\n    DB_PASSWORD: ${secret:DB_PASSWORD}\n", encoding="utf-8")
+        _effective_file, args, errors = _build_value_overrides(values_file, None, "prod", "nginx")
         assert args == []
         assert len(errors) == 1
 
     def test_missing_file_produces_error(self, tmp_path):
         values_file = tmp_path / "does-not-exist.yaml"
-        args, errors = _build_value_overrides(values_file, ResolvedValues(), "prod", "nginx")
+        _effective_file, args, errors = _build_value_overrides(values_file, ResolvedValues(), "prod", "nginx")
         assert args == []
         assert len(errors) == 1
 
 
 # ---------------------------------------------------------------------------
-# plan()/apply()/check() — end-to-end ${KEY} -> --set-string wiring
+# plan()/apply()/check() — end-to-end ${var:}/${secret:}/${feature:} wiring
 # ---------------------------------------------------------------------------
 
 
 class TestHelmDeployerValueSubstitution:
-    def test_plan_appends_set_string_for_resolved_token(self, tmp_path):
+    def test_plan_appends_set_string_for_resolved_secret(self, tmp_path):
         d = _make_deployer(tmp_path)
         d._helm = MagicMock()
         d._helm._run_integration.return_value = MagicMock(returncode=0, stdout="", stderr="")
         d.resolved_values = ResolvedValues(secrets={"DB_PASSWORD": "hunter2"})
-        d._helm_modules = [_make_target(tmp_path, values_content="nginx:\n  env:\n    DB_PASSWORD: ${DB_PASSWORD}\n")]
+        d._helm_modules = [
+            _make_target(tmp_path, values_content="nginx:\n  env:\n    DB_PASSWORD: ${secret:DB_PASSWORD}\n")
+        ]
         ok, msgs = d.plan()
         assert ok is True
         args = d._helm._run_integration.call_args[0][0]
         assert "--set-string" in args
         assert "nginx.env.DB_PASSWORD=hunter2" in args
 
-    def test_apply_fails_on_unresolved_token_without_calling_helm(self, tmp_path):
+    def test_apply_uses_resolved_values_file_for_var_only_substitution(self, tmp_path):
+        d = _make_deployer(tmp_path)
+        d._helm = MagicMock()
+        d._helm._run_integration.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        d.resolved_values = ResolvedValues(variables={"APP_VERSION": "1.2.3"})
+        target = _make_target(tmp_path, values_content="nginx:\n  env:\n    APP_VERSION: ${var:APP_VERSION}\n")
+        d._helm_modules = [target]
+        ok, msgs = d.apply()
+        assert ok is True
+        args = d._helm._run_integration.call_args[0][0]
+        assert "--set-string" not in args
+        f_index = args.index("-f")
+        assert args[f_index + 1] == str(target.values_file.with_name("values.resolved.yaml"))
+
+    def test_apply_fails_on_unresolved_reference_without_calling_helm(self, tmp_path):
         d = _make_deployer(tmp_path)
         d._helm = MagicMock()
         d.resolved_values = ResolvedValues()
-        d._helm_modules = [_make_target(tmp_path, values_content="nginx:\n  env:\n    DB_PASSWORD: ${DB_PASSWORD}\n")]
+        d._helm_modules = [
+            _make_target(tmp_path, values_content="nginx:\n  env:\n    DB_PASSWORD: ${secret:DB_PASSWORD}\n")
+        ]
         ok, msgs = d.apply()
         assert ok is False
         assert any("DB_PASSWORD" in m for m in msgs)
-        d._helm._run_integration.assert_not_called()
-
-    def test_apply_fails_on_ambiguous_token_across_namespaces(self, tmp_path):
-        d = _make_deployer(tmp_path)
-        d._helm = MagicMock()
-        d.resolved_values = ResolvedValues(
-            secrets={"DB_PASSWORD": "hunter2"}, variables={"DB_PASSWORD": "not-a-secret"}
-        )
-        d._helm_modules = [_make_target(tmp_path, values_content="nginx:\n  env:\n    DB_PASSWORD: ${DB_PASSWORD}\n")]
-        ok, msgs = d.apply()
-        assert ok is False
-        assert any("ambiguous" in m for m in msgs)
         d._helm._run_integration.assert_not_called()
 
     def test_check_appends_set_string_for_local_chart(self, tmp_path):
         d = _make_deployer(tmp_path)
         d._helm = MagicMock()
         d._helm._run_integration.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        d.resolved_values = ResolvedValues(variables={"APP_VERSION": "1.2.3"})
+        d.resolved_values = ResolvedValues(secrets={"APP_VERSION": "1.2.3"})
         d._helm_modules = [
             _make_target(
                 tmp_path,
                 repo_url=None,
-                values_content="nginx:\n  env:\n    APP_VERSION: ${APP_VERSION}\n",
+                values_content="nginx:\n  env:\n    APP_VERSION: ${secret:APP_VERSION}\n",
             )
         ]
         ok, msgs = d.check()

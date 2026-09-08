@@ -3,8 +3,9 @@
 Rules that enforce governance across the deployment lifecycle.
 
 Policies are declared under `spec.policies` in `configuration.yaml` and are
-evaluated at four phases: `validate`, `build`, `plan`, and `deploy`. Each policy
-can `deny`, `warn`, or `audit`, depending on its enforcement mode.
+evaluated at six phases: `validate`, `build`, `plan`, `deploy`,
+`deploy_before`, and `destroy_before`. Each policy can `deny`, `warn`, or
+`audit`, depending on its enforcement mode.
 
 See ADR-0006 for the full design. See `docs/platform/policies.md` for the
 complete configuration reference for every built-in type.
@@ -13,25 +14,26 @@ complete configuration reference for every built-in type.
 
 ## Policy Types
 
-| Type                         | Phase      | Trigger                                                              |
-| ---------------------------- | ---------- | -------------------------------------------------------------------- |
-| `tenant_zone`                | `plan`     | Resource region outside the tenant's allowed zones                   |
-| `resource_type_restrictions` | `plan`     | Planned Terraform resource type is denied (or not allowlisted)       |
-| `required_labels`            | `build`    | Selected entity (namespace/resource/module) missing a required label |
-| `naming_pattern`             | `validate` | `meta.name` doesn't match a configured regex                         |
-| `ref_convention`             | `validate` | Remote reference doesn't follow its declared tag convention          |
-| `script`                     | any        | External command (OPA, custom script) exits non-zero                 |
-| `sbom_pinned_versions`       | `build`    | SBOM component has a missing or floating version                     |
-| `sbom_allowed_registries`    | `build`    | Container image not from an approved registry                        |
-| `sbom_denied_packages`       | `build`    | SBOM component matches a purl/name blocklist pattern                 |
-| `sbom_max_components`        | `build`    | Total (or per-collector) SBOM component count exceeds budget         |
-| `sbom_license`               | `build`    | SBOM component license not on the allow list (or on the deny list)   |
-| `cve_max_severity`           | `build`    | CVE findings at/above a severity exceed a configured count           |
-| `cost_threshold`             | `plan`     | Estimated monthly cost (from `cost.json`) exceeds a maximum          |
-| `checkov`                    | `build`    | Checkov finding at/above `severity_gate` in generated Terraform      |
-| `opa`                        | any        | OPA Rego rule returns one or more violations                         |
-| `path_convention`            | `validate` | File path doesn't match a declared directory-structure convention    |
-| `ai_review`                  | `plan`     | AI-assessed plan risk at/above `risk_threshold`                      |
+| Type                         | Phase                              | Trigger                                                                     |
+| ---------------------------- | ---------------------------------- | --------------------------------------------------------------------------- |
+| `tenant_zone`                | `plan`                             | Resource region outside the tenant's allowed zones                          |
+| `resource_type_restrictions` | `plan`                             | Planned Terraform resource type is denied (or not allowlisted)              |
+| `required_labels`            | `build`                            | Selected entity (namespace/resource/module) missing a required label        |
+| `naming_pattern`             | `validate`                         | `meta.name` doesn't match a configured regex                                |
+| `ref_convention`             | `validate`                         | Remote reference doesn't follow its declared tag convention                 |
+| `script`                     | any                                | External command (OPA, custom script) exits non-zero                        |
+| `sbom_pinned_versions`       | `build`                            | SBOM component has a missing or floating version                            |
+| `sbom_allowed_registries`    | `build`                            | Container image not from an approved registry                               |
+| `sbom_denied_packages`       | `build`                            | SBOM component matches a purl/name blocklist pattern                        |
+| `sbom_max_components`        | `build`                            | Total (or per-collector) SBOM component count exceeds budget                |
+| `sbom_license`               | `build`                            | SBOM component license not on the allow list (or on the deny list)          |
+| `cve_max_severity`           | `build`                            | CVE findings at/above a severity exceed a configured count                  |
+| `cost_threshold`             | `plan`                             | Estimated monthly cost (from `cost.json`) exceeds a maximum                 |
+| `checkov`                    | `build`                            | Checkov finding at/above `severity_gate` in generated Terraform             |
+| `opa`                        | any                                | OPA Rego rule returns one or more violations                                |
+| `path_convention`            | `validate`                         | File path doesn't match a declared directory-structure convention           |
+| `ai_review`                  | `plan`                             | AI-assessed plan risk at/above `risk_threshold`                             |
+| `change_reference_required`  | `deploy_before` / `destroy_before` | No `--change-id` supplied for this `deploy run`/`deploy destroy` (ADR-0074) |
 
 ---
 

@@ -106,12 +106,12 @@ services:
 
 Each `environment` entry sets exactly one of:
 
-| Field     | Description                     | Artifact output                                                                       |
-| --------- | ------------------------------- | ------------------------------------------------------------------------------------- |
-| `value`   | Literal string                  | Written directly                                                                      |
-| `var`     | Key from `references.variables` | Resolved at build time                                                                |
-| `secret`  | Key from `references.secrets`   | `${KEY}` substitution; injected via `.env` (compose) or `--set` (helm) at deploy time |
-| `feature` | Key from `references.features`  | Resolved to `"true"` or `"false"`                                                     |
+| Field     | Description                     | Artifact output                                                                                                                                    |
+| --------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `value`   | Literal string                  | Written directly                                                                                                                                   |
+| `var`     | Key from `references.variables` | Compose: `${KEY}` via `.env` at deploy time. Helm: `${var:KEY}` (ADR-0075), resolved into a rewritten values file at deploy time.                  |
+| `secret`  | Key from `references.secrets`   | Compose: `${KEY}` via `.env` at deploy time. Helm: `${secret:KEY}` (ADR-0075), resolved via `--set-string` at deploy time — never written to disk. |
+| `feature` | Key from `references.features`  | Resolved to `"true"` or `"false"`. Helm emits `${feature:KEY}` (ADR-0075).                                                                         |
 
 ### Service naming in compose output
 

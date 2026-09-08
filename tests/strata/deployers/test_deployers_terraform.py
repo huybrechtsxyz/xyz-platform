@@ -298,7 +298,7 @@ class TestTerraformDeployerSetup:
         d._tf.init.return_value = _ok()
         d._iac_model.backend.configuration = {"key": "val"}
 
-        with patch.object(d, "_build_backend_config", return_value={"key": "val"}):
+        with patch.object(d, "_build_backend_config", return_value=({"key": "val"}, [])):
             d.setup()
 
         call_kwargs = d._tf.init.call_args[1]
@@ -609,21 +609,32 @@ class TestTerraformDeployerBuildBackendConfig:
         d = _make_deployer(tmp_path)
         iac = MagicMock()
         iac.backend = None
-        assert d._build_backend_config(iac) is None
+        assert d._build_backend_config(iac) == (None, [])
 
     def test_empty_configuration_returns_none(self, tmp_path):
         d = _make_deployer(tmp_path)
         iac = MagicMock()
         iac.backend.configuration = {}
-        result = d._build_backend_config(iac)
+        result, errors = d._build_backend_config(iac)
         assert result is None
+        assert errors == []
 
     def test_configuration_converted_to_strings(self, tmp_path):
         d = _make_deployer(tmp_path)
         iac = MagicMock()
         iac.backend.configuration = {"bucket": "my-bucket", "key": 42}
-        result = d._build_backend_config(iac)
+        result, errors = d._build_backend_config(iac)
         assert result == {"bucket": "my-bucket", "key": "42"}
+        assert errors == []
+
+    def test_unresolved_expression_reports_error(self, tmp_path):
+        d = _make_deployer(tmp_path)
+        iac = MagicMock()
+        iac.backend.configuration = {"bucket": "${var:missing_var}"}
+        result, errors = d._build_backend_config(iac)
+        assert result == {}
+        assert len(errors) == 1
+        assert "missing_var" in errors[0]
 
 
 class TestTerraformDeployerGetWorkingDir:

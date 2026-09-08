@@ -398,7 +398,7 @@ class WorkspaceIacBackendModel(PlatformBaseModel):
         description="Backend type (e.g., 'terraform_cloud', 's3', 'azurerm', 'gcs', 'local', 'remote')"
     )
     configuration: Dict[str, Any] = Field(
-        description="Backend-specific configuration (supports either a constant value or references like ${var:tf_org}, ${secret:tf_token}, ${feat:enable_encryption})"
+        description="Backend-specific configuration (supports either a constant value or references like ${var:tf_org}, ${secret:tf_token}, ${feature:enable_encryption})"
     )
 
 

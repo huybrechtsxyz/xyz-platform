@@ -2,7 +2,7 @@
 
 Declarative guardrails evaluated at specific lifecycle phases before or after infrastructure changes are applied.
 
-**Built-in types:** `tenant_zone` | `resource_type_restrictions` | `required_labels` | `naming_pattern` | `ref_convention` | `script` | `sbom_pinned_versions` | `sbom_allowed_registries` | `sbom_denied_packages` | `sbom_max_components` | `sbom_license` | `cve_max_severity` | `cost_threshold` | `checkov` | `opa` | `path_convention` | `layer_agreement` | `ai_review` | **Phases:** `validate` / `build` / `plan` / `deploy` | **Enforcement:** `deny` / `warn` / `audit` | **Declared in:** `configuration.spec.policies`
+**Built-in types:** `tenant_zone` | `resource_type_restrictions` | `required_labels` | `naming_pattern` | `ref_convention` | `script` | `sbom_pinned_versions` | `sbom_allowed_registries` | `sbom_denied_packages` | `sbom_max_components` | `sbom_license` | `cve_max_severity` | `cost_threshold` | `checkov` | `opa` | `path_convention` | `layer_agreement` | `ai_review` | `change_reference_required` | **Phases:** `validate` / `build` / `plan` / `deploy` / `deploy_before` / `destroy_before` | **Enforcement:** `deny` / `warn` / `audit` | **Declared in:** `configuration.spec.policies`
 
 ---
 
@@ -60,26 +60,27 @@ spec:
 
 ### Built-in types
 
-| Type                         | Phase      | What it checks                                                                   |
-| ---------------------------- | ---------- | -------------------------------------------------------------------------------- |
-| `tenant_zone`                | `plan`     | Terraform resource regions vs. the tenant's allowed zones                        |
-| `resource_type_restrictions` | `plan`     | Allow or deny Terraform resource types (allowlist or blocklist)                  |
-| `required_labels`            | `build`    | Required labels present on selected entities (namespaces/resources/modules)      |
-| `naming_pattern`             | `validate` | `meta.name` fields match a configured regex pattern                              |
-| `ref_convention`             | `validate` | Remote references follow configured tag naming conventions                       |
-| `script`                     | any        | Delegates to an external command (OPA, Checkov, custom script)                   |
-| `sbom_pinned_versions`       | `build`    | SBOM components have pinned, non-floating version tags                           |
-| `sbom_allowed_registries`    | `build`    | Container images originate only from approved registries                         |
-| `sbom_denied_packages`       | `build`    | No SBOM component matches a purl/name blocklist pattern                          |
-| `sbom_max_components`        | `build`    | Total SBOM component count stays within a configured budget                      |
-| `sbom_license`               | `build`    | SBOM component licenses match an allow/deny list (via `strata:license` property) |
-| `cve_max_severity`           | `build`    | CVE vulnerability findings stay within a configured severity threshold           |
-| `cost_threshold`             | `plan`     | Estimated monthly cost (from `cost.json`) stays within a configured maximum      |
-| `checkov`                    | `build`    | Runs Checkov against generated Terraform and gates on a severity threshold       |
-| `opa`                        | any        | Evaluates a Rego rule via an OPA server or the `opa eval` CLI                    |
-| `path_convention`            | `validate` | Files on disk follow declared directory-structure conventions                    |
-| `layer_agreement`            | `validate` | Explicit `spec.layers.segments` values agree with what the file's path derives   |
-| `ai_review`                  | `plan`     | AI-assessed risk of a Terraform plan stays below a configured threshold          |
+| Type                         | Phase                              | What it checks                                                                           |
+| ---------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------- |
+| `tenant_zone`                | `plan`                             | Terraform resource regions vs. the tenant's allowed zones                                |
+| `resource_type_restrictions` | `plan`                             | Allow or deny Terraform resource types (allowlist or blocklist)                          |
+| `required_labels`            | `build`                            | Required labels present on selected entities (namespaces/resources/modules)              |
+| `naming_pattern`             | `validate`                         | `meta.name` fields match a configured regex pattern                                      |
+| `ref_convention`             | `validate`                         | Remote references follow configured tag naming conventions                               |
+| `script`                     | any                                | Delegates to an external command (OPA, Checkov, custom script)                           |
+| `sbom_pinned_versions`       | `build`                            | SBOM components have pinned, non-floating version tags                                   |
+| `sbom_allowed_registries`    | `build`                            | Container images originate only from approved registries                                 |
+| `sbom_denied_packages`       | `build`                            | No SBOM component matches a purl/name blocklist pattern                                  |
+| `sbom_max_components`        | `build`                            | Total SBOM component count stays within a configured budget                              |
+| `sbom_license`               | `build`                            | SBOM component licenses match an allow/deny list (via `strata:license` property)         |
+| `cve_max_severity`           | `build`                            | CVE vulnerability findings stay within a configured severity threshold                   |
+| `cost_threshold`             | `plan`                             | Estimated monthly cost (from `cost.json`) stays within a configured maximum              |
+| `checkov`                    | `build`                            | Runs Checkov against generated Terraform and gates on a severity threshold               |
+| `opa`                        | any                                | Evaluates a Rego rule via an OPA server or the `opa eval` CLI                            |
+| `path_convention`            | `validate`                         | Files on disk follow declared directory-structure conventions                            |
+| `layer_agreement`            | `validate`                         | Explicit `spec.layers.segments` values agree with what the file's path derives           |
+| `ai_review`                  | `plan`                             | AI-assessed risk of a Terraform plan stays below a configured threshold                  |
+| `change_reference_required`  | `deploy_before` / `destroy_before` | An external change/ticket reference (`--change-id`) was supplied for this deploy/destroy |
 
 ### `tenant_zone`
 
@@ -626,6 +627,52 @@ Skipped gracefully when: no `ai_agent` integration is configured (or the named o
     risk_threshold: high
 ```
 
+### `change_reference_required`
+
+Evaluates once per invocation, before any stage executes, rather than per-stage like
+`plan`/`deploy` phase policies (ADR-0074 Phase 2). Fails when no change/ticket reference was
+supplied via `--change-id` (with `--change-system` and `--reason`, or the corresponding
+`STRATA_CHANGE_*` environment variables) — see
+[deployment.md#change-reference](../config/deployment.md#change-reference).
+
+**Two distinct phases, evaluated by two different commands — not one shared phase:**
+
+| Phase            | Evaluated by            |
+| ---------------- | ----------------------- |
+| `deploy_before`  | `strata deploy run`     |
+| `destroy_before` | `strata deploy destroy` |
+
+Declare separate policies for each phase to set independent enforcement — e.g. `deny` on
+`destroy_before` in production while only `warn` on `deploy_before`, since destroying
+infrastructure is arguably the riskier action. A policy declared for one phase has no effect
+on the other; there is no fallback or inheritance between them.
+
+No `configuration` block — it is a plain existence check against whatever
+`BaseDeployCommand._resolve_change_reference()` resolved for this invocation (shared by both
+commands; Phase 1 capture already works identically for `run` and `destroy`).
+
+`--dry-run` never reaches this policy for either command — nothing is changed, so nothing to
+require a reference for. `--force` does **not** bypass it: `--force` only skips interactive
+confirmation prompts and approval gates, which is a separate mechanism from policy evaluation.
+
+Skipped gracefully when: no configuration service is loaded (mirrors every other policy type).
+
+> A `deny` result here behaves like any other `deploy_before`/`destroy_before`/`plan`/`deploy`-phase
+> policy denial: it aborts the pipeline with exit code `1` (system/execution error), not `3`.
+> Only schema/cross-reference validation failures produce exit code `3` — see ADR-0004.
+
+```yaml
+- name: production-change-record-deploy
+  type: change_reference_required
+  phase: deploy_before
+  enforcement: deny
+
+- name: production-change-record-destroy
+  type: change_reference_required
+  phase: destroy_before
+  enforcement: deny
+```
+
 ---
 
 ## Enforcement Levels
@@ -642,12 +689,14 @@ Use `deny` for hard constraints (compliance, security, data residency). Use `war
 
 ## Phases
 
-| Phase      | Triggered by           | When it runs                                                         |
-| ---------- | ---------------------- | -------------------------------------------------------------------- |
-| `validate` | `strata validate -f …` | After Pydantic structural validation and cross-reference checks pass |
-| `build`    | `strata build run …`   | After the platform artifact is generated                             |
-| `plan`     | `strata deploy run …`  | After `terraform plan`, before `terraform apply`                     |
-| `deploy`   | `strata deploy run …`  | After `terraform apply` completes, before the manifest is persisted  |
+| Phase            | Triggered by              | When it runs                                                                  |
+| ---------------- | ------------------------- | ----------------------------------------------------------------------------- |
+| `validate`       | `strata validate -f …`    | After Pydantic structural validation and cross-reference checks pass          |
+| `build`          | `strata build run …`      | After the platform artifact is generated                                      |
+| `plan`           | `strata deploy run …`     | After `terraform plan`, before `terraform apply`                              |
+| `deploy`         | `strata deploy run …`     | After `terraform apply` completes, before the manifest is persisted           |
+| `deploy_before`  | `strata deploy run …`     | Once per invocation, before any stage executes (not evaluated on `--dry-run`) |
+| `destroy_before` | `strata deploy destroy …` | Once per invocation, before any stage executes (not evaluated on `--dry-run`) |
 
 The `plan` phase has the highest impact: it sits between planning and applying, giving policies access to the full Terraform plan JSON. A `deny` at this phase prevents any infrastructure change from being made.
 

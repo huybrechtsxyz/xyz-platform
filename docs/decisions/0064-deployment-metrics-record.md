@@ -2,7 +2,7 @@
 
 - Status: proposed
 - Date: 2026-08-06
-- Related: ADR-0018 (deployment audit & traceability), ADR-0022 (SIEM integration), ADR-0031 (cost estimation), ADR-0009 (SBOM), ADR-0008 (drift detection), ADR-0032 (approval gates)
+- Related: ADR-0018 (deployment audit & traceability), ADR-0022 (SIEM integration), ADR-0031 (cost estimation), ADR-0009 (SBOM), ADR-0008 (drift detection), ADR-0032 (approval gates), ADR-0074 (deployment change reference)
 
 ## Remaining Work
 
@@ -312,5 +312,6 @@ Failures to write metrics must never affect the deployment exit code — same be
 ## Open questions
 
 1. How a deployment learns that it is executing a rollback. `promote rollback` records `rollback_of` and produces a branch or PR, but the subsequent `deploy run` is a separate invocation, so the linkage is not automatic today. Options: propagate it through the promotion record that the deploy already resolves, or accept it as an explicit flag.
+   - **Note (2026-09-08, updated):** [ADR-0074](0074-deployment-change-reference.md) (deployment change reference) had the mirror-image question — whether a rollback deploy should require its own `change_reference`, or inherit the original deployment's — and has since resolved it (its Open Question 3): a rollback always supplies its own `change_reference` explicitly at invocation, with no automatic inheritance, independent of however this question (`rollback_of` propagation) gets answered. So this remains solely this ADR's open question now; ADR-0074 does not block on it and there is no propagate-together requirement after all — the two fields are populated through entirely separate paths (`rollback_of` from promotion-resolution state, `change_reference` from `--change-id`/`--reason` at invocation), so whichever mechanism this question settles on has no bearing on `change_reference`.
 2. Whether to promote the `label_safe` dimensions into OTel log-record attributes instead of leaving them inside the JSON body. (The broader export-format question is settled: OTLP is already supported via `OtelSiemIntegration`; a Prometheus exposition format is explicitly *not* pursued — it is pull-based, so an exiting CLI has nothing to scrape, and the Pushgateway workaround retains stale values indefinitely and drops timestamps.)
 3. Retention and rotation policy for `.strata/metrics/deployments.ndjson`

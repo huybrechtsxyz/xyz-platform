@@ -23,16 +23,26 @@ Chart source resolution:
     - No chart fields → local chart path in build directory
 
 Value substitution:
-  ``${KEY}`` tokens are resolved against the deployer's ``resolved_values`` and
-  passed to Helm as ``--set-string <path>=<value>`` flags at check/plan/apply
-  time — never written back to values.yaml on disk. Tokens are looked for
-  under any dict node keyed literally ``env`` (dict-shaped: ``env: {KEY:
-  value}``), at any nesting depth — this covers strata-generated
-  ``entry.env.KEY`` values (from ``svc.environment`` refs) as well as
-  hand-authored/registry-chart values with chart-mandated deep nesting (e.g.
-  ``controllers.main.containers.main.env.DB_PASSWORD``) or a flat top-level
-  ``env:`` block. See ``_find_env_tokens()``. An unresolved or ambiguous (name
-  collides across secrets/variables/features) token fails the step.
+  ``${var:KEY}`` / ``${secret:KEY}`` / ``${feature:KEY}`` references (ADR-0075 —
+  the same typed syntax TerraformDeployer uses for backend config) are resolved
+  against the deployer's ``resolved_values`` anywhere in the rendered values
+  document — an unrestricted full-tree walk, safe because the typed prefix
+  makes a false-positive match implausible. Leaves are then split by kind:
+
+  - Any leaf whose string contains a ``${secret:...}`` reference is resolved
+    and passed as ``--set-string <path>=<value>`` — never written to disk,
+    mirroring ``TerraformDeployer._write_deploy_time_vars()``'s rule that
+    secrets are only ever injected, never persisted.
+  - A leaf containing only ``${var:...}``/``${feature:...}`` references is
+    substituted directly into the parsed document and written to a sibling
+    ``<stem>.resolved.yaml`` file passed via ``-f`` in place of the original —
+    variables/features are already written to disk elsewhere (e.g.
+    Terraform's ``.tfvars.json``), so this carries no new secret-hygiene risk
+    and keeps the ``--set-string`` argument list from growing unbounded on
+    charts with many non-secret substitutions.
+
+  An unresolved reference fails the step (fail loud, never a silent
+  pass-through). See ``_build_value_overrides()``.
 """
 
 import re
@@ -60,7 +70,7 @@ from strata.models.integration_model import IntegrationModel
 from strata.services.configuration_service import ConfigurationService
 from strata.services.deployment_service import DeploymentService
 from strata.services.module_service import ModuleService
-from strata.utils.resolved_values import ResolvedValues, inject_compose_env
+from strata.utils.resolved_values import EXPR_PATTERN, ResolvedValues, inject_compose_env, resolve_expr_string
 from strata.utils.system import resolve_path
 
 if TYPE_CHECKING:
@@ -96,89 +106,26 @@ def _sanitize_repo_name(url: str) -> str:
     return name[:20]
 
 
-_TOKEN_RE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
-# Deliberately NOT `{{ VAR_NAME }}` (Jinja2/Go-template shape): `{{ }}` is already
-# Helm's own delimiter (Go templates + Sprig, and the `tpl` function lets chart
-# authors put literal `{{ ... }}` expressions directly inside values.yaml for the
-# chart itself to render later). Off-the-shelf/registry charts may already contain
-# such literal `{{ }}` text in their default values — reusing that shape here would
-# be ambiguous between "strata should substitute this" and "the chart authors put
-# this here for Helm to template-render". `${VAR_NAME}` has zero overlap with Go
-# template syntax, so it stays unambiguous regardless of what a third-party chart's
-# values.yaml already contains.
-
-
-def _find_env_tokens(values_doc: Dict[str, Any]) -> List[Tuple[str, str]]:
-    """Return (dotted_path, token_key) for every ``${TOKEN}`` leaf found under any
-    dict node keyed literally ``"env"``, anywhere in *values_doc* (any nesting depth).
-
-    Scoped to ``env``-keyed dicts specifically — NOT an unrestricted full-tree walk
-    of ``values_doc``: ``module.spec.configuration``/``svc.configuration`` are raw,
-    user-authored pass-through values merged elsewhere in the same doc, and walking
-    arbitrary keys there would risk matching a user-typed ``${...}``-shaped string
-    that was never meant as a strata substitution token. Restricting to ``env`` dicts
-    keeps that safety property while covering every real-world shape seen in practice:
-
-    - strata-managed services: ``values_doc[entry]["env"][KEY]`` — one level, from
-      ``svc.environment`` ``var:``/``secret:``/``feature:`` refs (``helm_builder.py``'s
-      own emitted shape).
-    - Off-the-shelf/registry charts with chart-mandated deep nesting, e.g. Immich's
-      ``controllers.main.containers.main.env.DB_PASSWORD``.
-    - A flat ``{env: {...}, image: {...}}`` shape, where ``env`` IS the top-level key.
-
-    Only dict-shaped ``env`` blocks (``env: {KEY: value}``) are matched — the
-    alternate Kubernetes-native list shape (``env: [{name: KEY, value: value}]``)
-    is a different data shape (list of name/value pairs, index-addressed for
-    ``--set``) and is intentionally not walked here.
+def _find_expr_leaves(node: Any, path: Optional[List[Any]] = None) -> List[Tuple[List[Any], str]]:
+    """Return ``(path_parts, leaf_string)`` for every string leaf containing at
+    least one ``${var:}``/``${secret:}``/``${feature:}`` reference, anywhere in
+    *node* (ADR-0075). Dict keys and list indices are both walked — an
+    unrestricted full-tree walk, safe precisely because the typed prefix makes
+    a false-positive match implausible (unlike the old untyped ``${KEY}``
+    shape, which had to be scoped to ``env:``-keyed dicts only).
     """
-    tokens: List[Tuple[str, str]] = []
-
-    def _walk(node: Any, path: List[str]) -> None:
-        if not isinstance(node, dict):
-            return
+    current_path: List[Any] = path if path is not None else []
+    leaves: List[Tuple[List[Any], str]] = []
+    if isinstance(node, dict):
         for key, value in node.items():
-            current_path = path + [str(key)]
-            if key == "env" and isinstance(value, dict):
-                for env_key, env_value in value.items():
-                    if not isinstance(env_value, str):
-                        continue
-                    match = _TOKEN_RE.match(env_value)
-                    if match:
-                        tokens.append((".".join(current_path + [str(env_key)]), match.group(1)))
-                # env maps are a flat KEY: value convention — don't recurse further
-                # inside a matched env dict itself.
-                continue
-            _walk(value, current_path)
-
-    _walk(values_doc, [])
-    return tokens
-
-
-def _resolve_token(token: str, resolved: ResolvedValues) -> Tuple[Optional[str], Optional[str]]:
-    """Resolve a token name against resolved secrets/variables/features.
-
-    Returns ``(value, None)`` when the name appears in exactly one namespace,
-    or ``(None, error_message)`` when it appears in none OR in more than one.
-    A cross-namespace name collision is treated as fatal rather than resolved
-    via precedence — the ``${KEY}`` token carries no type prefix, so which
-    namespace it was meant to come from is not recoverable at deploy time.
-    """
-    found_in: List[str] = []
-    value: Optional[str] = None
-    if token in resolved.secrets:
-        found_in.append("secret")
-        value = str(resolved.secrets[token])
-    if token in resolved.variables:
-        found_in.append("variable")
-        value = str(resolved.variables[token])
-    if token in resolved.features and resolved.features[token] is not None:
-        found_in.append("feature")
-        value = str(resolved.features[token]).lower()
-    if not found_in:
-        return None, f"no matching variable, secret, or feature named '{token}'"
-    if len(found_in) > 1:
-        return None, f"ambiguous — '{token}' is declared as more than one of: {', '.join(found_in)}"
-    return value, None
+            leaves.extend(_find_expr_leaves(value, current_path + [str(key)]))
+    elif isinstance(node, list):
+        for idx, item in enumerate(node):
+            leaves.extend(_find_expr_leaves(item, current_path + [idx]))
+    elif isinstance(node, str):
+        if EXPR_PATTERN.search(node):
+            leaves.append((current_path, node))
+    return leaves
 
 
 def _escape_set_value(value: str) -> str:
@@ -194,45 +141,115 @@ def _escape_set_value(value: str) -> str:
     return value
 
 
+def _format_set_path(path: List[Any]) -> str:
+    """Render path parts as a Helm ``--set``-style dotted/bracketed path string."""
+    rendered: List[str] = []
+    for i, seg in enumerate(path):
+        if isinstance(seg, int):
+            rendered.append(f"[{seg}]")
+        elif i == 0:
+            rendered.append(str(seg))
+        else:
+            rendered.append(f".{seg}")
+    return "".join(rendered)
+
+
+def _set_by_path(doc: Any, path: List[Any], value: str) -> None:
+    """Mutate *doc* in place, setting the leaf addressed by *path* to *value*."""
+    node = doc
+    for seg in path[:-1]:
+        node = node[seg]
+    node[path[-1]] = value
+
+
 def _build_value_overrides(
     values_file: Path,
     resolved: Optional[ResolvedValues],
     ns_name: str,
     module_name: str,
-) -> Tuple[List[str], List[str]]:
-    """Parse ``values_file``, resolve every ``${TOKEN}`` under an ``env`` sub-dict,
-    and return (``--set-string`` args, error messages).
+) -> Tuple[Path, List[str], List[str]]:
+    """Parse ``values_file``, resolve every ``${var:}``/``${secret:}``/``${feature:}``
+    reference found anywhere in the document (ADR-0075), and split the results by
+    kind:
 
-    Any unresolved or ambiguous token produces no ``--set-string`` arg and is
-    reported as an error — callers must treat a non-empty error list as fatal
-    rather than deploy with the literal token left in the values file.
+    - A leaf whose string contains a ``${secret:...}`` reference (alone or mixed
+      with ``var:``/``feature:`` refs in the same string) is resolved and returned
+      as a ``--set-string <path>=<value>`` arg — never written to disk.
+    - A leaf containing only ``${var:...}``/``${feature:...}`` references is
+      substituted directly into the parsed document, which (if any such
+      substitution happened) is written to a sibling ``<stem>.resolved.yaml``
+      file for the caller to pass via ``-f`` in place of the original.
+
+    Any unresolved reference produces no output for that leaf and is reported as
+    an error — callers must treat a non-empty error list as fatal rather than
+    deploy with the literal reference left unresolved.
+
+    Returns:
+        ``(effective_values_file, set_string_args, errors)``. ``effective_values_file``
+        is *values_file* unchanged when no var/feature substitution was needed,
+        otherwise the new sibling file the caller should use instead.
     """
     try:
         with values_file.open("r", encoding="utf-8") as fh:
             values_doc = yaml.safe_load(fh) or {}
     except Exception as exc:
-        return [], [f"Namespace '{ns_name}', module '{module_name}': cannot read values.yaml for substitution: {exc}"]
+        return (
+            values_file,
+            [],
+            [f"Namespace '{ns_name}', module '{module_name}': cannot read values.yaml for substitution: {exc}"],
+        )
 
-    tokens = _find_env_tokens(values_doc)
-    if not tokens:
-        return [], []
+    leaves = _find_expr_leaves(values_doc)
+    if not leaves:
+        return values_file, [], []
 
     if resolved is None:
-        return [], [
-            f"Namespace '{ns_name}', module '{module_name}': unresolved value '${{{token}}}' "
-            f"at '{path}' — no resolved values available"
-            for path, token in tokens
-        ]
+        return (
+            values_file,
+            [],
+            [
+                f"Namespace '{ns_name}', module '{module_name}': unresolved expression at "
+                f"'{_format_set_path(path)}' in '{value}' — no resolved values available"
+                for path, value in leaves
+            ],
+        )
 
     args: List[str] = []
     errors: List[str] = []
-    for path, token in tokens:
-        value, error = _resolve_token(token, resolved)
-        if error is not None:
-            errors.append(f"Namespace '{ns_name}', module '{module_name}': '${{{token}}}' at '{path}': {error}")
+    mutated = False
+    for path, value in leaves:
+        is_secret_shaped = any(m.group(1) == "secret" for m in EXPR_PATTERN.finditer(value))
+        resolved_value, resolve_errors = resolve_expr_string(value, resolved)
+        if resolve_errors:
+            errors.extend(
+                f"Namespace '{ns_name}', module '{module_name}': '{value}' at '{_format_set_path(path)}': {err}"
+                for err in resolve_errors
+            )
             continue
-        args += ["--set-string", f"{path}={_escape_set_value(value)}"]  # type: ignore[arg-type]
-    return args, errors
+        if is_secret_shaped:
+            args += ["--set-string", f"{_format_set_path(path)}={_escape_set_value(resolved_value)}"]
+        else:
+            _set_by_path(values_doc, path, resolved_value)
+            mutated = True
+
+    if errors:
+        return values_file, [], errors
+
+    if not mutated:
+        return values_file, args, []
+
+    resolved_values_file = values_file.with_name(f"{values_file.stem}.resolved{values_file.suffix}")
+    try:
+        with resolved_values_file.open("w", encoding="utf-8") as fh:
+            yaml.dump(values_doc, fh, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    except OSError as exc:
+        return (
+            values_file,
+            [],
+            [f"Namespace '{ns_name}', module '{module_name}': cannot write resolved values file: {exc}"],
+        )
+
+    return resolved_values_file, args, []
 
 
 class HelmDeployer(BaseDeployer):
@@ -535,14 +552,14 @@ class HelmDeployer(BaseDeployer):
                 kind = "OCI chart" if target.is_oci else "registry chart"
                 messages.append(f"  ({kind} — lint skipped; use plan for dry-run)")
                 continue
-            overrides, override_errors = _build_value_overrides(
+            resolved_values_file, overrides, override_errors = _build_value_overrides(
                 target.values_file, self.resolved_values, target.ns_name, target.module_name
             )
             if override_errors:
                 messages.extend(override_errors)
                 return False, messages
             ok, run_messages = self._run_helm(
-                ["lint", "-f", str(target.values_file), *overrides, target.chart_ref],
+                ["lint", "-f", str(resolved_values_file), *overrides, target.chart_ref],
                 line_callback=line_callback,
             )
             messages.extend(run_messages)
@@ -569,7 +586,7 @@ class HelmDeployer(BaseDeployer):
                 messages.append(
                     f"helm upgrade --dry-run --install {target.release_name} -n {target.chart_namespace} {target.chart_ref}"
                 )
-                overrides, override_errors = _build_value_overrides(
+                resolved_values_file, overrides, override_errors = _build_value_overrides(
                     target.values_file, self.resolved_values, target.ns_name, target.module_name
                 )
                 if override_errors:
@@ -582,7 +599,7 @@ class HelmDeployer(BaseDeployer):
                     "--namespace",
                     target.chart_namespace,
                     "-f",
-                    str(target.values_file),
+                    str(resolved_values_file),
                     *overrides,
                     target.release_name,
                     target.chart_ref,
@@ -614,7 +631,7 @@ class HelmDeployer(BaseDeployer):
                 messages.append(
                     f"helm upgrade --install {target.release_name} -n {target.chart_namespace} {target.chart_ref}"
                 )
-                overrides, override_errors = _build_value_overrides(
+                resolved_values_file, overrides, override_errors = _build_value_overrides(
                     target.values_file, self.resolved_values, target.ns_name, target.module_name
                 )
                 if override_errors:
@@ -631,7 +648,7 @@ class HelmDeployer(BaseDeployer):
                     "--namespace",
                     target.chart_namespace,
                     "-f",
-                    str(target.values_file),
+                    str(resolved_values_file),
                     *overrides,
                     target.release_name,
                     target.chart_ref,

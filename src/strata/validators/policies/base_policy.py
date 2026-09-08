@@ -32,6 +32,7 @@ class PolicyContext:
     cve_audit_result: Optional[Any] = None  # CveAuditResultModel — populated when --audit ran before policies
     cost_data: Optional[Dict[str, Any]] = None  # cost.json contents — populated when cost.json exists in build/
     file_path: Optional[Path] = None  # the file currently being validated (path_convention policy)
+    change_reference: Optional[Any] = None  # ChangeReferenceModel — populated for phase 'deploy_before' (ADR-0074)
 
 
 @dataclass

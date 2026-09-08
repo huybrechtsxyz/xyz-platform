@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from strata.builders.terraform_builder import TerraformBuilder
 from strata.models.common_models import ProvisionerType, SourceModel
-from strata.models.workspace_model import WorkspaceIacModel
+from strata.models.workspace_model import WorkspaceIacBackendModel, WorkspaceIacModel
 
 
 def _mock_svc(validated=True, build_path=None):
@@ -932,3 +932,140 @@ class TestValidateInputsProvisionerScoping:
 
         assert ok is False
         assert any("TYPO_SECRET" in e for e in builder.get_errors())
+
+
+class TestValidateInputsBackendConfigExclusion:
+    """Regression tests: keys referenced only by a provisioner's
+    ``backend.configuration`` ``${var:KEY}``/``${secret:KEY}`` expressions are
+    backend plumbing (consumed via ``-backend-config`` at deploy time, never
+    passed as Terraform root-module inputs) and must not be flagged as
+    "not declared in variables.tf"."""
+
+    def _write_variables_tf(self, prov_dir: Path, var_names):
+        prov_dir.mkdir(parents=True, exist_ok=True)
+        body = "\n".join(f'variable "{name}" {{\n  type = string\n}}\n' for name in var_names)
+        (prov_dir / "variables.tf").write_text(body, encoding="utf-8")
+
+    def _make_deployment_service(self, tmp_path, prov, variable_keys, secret_keys=None):
+        workspace_model = MagicMock()
+        workspace_model.spec.provisioners = [prov]
+        workspace_model.spec.topology = []
+
+        workspace_service = MagicMock()
+        workspace_service.model = workspace_model
+
+        env_service = MagicMock()
+        env_service.model.spec.secrets = [MagicMock(key=k) for k in (secret_keys or [])]
+        env_service.get_variables.return_value = [MagicMock(key=k) for k in variable_keys]
+        env_service.get_features.return_value = []
+
+        deployment_service = MagicMock()
+        deployment_service.get_workspace_service.return_value = workspace_service
+        deployment_service.get_environment_service.return_value = env_service
+        deployment_service.get_build_path.return_value = tmp_path
+        deployment_service.model.spec.stages = []
+        return deployment_service
+
+    def test_backend_only_variable_excluded_from_undeclared_check(self, tmp_path):
+        """The exact bug-report scenario: backend.configuration references four
+        ``${var:...}`` keys that are declared as environment variables but are
+        deliberately absent from variables.tf. The build must succeed."""
+        prov = _make_provisioner(source_path="terraform")
+        prov.name = "infra"
+        prov.backend = WorkspaceIacBackendModel(
+            type="azurerm",
+            configuration={
+                "resource_group_name": "${var:tf_state_resource_group}",
+                "storage_account_name": "${var:tf_state_storage_account}",
+                "container_name": "${var:tf_state_container_name}",
+                "key": "${var:tf_state_key}",
+            },
+        )
+
+        prov_dir = tmp_path / "terraform"
+        self._write_variables_tf(prov_dir, ["real_input"])
+
+        deployment_service = self._make_deployment_service(
+            tmp_path,
+            prov,
+            variable_keys=[
+                "real_input",
+                "tf_state_resource_group",
+                "tf_state_storage_account",
+                "tf_state_container_name",
+                "tf_state_key",
+            ],
+        )
+
+        builder = TerraformBuilder()
+        ok = builder._validate_inputs(deployment_service, tmp_path)
+
+        assert ok is True, builder.get_errors()
+        assert not builder.get_errors()
+
+    def test_backend_secret_key_also_excluded(self, tmp_path):
+        prov = _make_provisioner(source_path="terraform")
+        prov.name = "infra"
+        prov.backend = WorkspaceIacBackendModel(
+            type="azurerm",
+            configuration={"sas_token": "${secret:tf_state_sas_token}"},
+        )
+
+        prov_dir = tmp_path / "terraform"
+        self._write_variables_tf(prov_dir, ["real_input"])
+
+        deployment_service = self._make_deployment_service(
+            tmp_path,
+            prov,
+            variable_keys=["real_input"],
+            secret_keys=["tf_state_sas_token"],
+        )
+
+        builder = TerraformBuilder()
+        ok = builder._validate_inputs(deployment_service, tmp_path)
+
+        assert ok is True, builder.get_errors()
+
+    def test_genuine_undeclared_variable_still_reported_with_backend_present(self, tmp_path):
+        """Backend exclusion must be scoped to the keys it actually references —
+        an unrelated undeclared variable is still an error."""
+        prov = _make_provisioner(source_path="terraform")
+        prov.name = "infra"
+        prov.backend = WorkspaceIacBackendModel(
+            type="azurerm",
+            configuration={"resource_group_name": "${var:tf_state_resource_group}"},
+        )
+
+        prov_dir = tmp_path / "terraform"
+        self._write_variables_tf(prov_dir, ["real_input"])
+
+        deployment_service = self._make_deployment_service(
+            tmp_path,
+            prov,
+            variable_keys=["real_input", "tf_state_resource_group", "typo_var"],
+        )
+
+        builder = TerraformBuilder()
+        ok = builder._validate_inputs(deployment_service, tmp_path)
+
+        assert ok is False
+        assert any("typo_var" in e for e in builder.get_errors())
+        assert not any("tf_state_resource_group" in e for e in builder.get_errors())
+
+    def test_no_backend_configured_behaves_as_before(self, tmp_path):
+        prov = _make_provisioner(source_path="terraform")
+        prov.name = "infra"
+
+        prov_dir = tmp_path / "terraform"
+        self._write_variables_tf(prov_dir, ["real_input"])
+
+        deployment_service = self._make_deployment_service(
+            tmp_path,
+            prov,
+            variable_keys=["real_input"],
+        )
+
+        builder = TerraformBuilder()
+        ok = builder._validate_inputs(deployment_service, tmp_path)
+
+        assert ok is True, builder.get_errors()

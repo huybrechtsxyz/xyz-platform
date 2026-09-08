@@ -177,6 +177,74 @@ class TestHelmBuilderAfterBuild:
 
 
 # ---------------------------------------------------------------------------
+# _validate_expr_refs (ADR-0075)
+# ---------------------------------------------------------------------------
+
+
+def _mock_env_service(variables=None, features=None, secret_keys=None):
+    env_service = MagicMock()
+    env_service.model.spec.secrets = [MagicMock(key=k) for k in (secret_keys or [])]
+    env_service.get_variables.return_value = [MagicMock(key=k) for k in (variables or [])]
+    env_service.get_features.return_value = [MagicMock(key=k) for k in (features or [])]
+    return env_service
+
+
+class TestHelmBuilderValidateExprRefs:
+    def test_no_refs_produces_no_errors(self):
+        builder = HelmBuilder()
+        deployment_service = MagicMock()
+        builder._validate_expr_refs({"nginx": {"env": {"TZ": "UTC"}}}, deployment_service, "prod", "nginx")
+        assert builder.get_errors() == []
+        deployment_service.get_environment_service.assert_not_called()
+
+    def test_declared_var_ref_produces_no_error(self):
+        builder = HelmBuilder()
+        deployment_service = MagicMock()
+        deployment_service.get_environment_service.return_value = _mock_env_service(variables=["APP_VERSION"])
+        values_doc = {"nginx": {"env": {"APP_VERSION": "${var:APP_VERSION}"}}}
+        builder._validate_expr_refs(values_doc, deployment_service, "prod", "nginx")
+        assert builder.get_errors() == []
+
+    def test_declared_secret_ref_produces_no_error(self):
+        builder = HelmBuilder()
+        deployment_service = MagicMock()
+        deployment_service.get_environment_service.return_value = _mock_env_service(secret_keys=["DB_PASSWORD"])
+        values_doc = {"nginx": {"env": {"DB_PASSWORD": "${secret:DB_PASSWORD}"}}}
+        builder._validate_expr_refs(values_doc, deployment_service, "prod", "nginx")
+        assert builder.get_errors() == []
+
+    def test_declared_feature_ref_produces_no_error(self):
+        builder = HelmBuilder()
+        deployment_service = MagicMock()
+        deployment_service.get_environment_service.return_value = _mock_env_service(features=["enable_tls"])
+        values_doc = {"nginx": {"env": {"ENABLE_TLS": "${feature:enable_tls}"}}}
+        builder._validate_expr_refs(values_doc, deployment_service, "prod", "nginx")
+        assert builder.get_errors() == []
+
+    def test_undeclared_ref_produces_error(self):
+        builder = HelmBuilder()
+        deployment_service = MagicMock()
+        deployment_service.get_environment_service.return_value = _mock_env_service()
+        values_doc = {"nginx": {"env": {"DB_PASSWORD": "${secret:DB_PASSWORD}"}}}
+        builder._validate_expr_refs(values_doc, deployment_service, "prod", "nginx")
+        errors = builder.get_errors()
+        assert len(errors) == 1
+        assert "DB_PASSWORD" in errors[0]
+        assert "prod" in errors[0] and "nginx" in errors[0]
+
+    def test_no_environment_service_produces_no_error(self):
+        """No environment declared at all — nothing to cross-check against, so this
+        is not itself flagged (an unresolvable reference will still fail loud at
+        deploy time)."""
+        builder = HelmBuilder()
+        deployment_service = MagicMock()
+        deployment_service.get_environment_service.return_value = None
+        values_doc = {"nginx": {"env": {"DB_PASSWORD": "${secret:DB_PASSWORD}"}}}
+        builder._validate_expr_refs(values_doc, deployment_service, "prod", "nginx")
+        assert builder.get_errors() == []
+
+
+# ---------------------------------------------------------------------------
 # build — no-op paths
 # ---------------------------------------------------------------------------
 

@@ -7,9 +7,10 @@ can import ``ResolvedValues`` and ``inject_*`` without crossing into the control
 
 import json
 import os
+import re
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 
 
 @dataclass
@@ -193,6 +194,81 @@ class ResolvedValues:
             if val is not None:
                 result[f"TF_VAR_{key}"] = json.dumps(val) if isinstance(val, (dict, list)) else str(val)
         return result
+
+
+# ---------------------------------------------------------------------------
+# ${var:KEY} / ${secret:KEY} / ${feature:KEY} expression substitution (ADR-0075)
+#
+# Shared by TerraformDeployer (spec.provisioners[].backend.configuration) and
+# HelmDeployer (rendered values.yaml) — one implementation, not a per-provisioner
+# copy. Both provisioners' "plumbing" config (state-backend settings, Helm chart
+# values) needs the same operation: substitute a typed reference into a string
+# using already-resolved ResolvedValues, and fail loud (never silently pass
+# through) when a reference doesn't resolve.
+# ---------------------------------------------------------------------------
+
+EXPR_PATTERN = re.compile(r"\$\{(var|secret|feature):([^}]+)\}")
+
+
+def resolve_expr_string(value: str, resolved: ResolvedValues) -> Tuple[str, List[str]]:
+    """Partial ``re.sub`` over *value*, substituting every ``${var:}``/``${secret:}``/
+    ``${feature:}`` reference found (a token may appear anywhere in the string,
+    possibly alongside literal text or other references).
+
+    Every match must resolve — an unmatched key is always an error, never a
+    silent pass-through (ADR-0075's "fail loud" decision driver).
+
+    Returns:
+        ``(resolved_value, errors)``. ``resolved_value`` has every *resolvable*
+        match substituted even when some matches fail — callers should treat a
+        non-empty ``errors`` list as fatal rather than use the partially-resolved
+        string.
+    """
+    errors: List[str] = []
+
+    def _replace(match: "re.Match[str]") -> str:
+        kind, key = match.group(1), match.group(2)
+        if kind == "var":
+            if key in resolved.variables:
+                return str(resolved.variables[key])
+            errors.append(f"no variable named '{key}'")
+            return match.group(0)
+        if kind == "secret":
+            if key in resolved.secrets:
+                return str(resolved.secrets[key])
+            errors.append(f"no secret named '{key}'")
+            return match.group(0)
+        if kind == "feature":
+            if key in resolved.features and resolved.features[key] is not None:
+                return str(resolved.features[key]).lower()
+            errors.append(f"no feature named '{key}'")
+            return match.group(0)
+        return match.group(0)  # pragma: no cover — unreachable, EXPR_PATTERN only matches the three kinds above
+
+    result = EXPR_PATTERN.sub(_replace, value)
+    return result, errors
+
+
+def collect_expr_refs(node: Any) -> Set[Tuple[str, str]]:
+    """Recursively walk any structure (dict/list/str; other leaf types are ignored)
+    and return every ``(kind, key)`` pair referenced anywhere in it.
+
+    No "must be nested under a key named env" restriction — safe to run as an
+    unrestricted full-tree walk precisely because the ``kind:`` prefix makes a
+    false-positive match implausible (nothing but a real reference produces the
+    literal substring ``${var:``, ``${secret:``, or ``${feature:``).
+    """
+    refs: Set[Tuple[str, str]] = set()
+    if isinstance(node, dict):
+        for child in node.values():
+            refs |= collect_expr_refs(child)
+    elif isinstance(node, list):
+        for item in node:
+            refs |= collect_expr_refs(item)
+    elif isinstance(node, str):
+        for match in EXPR_PATTERN.finditer(node):
+            refs.add((match.group(1), match.group(2)))
+    return refs
 
 
 @contextmanager
