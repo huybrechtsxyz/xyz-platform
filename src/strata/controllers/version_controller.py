@@ -6,9 +6,10 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import yaml
+from ruamel.yaml import YAML
 
 from strata.controllers.base_controller import BaseController
 from strata.models.common_models import PlatformKind
@@ -17,6 +18,16 @@ _API_VERSION = "strata.huybrechts.xyz/v1"
 
 # Flat pin representation: type_key (str) → {name: version}
 TargetMap = dict[str, dict[str, str]]
+
+# Round-trip YAML loader/dumper — preserves comments, key order, and blank lines
+# on any read-modify-write cycle over an *existing* file (as opposed to
+# `yaml.dump()`, used elsewhere in this module only to write brand-new files
+# that have no prior content to preserve). `lock_manifest()`/`refresh_manifest()`
+# rewrite a hand-authored version-manifest in place — without this, every
+# `strata versions lock`/`refresh` silently deleted any comments the file had.
+_ROUND_TRIP_YAML = YAML()
+_ROUND_TRIP_YAML.preserve_quotes = True
+_ROUND_TRIP_YAML.width = 4096  # avoid re-wrapping long scalar values (e.g. image digests)
 
 
 class VersionController(BaseController):
@@ -177,8 +188,7 @@ class VersionController(BaseController):
             self._add_error(f"File not found: {file_path}")
             return {}
 
-        with file_path.open("r", encoding="utf-8") as fh:
-            raw_doc = yaml.safe_load(fh)
+        raw_doc = self._read_yaml_preserving_comments(file_path)
 
         if not isinstance(raw_doc, dict) or raw_doc.get("kind") != PlatformKind.VERSION_MANIFEST.value:
             self._add_error(
@@ -221,7 +231,7 @@ class VersionController(BaseController):
         }
 
         if not dry_run:
-            self._write_yaml(file_path, raw_doc)
+            self._write_yaml_preserving_comments(file_path, raw_doc)
 
         return result
 
@@ -339,8 +349,7 @@ class VersionController(BaseController):
             self._add_error(f"File not found: {file_path}")
             return {}
 
-        with file_path.open("r", encoding="utf-8") as fh:
-            raw_doc = yaml.safe_load(fh)
+        raw_doc = self._read_yaml_preserving_comments(file_path)
 
         if not isinstance(raw_doc, dict) or raw_doc.get("kind") != PlatformKind.VERSION_MANIFEST.value:
             self._add_error(
@@ -354,7 +363,7 @@ class VersionController(BaseController):
         digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
         raw_doc.setdefault("spec", {})["hash"] = digest
-        self._write_yaml(file_path, raw_doc)
+        self._write_yaml_preserving_comments(file_path, raw_doc)
 
         return {"file": str(file_path), "hash": digest}
 
@@ -420,3 +429,26 @@ class VersionController(BaseController):
     def _write_yaml(path: Path, doc: dict) -> None:
         with path.open("w", encoding="utf-8") as fh:
             yaml.dump(doc, fh, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+    @staticmethod
+    def _read_yaml_preserving_comments(path: Path) -> Any:
+        """Load *path* via the round-trip loader — the returned mapping carries
+        comment/order metadata that survives a subsequent
+        ``_write_yaml_preserving_comments()`` call. Use for any read-modify-write
+        cycle over a file a user may have hand-authored; use ``yaml.safe_load()``
+        (via plain ``open()``) for read-only inspection instead, since the
+        round-trip loader is unnecessary overhead when nothing gets written back.
+        """
+        with path.open("r", encoding="utf-8") as fh:
+            return _ROUND_TRIP_YAML.load(fh)
+
+    @staticmethod
+    def _write_yaml_preserving_comments(path: Path, doc: Any) -> None:
+        """Write back a mapping previously loaded by ``_read_yaml_preserving_comments()``.
+
+        Only meaningful when *doc* is still the same (mutated) round-trip object —
+        passing a plain ``dict`` here writes it without comments, same as
+        ``_write_yaml()``.
+        """
+        with path.open("w", encoding="utf-8") as fh:
+            _ROUND_TRIP_YAML.dump(doc, fh)

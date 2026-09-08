@@ -7,6 +7,14 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+### Fixed
+
+#### **`strata versions lock`/`strata versions refresh` silently deleted comments in the version-manifest file**
+
+- **Root cause**: `VersionController.lock_manifest()` and `.refresh_manifest()` both rewrite an *existing*, potentially hand-authored version-manifest file in place — `lock_manifest()` to add `spec.hash`, `refresh_manifest()` to add/remove pins discovered by scanning. Both read the file with plain `yaml.safe_load()` and wrote it back with `yaml.dump()` (via the shared `_write_yaml()` helper) — neither preserves comments, so every `strata versions lock`/`refresh` silently deleted any comments the file had, even though nothing else about the file's content changed.
+- **Fix**: new `ruamel.yaml` dependency (`ruamel.yaml>=0.18`) and two new helpers on `VersionController` — `_read_yaml_preserving_comments()`/`_write_yaml_preserving_comments()` — using `ruamel.yaml.YAML()`'s round-trip mode, which carries comment/order metadata through a read-modify-write cycle. `lock_manifest()` and `refresh_manifest()` now use these instead of plain `yaml.safe_load()`/`_write_yaml()`. The other three write paths (`init_manifest()`, `apply_manifest()`, `add_manifest()`) are unaffected — they only ever write brand-new files (or a different destination file), so there's no prior content/comments to lose.
+- **Testing**: new `test_lock_preserves_comments`/`test_refresh_preserves_comments` regression tests, plus a new `TestVersionControllerRefreshManifest` class in `test_controllers_version_lock_add.py` — `refresh_manifest()` had no test coverage at all before this pass.
+
 ## [1.9.5] - 2026-09-08
 
 ### Added

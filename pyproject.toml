@@ -27,6 +27,7 @@ classifiers = [
 dependencies = [
     "pydantic>=2.4",
     "pyyaml>=6.0",
+    "ruamel.yaml>=0.18",             # Comment-preserving round-trip YAML (strata versions lock/refresh)
     "python-hcl2>=8.0",
     "click>=8.0",
     "rich>=13.0",
@@ -39,11 +40,11 @@ dependencies = [
     "cyclonedx-python-lib>=7.0,<12",
     "packageurl-python>=0.11,<2",
     # Logging - Standard libraries
-    "structlog>=24.0",                  # Structured logging (replaces python-json-logger)
+    "structlog>=24.0",                             # Structured logging (replaces python-json-logger)
     "colorama>=0.4; platform_system == 'Windows'", # Required by structlog.dev.ConsoleRenderer(colors=True) on Windows
-    "opentelemetry-api>=1.20",          # OpenTelemetry API
-    "opentelemetry-sdk>=1.20",          # OpenTelemetry SDK
-    "azure-monitor-opentelemetry>=1.0", # Azure Application Insights
+    "opentelemetry-api>=1.20",                     # OpenTelemetry API
+    "opentelemetry-sdk>=1.20",                     # OpenTelemetry SDK
+    "azure-monitor-opentelemetry>=1.0",            # Azure Application Insights
 ]
 dynamic = ["version"]
 
