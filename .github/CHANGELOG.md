@@ -12,6 +12,13 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 - **`strata versions lock`/`strata versions refresh` silently deleted any comments in the version-manifest file** — both rewrote the file via plain `yaml.safe_load()`/`yaml.dump()`, which don't preserve comments. Both now use a comment-preserving round-trip YAML reader/writer (new `ruamel.yaml` dependency), so hand-authored comments survive.
 
+## [1.9.6] - 2026-09-08
+
+### Fixed
+
+- **`strata build run` never resolved `spec.extends` (ADR-0039)**, unlike `deploy run` and `validate --deep` — a leaf deployment file that passed `validate --deep` still failed `build run` with "Workspace not found in deployment" because inherited fields (`workspace`, `stages`, ...) were never merged in. Fixed via a shared resolver helper now used by both build and deploy; `build run` also rejects partial deployments the same way `deploy run` already did, and this failure (and others like it) is now properly surfaced in `get_validation_errors()` instead of only appearing in the stderr log.
+- **`RemoteModel.deploy_path` was optional but effectively mandatory for gitops remotes** — an unset value silently dropped the remote from `@remote/...` resolution and made repo-fetch checks look for the wrong local path. Now required for `type: gitops`, failing loud at config-validation time instead of at deploy time with a misleading error.
+
 ## [1.9.5] - 2026-09-08
 
 ### Added
