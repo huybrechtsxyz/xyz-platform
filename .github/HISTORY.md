@@ -7,6 +7,31 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+### Added
+
+#### **Deployment change-reference tracking (ADR-0074)**
+
+- **Problem**: strata already records everything observable from inside the deploying process — actor, timestamps, commit, stages, policy results, lock trail, outcome — but nothing about *why* a production deployment happened. No link to a ticket/work-item/change record, no required justification.
+- **Model**: new `ChangeReferenceModel` (`src/strata/models/change_reference_model.py`) — `system` (open string, not an enum), `id`, `reason` (required whenever `--change-id` is supplied), optional `classification`/`title`/`url`, plus `supplied_by`/`supplied_at` provenance. A single reference only — no list; a rollback deploy supplies its own reference rather than auto-inheriting the original.
+- **Supplying it**: new `click_change_reference` decorator adds `--change-id`/`--change-system`/`--change-title`/`--change-url`/`--change-classification`/`--reason` (each with a matching `STRATA_CHANGE_*` env var) to `deploy run` and `deploy destroy`. `configuration.spec.change_tracking` supplies workspace-wide defaults (`system`, `url_template`, `id_pattern` regex, an optional `classifications` allowlist).
+- **Recording it**: written to `DeploymentManifestSpecModel.change_reference` and `DeployLogModel.change_reference` on every terminal outcome (success, failure, or policy rejection) — not just on success.
+- **Enforcing it**: new `change_reference_required` policy (`ChangeReferenceRequiredPolicy`), evaluated at new `deploy_before`/`destroy_before` phases via a shared `BaseDeployCommand._evaluate_preflight_policies()` helper (moved out of `RunDeployCommand` so `DestroyDeployCommand` gets the identical enforcement path). A configured allowlist/pattern mismatch is a `click.UsageError` (exit code 2); a missing reference when the policy is `deny` blocks the deploy before any provisioning starts.
+- **Explicitly out of scope (Phase 3, considered and rejected)**: verifying the referenced ticket actually exists/is in the right state. An anonymous HTTP check against most ticketing systems can't reliably distinguish "real ticket" from "typo" (login-page redirects return 200 for both), and verification doesn't belong on the deploy hot path — the same "emit facts, aggregate downstream" principle as ADR-0064. Left as a future server-side (ADR-0065) capability instead.
+- **Testing**: new `test_models_change_reference.py`, `test_commands_deploy_change_reference.py`, `test_commands_deploy_change_reference_policy.py`, `test_change_reference_required_policy.py`, plus registry/audit-fixture updates across the existing deploy command test suite.
+
+See [ADR-0074](../docs/decisions/0074-deployment-change-reference.md) for the full design, including the 4 considered options and why per-provider ticketing integrations (Option B) and reusing the existing approval-gate work-item field (Option C) were rejected.
+
+#### **Unified `${var:}`/`${secret:}`/`${feature:}` value-expression syntax across Terraform and Helm (ADR-0075)**
+
+- **Root problem**: Terraform's backend config (`spec.provisioners[].backend.configuration`) and Helm's `values.yaml` each resolved references against `ResolvedValues` with their own independently-written, differently-shaped mechanism — and each had a gap the other didn't. Terraform's `${var:}`/`${secret:}` resolver silently left an unresolved reference as the literal `${var:KEY}` text instead of failing; Helm's bare, untyped `${KEY}` token only matched inside a dict node keyed literally `env`, and only on an exact whole-value match — a token embedded in a larger string, or placed anywhere outside an `env:` block, was silently never looked at and shipped as literal placeholder text (including for secrets).
+- **Fix**: one shared resolver, `resolve_expr_string()`/`collect_expr_refs()`/`EXPR_PATTERN` (new, `src/strata/utils/resolved_values.py`), used by both provisioners. Every reference must resolve — an unmatched key is now always a hard error, never a silent pass-through, on both sides.
+  - **Terraform**: `TerraformDeployer._resolve_backend_expr()`/`_build_backend_config()` now fail the deploy step loud on an unresolved reference instead of passing through literal text; `TerraformBuilder` gained a build-time check that every backend-config reference resolves against a declared variable/secret/feature.
+  - **Helm**: `HelmDeployer._build_value_overrides()` now walks the *entire* rendered values document (not just `env:`-keyed dicts) and classifies each leaf by kind — a leaf referencing a secret (even mixed with `var:`/`feature:` refs in the same string) is resolved and passed as `--set-string` (never written to disk, matching Terraform's existing secrets-never-touch-disk rule); a leaf with only `var:`/`feature:` refs is substituted into a sibling `<stem>.resolved.yaml` file used via `-f` instead. `HelmBuilder` gained a matching build-time check — Helm reaches build-time typo detection parity with Terraform's `variables.tf` cross-check for the first time.
+- **Breaking**: removes Helm's old bare `${KEY}` syntax entirely (no back-compat fallback, per the decision's explicit premise). A repo-wide audit of `config/*/stack/*.yaml` found and migrated the one real usage (`config/aws-eks/stack/aws-mod-alb-controller.yaml`, `${EKS_CLUSTER_NAME}` → `${var:EKS_CLUSTER_NAME}`); Docker Compose's own unrelated `${KEY}` `.env` interpolation is untouched.
+- **Testing**: new `test_utils_resolved_values_expr.py` for the shared primitives; `test_deployers_helm.py`'s obsolete `TestFindEnvTokens`/`TestResolveToken` replaced with `TestFindExprLeaves`/`TestBuildValueOverrides` (including a leaf mixing `var:`/`secret:` routing as secret-shaped); new `TestHelmBuilderValidateExprRefs`; full suite green (6475 passed).
+
+See [ADR-0075](../docs/decisions/0075-unify-terraform-helm-value-expression-syntax.md) for the full design, including the rejected alternatives (fixing Helm's scoping in place while keeping it untyped; wrapping the expression in ADR-0073's `ExpressionModel`) and the escaping-semantics rationale for the split-by-kind output mechanism.
+
 ## [1.9.3] - 2026-09-04
 
 ### Fixed

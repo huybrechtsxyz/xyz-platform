@@ -5,7 +5,6 @@ and compares them against the variable/feature keys declared in environment YAML
 Catches typos (undeclared inputs) and missing required variables before deploy.
 """
 
-import re
 from dataclasses import dataclass, field
 from difflib import get_close_matches
 from pathlib import Path
@@ -34,31 +33,6 @@ STRATA_INJECTED_KEYS: frozenset = frozenset(
         "strata_tenant",
     }
 )
-
-# Matches ``${var:KEY}`` / ``${secret:KEY}`` expressions, e.g. in
-# ``spec.provisioners[].backend.configuration`` values. Shared with
-# ``TerraformDeployer._resolve_backend_expr()``, which resolves these same
-# expressions at deploy time — kept as a single pattern so the two never drift.
-BACKEND_EXPR_PATTERN = re.compile(r"\$\{(var|secret):([^}]+)\}")
-
-
-def collect_backend_expr_keys(configuration: Optional[Dict[str, Any]]) -> Set[str]:
-    """Collect ``var``/``secret`` key names referenced by backend config expressions.
-
-    ``spec.provisioners[].backend.configuration`` values may contain
-    ``${var:KEY}`` / ``${secret:KEY}`` expressions that are resolved at deploy
-    time by ``TerraformDeployer._resolve_backend_expr()`` directly from
-    ``ResolvedValues`` — never passed through as Terraform root-module inputs.
-    A key used only here is backend plumbing, not a module input, and must be
-    excluded from the ``variables.tf`` cross-check (see ``check_inputs()``).
-    """
-    keys: Set[str] = set()
-    if not configuration:
-        return keys
-    for value in configuration.values():
-        for match in BACKEND_EXPR_PATTERN.finditer(str(value)):
-            keys.add(match.group(2))
-    return keys
 
 
 @dataclass

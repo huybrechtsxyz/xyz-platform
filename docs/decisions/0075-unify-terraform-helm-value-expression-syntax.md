@@ -1,8 +1,56 @@
 # Unify `${var:}`/`${secret:}`/`${feature:}` Value-Expression Substitution Across Terraform and Helm
 
-- Status: proposed
+- Status: implemented
 - Date: 2026-09-08
 - Related: [ADR-0007](0007-deployment-state-locking.md), [ADR-0019](0019-configurable-terraform-build-output.md), [ADR-0066](0066-audit-event-routing-policy-model.md), [ADR-0070](0070-helm-oci-repositories-and-value-substitution.md), [ADR-0073](0073-embedded-string-syntax-inventory-and-creep-prevention.md)
+
+## Implementation Notes
+
+**Completed 2026-09-08.** All five steps from the original Remaining Work plan
+implemented in order:
+
+1. `EXPR_PATTERN`, `resolve_expr_string()`, `collect_expr_refs()` added to
+   [resolved_values.py](../../src/strata/utils/resolved_values.py), with a new
+   dedicated test module,
+   [test_utils_resolved_values_expr.py](../../tests/strata/utils/test_utils_resolved_values_expr.py).
+2. Terraform: `TerraformDeployer._resolve_backend_expr()` /
+   `_build_backend_config()` switched to the shared resolver and now fail loud
+   (return `(value, errors)`, checked by `setup()` before `terraform init`).
+   `TerraformBuilder._validate_inputs()` switched to `collect_expr_refs()` and
+   gained a new build-time check that every backend-config reference resolves
+   against a declared variable/secret/feature. `collect_backend_expr_keys()` /
+   `BACKEND_EXPR_PATTERN` removed from `terraform_input_validator.py`.
+   `WorkspaceIacBackendModel.configuration`'s docstring corrected from `feat` to
+   `feature`.
+3. Helm: `HelmDeployer._build_value_overrides()` rewritten to walk the whole
+   values document via `collect_expr_refs()`/`resolve_expr_string()` and split
+   leaves by kind — secret-shaped leaves become `--set-string` args (unchanged
+   escaping), var/feature-only leaves are substituted into the parsed doc and
+   written to a sibling `<stem>.resolved.yaml` used via `-f` in place of the
+   original. `_TOKEN_RE`, `_find_env_tokens()`, `_resolve_token()` deleted.
+   `HelmBuilder` gained a matching `_validate_expr_refs()` build-time check.
+   `test_deployers_helm.py`'s obsolete `TestFindEnvTokens`/`TestResolveToken`
+   classes replaced with `TestFindExprLeaves`/`TestBuildValueOverrides`
+   (including a test for a leaf mixing `var:`/`secret:` routing as
+   secret-shaped); `test_builders_helm.py` gained
+   `TestHelmBuilderValidateExprRefs`.
+4. Docs updated: [docs/platform/builders.md](../platform/builders.md) (Helm
+   section), [docs/config/module.md](../config/module.md) (environment source
+   table), cross-links added to [ADR-0066](0066-audit-event-routing-policy-model.md)
+   and [ADR-0070](0070-helm-oci-repositories-and-value-substitution.md), and
+   [ADR-0073](0073-embedded-string-syntax-inventory-and-creep-prevention.md)'s
+   expression-system inventory table updated to the shared three-kind entry.
+5. The one confirmed bare-`${KEY}` usage,
+   [config/aws-eks/stack/aws-mod-alb-controller.yaml](../../config/aws-eks/stack/aws-mod-alb-controller.yaml#L20),
+   migrated to `${var:EKS_CLUSTER_NAME}` and re-validated with `strata validate`.
+   A repo-wide grep of `config/*/stack/*.yaml` confirmed no other Helm module
+   uses the old syntax (the other `${KEY}`-shaped matches found, in
+   `kamatera-mod-traefik.yaml`, are a `type: compose` module's own
+   Compose-native `.env` tokens — explicitly out of scope, left untouched).
+
+Full test suite: 6475 passed, 16 skipped. `mypy .` clean except two
+pre-existing, unrelated errors in `docs/examples/provisioners/` (not touched
+by this change). `ruff check`/`ruff format` clean on all touched files.
 
 ## Context and Problem Statement
 
@@ -382,51 +430,3 @@ correctly without any bespoke escaping function.
 - Neutral: `_validate_helm_values()`'s separate warn-only enforcement level is
   untouched; whether to make it configurable/stricter is still open, tracked
   as its own future decision, not folded into this one.
-
-## Remaining Work
-
-<!-- Required while Status is proposed / in-progress / partially-implemented.
-     Remove this section once Status becomes implemented. -->
-
-- **Not started.** This ADR records the design only. Implementation phases,
-  in order:
-  1. Add `EXPR_PATTERN`, `resolve_expr_string()`, `collect_expr_refs()` to
-     `resolved_values.py`, with direct unit tests (partial match, multiple
-     refs per string, unresolved-key error, all three kinds).
-  2. Terraform: switch `_resolve_backend_expr()`/`_build_backend_config()` to
-     the shared resolver (fail-loud on unresolved); switch
-     `_validate_inputs()`'s exclusion set to `collect_expr_refs()`, removing
-     `collect_backend_expr_keys()`; add the new "references must resolve"
-     build-time check; add `${feature:}` test coverage; correct
-     `WorkspaceIacBackendModel.configuration`'s field description from
-     `${feat:enable_encryption}` to `${feature:enable_encryption}`.
-  3. Helm: switch `_build_value_overrides()` to the shared resolver over the
-     whole values doc, implementing the split-by-kind output mechanism
-     decided in "Helm side" above — classify each leaf by whether any of its
-     matches is a `secret:` reference (→ `--set-string`, same escaping as
-     today) versus only `var:`/`feature:` (→ substituted directly into a
-     rewritten values document passed via `-f`, no escaping needed); delete
-     `_TOKEN_RE`/`_find_env_tokens()`/ambiguous-name handling in
-     `_resolve_token()`; add the new build-time "references must resolve"
-     check to `HelmBuilder`; migrate/replace the now-obsolete
-     `TestFindEnvTokens`/exact-match/env-only test cases in
-     `test_deployers_helm.py`; add a test for a leaf mixing both kinds
-     (must route as secret-shaped as a whole).
-  4. Docs: update the Helm and Terraform sections of
-     [docs/platform/builders.md](../platform/builders.md) (remove bare
-     `${KEY}` examples, document the three-kind typed syntax); also update
-     [docs/config/module.md](../config/module.md#L113), which currently
-     documents the old bare-`${KEY}`-via-`.env`/`--set` behavior directly;
-     add a cross-link from [ADR-0066](0066-audit-event-routing-policy-model.md),
-     [ADR-0070](0070-helm-oci-repositories-and-value-substitution.md), and
-     [ADR-0019](0019-configurable-terraform-build-output.md) (already updated
-     with a forward-reference note to this ADR) to this ADR; update
-     [ADR-0073](0073-embedded-string-syntax-inventory-and-creep-prevention.md)'s
-     expression-system inventory table (the `${VAR_NAME}` row is now the
-     shared, three-kind, two-provisioner mechanism, not Helm-only).
-  5. **Already done during this ADR's review, not left for implementation:**
-     confirmed real usage of Helm's bare-`${KEY}` shape exists in a shipped
-     example — see the Consequences "Bad" bullet above for the concrete file
-     and its migration. A full audit across every `config/*/stack/*.yaml` Helm
-     module (not just the one instance already found) should still happen
-     before actually removing bare-`${KEY}` support.

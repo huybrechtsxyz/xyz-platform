@@ -21,6 +21,13 @@ in `tests/strata/builders/test_builders_helm.py`.
   (local charts only), `plan()`, and `apply()`, appending `--set-string` args
   after `-f <values_file>`.
 
+> **Update (ADR-0075):** the untyped `${KEY}` shape from Bug 2 (and its
+> `env:`-key scoping, ambiguity-is-fatal resolution via `_resolve_token()`)
+> has been retired and replaced by the typed `${var:KEY}` / `${secret:KEY}` /
+> `${feature:KEY}` syntax shared with `TerraformDeployer`'s backend config —
+> see [ADR-0075](0075-unify-terraform-helm-value-expression-syntax.md). The
+> OCI chart repository support from Bug 1 is unaffected.
+
 ## Context and Problem Statement
 
 Two independent bugs in the Helm builder/deployer path (`src/strata/builders/helm_builder.py`,

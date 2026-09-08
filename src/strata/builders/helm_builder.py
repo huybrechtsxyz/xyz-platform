@@ -7,13 +7,16 @@ this builder writes per-module output files to::
     {build_path}/{namespace}/{module}/meta.yaml
 
 Security: this builder never writes resolved secret or variable values.
-Secrets and variable/feature references are emitted as ``${KEY}`` substitution
-tokens.  The deployer injects real values via ``--set`` flags at deploy time.
+Variable/secret/feature references are emitted as typed ``${var:KEY}`` /
+``${secret:KEY}`` / ``${feature:KEY}`` substitution expressions (ADR-0075).
+The deployer resolves them at deploy time — secret-shaped values via
+``--set-string`` (never written to disk), var/feature-only values via a
+rewritten values file.
 """
 
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
 import yaml
 
@@ -22,6 +25,7 @@ from strata.models.common_models import ServiceDeployerType
 from strata.models.module_model import ModuleServiceModel
 from strata.services.deployment_service import DeploymentService
 from strata.services.module_service import ModuleService
+from strata.utils.resolved_values import collect_expr_refs
 from strata.utils.system import resolve_path
 
 if TYPE_CHECKING:
@@ -106,7 +110,10 @@ class HelmBuilder(BaseBuilder):
                 if not ok:
                     return False
 
-            return True
+            # _validate_expr_refs() (ADR-0075) appends to self._errors without
+            # returning False per-module, so it must be checked here — every
+            # other error path in this loop returns False immediately instead.
+            return not self._errors
 
         except Exception as exc:
             msg = f"Helm build failed: {exc}"
@@ -358,6 +365,19 @@ class HelmBuilder(BaseBuilder):
                     module_name=module_name,
                 )
 
+            # ADR-0075: every ${var:}/${secret:}/${feature:} reference in the
+            # rendered values document must resolve against a declared
+            # variable/secret/feature — the only build-time signal for a typo'd
+            # or undeclared name (the deployer also fails loud at deploy time,
+            # but that's much later in the pipeline than a build error).
+            if values_doc:
+                self._validate_expr_refs(
+                    values_doc=values_doc,
+                    deployment_service=deployment_service,
+                    namespace_name=namespace_name,
+                    module_name=module_name,
+                )
+
             if dry_run:
                 if self.verbose:
                     if values_doc is not None:
@@ -579,3 +599,42 @@ class HelmBuilder(BaseBuilder):
             self._messages.append(f"⚠ {error}")
         for warning in warnings:
             self._messages.append(f"⚠ {warning}")
+
+    def _validate_expr_refs(
+        self,
+        values_doc: Dict[str, Any],
+        deployment_service: DeploymentService,
+        namespace_name: str,
+        module_name: str,
+    ) -> None:
+        """Cross-check ``${var:}``/``${secret:}``/``${feature:}`` references in the
+        rendered values document against declared variables/secrets/features
+        (ADR-0075). An undeclared name blocks the build.
+
+        Unlike ``TerraformBuilder``'s equivalent check, this is not scoped to a
+        stage's ``secrets:`` allowlist — Helm modules aren't associated with a
+        deployment stage at build time the way Terraform provisioners are, so
+        this checks against everything declared anywhere in the environment.
+        """
+        refs = collect_expr_refs(values_doc)
+        if not refs:
+            return
+
+        env_service = deployment_service.get_environment_service()
+        if env_service is None or env_service.model is None:
+            return
+
+        declared: Set[str] = set()
+        for var in env_service.get_variables():
+            declared.add(var.key)
+        for feat in env_service.get_features():
+            declared.add(feat.key)
+        if env_service.model.spec and env_service.model.spec.secrets:
+            declared.update(secret.key for secret in env_service.model.spec.secrets)
+
+        for kind, key in sorted(refs):
+            if key not in declared:
+                self._errors.append(
+                    f"Namespace '{namespace_name}', module '{module_name}': values reference "
+                    f"'${{{kind}:{key}}}', but '{key}' is not declared as a variable, secret, or feature."
+                )

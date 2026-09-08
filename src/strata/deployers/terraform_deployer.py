@@ -22,7 +22,6 @@ Typical caller sequences:
 """
 
 import json
-import re
 from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
@@ -45,7 +44,7 @@ from strata.models.deployment_model import DeploymentStageModel
 from strata.models.workspace_model import OutputProfileModel, WorkspaceIacModel
 from strata.services.configuration_service import ConfigurationService
 from strata.services.deployment_service import DeploymentService
-from strata.utils.resolved_values import ResolvedValues, inject_tf_vars
+from strata.utils.resolved_values import EXPR_PATTERN, ResolvedValues, inject_tf_vars, resolve_expr_string
 
 if TYPE_CHECKING:
     from strata.controllers.solution_controller import SolutionController
@@ -271,7 +270,10 @@ class TerraformDeployer(BaseDeployer):
         assert self._iac_model is not None
         assert self._tf is not None
 
-        backend_config = self._build_backend_config(self._iac_model)
+        backend_config, backend_errors = self._build_backend_config(self._iac_model)
+        if backend_errors:
+            messages.extend(f"backend config error: {err}" for err in backend_errors)
+            return False, messages
         messages.append(f"terraform init  ({self._working_dir})")
 
         # Phase 1B: write deploy-time store-backed tfvars before terraform init
@@ -784,41 +786,41 @@ class TerraformDeployer(BaseDeployer):
             raise ValueError(f"Provisioner '{iac_model.name}' source has no source_path or target_path defined.")
         return deployment_build_path / target
 
-    def _build_backend_config(self, iac_model: WorkspaceIacModel) -> Optional[Dict[str, str]]:
+    def _build_backend_config(self, iac_model: WorkspaceIacModel) -> Tuple[Optional[Dict[str, str]], List[str]]:
         """Extract backend configuration key-value pairs from the IaC model.
 
-        Resolves ``${var:KEY}`` and ``${secret:KEY}`` expressions using
-        ``self.resolved_values`` when available.
+        Resolves ``${var:KEY}`` / ``${secret:KEY}`` / ``${feature:KEY}`` expressions
+        (ADR-0075) using ``self.resolved_values`` when available. Fails loud — an
+        unresolved reference is always an error, never a silent pass-through.
+
+        Returns:
+            ``(backend_config, errors)``. When ``errors`` is non-empty the caller
+            must not proceed to ``terraform init`` with the (incomplete) config.
         """
         if not iac_model.backend:
-            return None
+            return None, []
         config = iac_model.backend.configuration or {}
         if not config:
-            return None
+            return None, []
 
         result: Dict[str, str] = {}
+        errors: List[str] = []
         for k, v in config.items():
-            str_v = str(v)
-            resolved = self._resolve_backend_expr(str_v)
+            resolved, resolve_errors = self._resolve_backend_expr(str(v))
+            if resolve_errors:
+                errors.extend(f"backend config key '{k}': {err}" for err in resolve_errors)
+                continue
             result[k] = resolved
-        return result
+        return result, errors
 
-    def _resolve_backend_expr(self, value: str) -> str:
-        """Resolve ``${var:KEY}`` and ``${secret:KEY}`` expressions in a string value."""
-        from strata.validators.terraform_input_validator import BACKEND_EXPR_PATTERN
-
-        def replace(m: "re.Match[str]") -> str:
-            kind = m.group(1)  # "var" or "secret"
-            key = m.group(2)
-            if self.resolved_values is None:
-                return m.group(0)  # leave unreplaced
-            if kind == "var":
-                return str(self.resolved_values.variables.get(key, m.group(0)))
-            if kind == "secret":
-                return str(self.resolved_values.secrets.get(key, m.group(0)))
-            return m.group(0)
-
-        return BACKEND_EXPR_PATTERN.sub(replace, value)
+    def _resolve_backend_expr(self, value: str) -> Tuple[str, List[str]]:
+        """Resolve ``${var:KEY}`` / ``${secret:KEY}`` / ``${feature:KEY}`` expressions
+        in a string value (ADR-0075's shared expression syntax)."""
+        if self.resolved_values is None:
+            if EXPR_PATTERN.search(value):
+                return value, [f"cannot resolve '{value}': no resolved values available"]
+            return value, []
+        return resolve_expr_string(value, self.resolved_values)
 
     def _write_deploy_time_vars(
         self,

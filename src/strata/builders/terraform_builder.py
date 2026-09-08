@@ -1373,10 +1373,10 @@ class TerraformBuilder(BaseBuilder):
         Returns:
             True if no undeclared-input errors found, False otherwise.
         """
+        from strata.utils.resolved_values import collect_expr_refs
         from strata.validators.terraform_input_validator import (
             STRATA_INJECTED_KEYS,
             check_inputs,
-            collect_backend_expr_keys,
             parse_variables_tf,
         )
 
@@ -1434,12 +1434,26 @@ class TerraformBuilder(BaseBuilder):
             # Add resource-category keys emitted by _build_resources_by_category
             excluded.update(self._collect_platform_emitted_keys(deployment_service))
 
-            # Backend configuration expressions (${var:KEY} / ${secret:KEY}) are resolved
-            # directly from ResolvedValues at deploy time — never passed as Terraform root-
-            # module inputs — so keys referenced only there are backend plumbing, not
-            # undeclared module inputs.
+            # Backend configuration expressions (${var:KEY} / ${secret:KEY} / ${feature:KEY},
+            # ADR-0075) are resolved directly from ResolvedValues at deploy time — never
+            # passed as Terraform root-module inputs — so keys referenced only there are
+            # backend plumbing, not undeclared module inputs.
             if prov.backend is not None:
-                excluded.update(collect_backend_expr_keys(prov.backend.configuration))
+                backend_refs = collect_expr_refs(prov.backend.configuration)
+                excluded.update(key for _kind, key in backend_refs)
+
+                # New (ADR-0075): every backend expression reference must resolve against
+                # a declared variable/secret/feature — today's only build-time signal for
+                # a typo'd or undeclared name (deploy time now fails loud too, but that's
+                # much later in the pipeline than a build error).
+                for kind, key in sorted(backend_refs):
+                    if key not in declared_keys:
+                        self._errors.append(
+                            f"[{prov.name}] backend.configuration references "
+                            f"'${{{kind}:{key}}}', but '{key}' is not declared as a "
+                            "variable, secret, or feature."
+                        )
+                        has_errors = True
 
             # Run the cross-check
             result = check_inputs(declared_keys, module_vars, excluded_keys=excluded)

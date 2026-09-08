@@ -309,24 +309,29 @@ class TestResolveBackendExpr:
 
     def test_var_expression_resolved(self, tmp_path: Path):
         deployer = self._make_deployer(tmp_path)
-        assert deployer._resolve_backend_expr("${var:TF_RG}") == "my-rg"
+        assert deployer._resolve_backend_expr("${var:TF_RG}") == ("my-rg", [])
 
     def test_secret_expression_resolved(self, tmp_path: Path):
         deployer = self._make_deployer(tmp_path)
-        assert deployer._resolve_backend_expr("${secret:TF_STATE_KEY}") == "tfstate-secret"
+        assert deployer._resolve_backend_expr("${secret:TF_STATE_KEY}") == ("tfstate-secret", [])
 
     def test_plain_value_unchanged(self, tmp_path: Path):
         deployer = self._make_deployer(tmp_path)
-        assert deployer._resolve_backend_expr("tfstate") == "tfstate"
+        assert deployer._resolve_backend_expr("tfstate") == ("tfstate", [])
 
-    def test_unresolved_expr_left_as_is(self, tmp_path: Path):
+    def test_unresolved_expr_is_an_error_not_a_pass_through(self, tmp_path: Path):
         deployer = self._make_deployer(tmp_path)
-        assert deployer._resolve_backend_expr("${var:MISSING_KEY}") == "${var:MISSING_KEY}"
+        value, errors = deployer._resolve_backend_expr("${var:MISSING_KEY}")
+        assert value == "${var:MISSING_KEY}"
+        assert len(errors) == 1
+        assert "MISSING_KEY" in errors[0]
 
-    def test_no_resolved_values_returns_literal(self, tmp_path: Path):
+    def test_no_resolved_values_is_an_error(self, tmp_path: Path):
         deployer = self._make_deployer(tmp_path)
         deployer.resolved_values = None
-        assert deployer._resolve_backend_expr("${var:TF_RG}") == "${var:TF_RG}"
+        value, errors = deployer._resolve_backend_expr("${var:TF_RG}")
+        assert value == "${var:TF_RG}"
+        assert len(errors) == 1
 
     def test_build_backend_config_resolves_expressions(self, tmp_path: Path):
         from unittest.mock import MagicMock
@@ -338,7 +343,8 @@ class TestResolveBackendExpr:
             "storage_account_name": "${var:TF_SA}",
             "key": "${secret:TF_STATE_KEY}",
         }
-        result = deployer._build_backend_config(iac)
+        result, errors = deployer._build_backend_config(iac)
+        assert errors == []
         assert result == {
             "resource_group_name": "my-rg",
             "storage_account_name": "my-storage",

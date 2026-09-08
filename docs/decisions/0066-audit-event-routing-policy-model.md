@@ -70,12 +70,12 @@ The problems below are behavioural, and there are eleven of them.
 
 This is not an isolated slip. Strata currently runs **three** unreconciled credential conventions, and the audit sink belongs to a fourth category — no convention at all:
 
-| Convention              | Syntax in YAML                 | Resolver                                              | Where it works                                                                 |
-| ----------------------- | ------------------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------ |
-| A — env-var *name*      | `api_key: BWS_ACCESS_TOKEN`    | `_get_env_var()` / `os.getenv()`                      | bitwarden, vault, consul, infisical, etcd, azure keyvault/appconfig, flagsmith |
-| B — Jinja env reference | `{{ env.VAULT_ADDR }}`         | `BaseIntegration._resolve_env_vars()`                 | **only** `endpoints.address`, and only in the 7 integrations that call it      |
-| C — value expression    | `${secret:tf_token}`           | `TerraformDeployer._resolve_backend_expr()` (private) | **only** `workspace.spec.provisioners[].backend.configuration`                 |
-| — none                  | `Authorization: Bearer abc123` | verbatim                                              | `AuditSinkModel.headers`                                                       |
+| Convention              | Syntax in YAML                 | Resolver                                               | Where it works                                                                                                                                  |
+| ----------------------- | ------------------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| A — env-var *name*      | `api_key: BWS_ACCESS_TOKEN`    | `_get_env_var()` / `os.getenv()`                       | bitwarden, vault, consul, infisical, etcd, azure keyvault/appconfig, flagsmith                                                                  |
+| B — Jinja env reference | `{{ env.VAULT_ADDR }}`         | `BaseIntegration._resolve_env_vars()`                  | **only** `endpoints.address`, and only in the 7 integrations that call it                                                                       |
+| C — value expression    | `${secret:tf_token}`           | `resolve_expr_string()` (shared, `resolved_values.py`) | `workspace.spec.provisioners[].backend.configuration` and Helm module values ([ADR-0075](0075-unify-terraform-helm-value-expression-syntax.md)) |
+| — none                  | `Authorization: Bearer abc123` | verbatim                                               | `AuditSinkModel.headers`                                                                                                                        |
 
 Convention A is the documented contract: `auth_models.py` opens with "All fields are key references resolved at runtime", and every field description reads "Key reference for …". Convention C is the only one that reaches the **secret store** (via `ResolvedValues`) rather than the process environment.
 
