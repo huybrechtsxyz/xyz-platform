@@ -1376,6 +1376,7 @@ class TerraformBuilder(BaseBuilder):
         from strata.validators.terraform_input_validator import (
             STRATA_INJECTED_KEYS,
             check_inputs,
+            collect_backend_expr_keys,
             parse_variables_tf,
         )
 
@@ -1432,6 +1433,13 @@ class TerraformBuilder(BaseBuilder):
             excluded = set(STRATA_INJECTED_KEYS)
             # Add resource-category keys emitted by _build_resources_by_category
             excluded.update(self._collect_platform_emitted_keys(deployment_service))
+
+            # Backend configuration expressions (${var:KEY} / ${secret:KEY}) are resolved
+            # directly from ResolvedValues at deploy time — never passed as Terraform root-
+            # module inputs — so keys referenced only there are backend plumbing, not
+            # undeclared module inputs.
+            if prov.backend is not None:
+                excluded.update(collect_backend_expr_keys(prov.backend.configuration))
 
             # Run the cross-check
             result = check_inputs(declared_keys, module_vars, excluded_keys=excluded)

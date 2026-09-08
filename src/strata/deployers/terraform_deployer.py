@@ -22,6 +22,7 @@ Typical caller sequences:
 """
 
 import json
+import re
 from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
@@ -804,7 +805,7 @@ class TerraformDeployer(BaseDeployer):
 
     def _resolve_backend_expr(self, value: str) -> str:
         """Resolve ``${var:KEY}`` and ``${secret:KEY}`` expressions in a string value."""
-        import re
+        from strata.validators.terraform_input_validator import BACKEND_EXPR_PATTERN
 
         def replace(m: "re.Match[str]") -> str:
             kind = m.group(1)  # "var" or "secret"
@@ -817,7 +818,7 @@ class TerraformDeployer(BaseDeployer):
                 return str(self.resolved_values.secrets.get(key, m.group(0)))
             return m.group(0)
 
-        return re.sub(r"\$\{(var|secret):([^}]+)\}", replace, value)
+        return BACKEND_EXPR_PATTERN.sub(replace, value)
 
     def _write_deploy_time_vars(
         self,

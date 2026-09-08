@@ -16,6 +16,7 @@ from strata.integrations.lock.base_lock_backend import (
     LockConflictError,
     LockHandle,
 )
+from strata.models.change_reference_model import ChangeReferenceModel
 from strata.models.common_models import ProvisionerType
 from strata.models.deployment_manifest_model import (
     DeploymentManifestMetaModel,
@@ -57,6 +58,12 @@ class BaseDeployCommand(BaseCommand):
         quiet: Optional[bool] = None,
         no_cache: bool = False,
         refresh_cache: bool = False,
+        change_id: Optional[str] = None,
+        change_system: Optional[str] = None,
+        change_title: Optional[str] = None,
+        change_url: Optional[str] = None,
+        change_classification: Optional[str] = None,
+        change_reason: Optional[str] = None,
     ):
         super().__init__(
             work_path=work_path,
@@ -91,6 +98,16 @@ class BaseDeployCommand(BaseCommand):
         self._refresh_cache: bool = refresh_cache
         self._environment_snapshot: Optional[Dict[str, Any]] = None
         self._cache_indicator: str = "no-cache"
+        # ADR-0074 Phase 1 — external change/ticket reference, capture only.
+        # Raw CLI/env input; resolved into self._change_reference by
+        # _resolve_change_reference() once configuration is loaded.
+        self._change_id: Optional[str] = change_id
+        self._change_system: Optional[str] = change_system
+        self._change_title: Optional[str] = change_title
+        self._change_url: Optional[str] = change_url
+        self._change_classification: Optional[str] = change_classification
+        self._change_reason: Optional[str] = change_reason
+        self._change_reference: Optional[ChangeReferenceModel] = None
 
     def get_required_integrations(self):
         return {}
@@ -427,6 +444,16 @@ class BaseDeployCommand(BaseCommand):
             return False
         self._build_path = self._get_build_path()
 
+        # ADR-0074 Phase 1 — resolve --change-id/--change-system/--change-title/
+        # --change-url/--reason (plus configuration.spec.change_tracking defaults)
+        # into self._change_reference. A usage-level problem (missing --reason,
+        # missing --change-id, id not matching id_pattern, ...) is reported as
+        # exit code 2, same as any other bad-argument case — it doesn't depend
+        # on the deployment file at all.
+        change_reference_error = self._resolve_change_reference()
+        if change_reference_error:
+            raise click.UsageError(change_reference_error)
+
         # Phase 1: load + Pydantic-validate the deployment file
         # ADR 0039: resolve spec.extends before loading into DeploymentService.
         from strata.services.deployment_extension_resolver import DeploymentExtensionResolver
@@ -728,6 +755,164 @@ class BaseDeployCommand(BaseCommand):
         return super()._finalize(success=success, show_footer=show_footer)
 
     # ------------------------------------------------------------------
+    # Change reference (ADR-0074 Phase 1 — capture and record only)
+    # ------------------------------------------------------------------
+
+    def _resolve_change_reference(self) -> Optional[str]:
+        """Build ``self._change_reference`` from ``--change-*``/``--reason`` input.
+
+        Combines CLI/env-supplied values with ``configuration.spec.change_tracking``
+        defaults (``system``, ``url_template``, ``id_pattern``). Populates
+        ``self._change_reference`` on success.
+
+        This is a usage-level check, not deployment-file validation — it runs
+        before the deployment file is loaded and never sets
+        ``self._validation_failed``. Nothing is required by default: when no
+        ``--change-*``/``--reason`` flag is supplied, this is a no-op. Phase 1 does
+        not enforce that a reference is supplied at all — see ADR-0074.
+
+        Returns:
+            An error message if the supplied input is invalid, else ``None``.
+        """
+        if not any(
+            (
+                self._change_id,
+                self._change_system,
+                self._change_title,
+                self._change_url,
+                self._change_classification,
+                self._change_reason,
+            )
+        ):
+            return None
+
+        if not self._change_id:
+            return (
+                "--change-id is required when --change-system/--change-title/--change-url/"
+                "--change-classification/--reason is supplied."
+            )
+
+        if not self._change_reason:
+            return "--reason is required when --change-id is supplied."
+
+        change_tracking = None
+        if self._configuration_service is not None and self._configuration_service.model is not None:
+            change_tracking = getattr(self._configuration_service.model.spec, "change_tracking", None)
+
+        system = self._change_system or (change_tracking.system if change_tracking else None)
+        if not system:
+            return (
+                "--change-system is required when --change-id is supplied and no default is configured "
+                "under configuration spec.change_tracking.system."
+            )
+
+        if change_tracking and change_tracking.id_pattern:
+            import re
+
+            if not re.match(change_tracking.id_pattern, self._change_id):
+                return (
+                    f"--change-id '{self._change_id}' does not match the configured "
+                    f"change_tracking.id_pattern '{change_tracking.id_pattern}'."
+                )
+
+        if self._change_classification and change_tracking and change_tracking.classifications:
+            if self._change_classification not in change_tracking.classifications:
+                allowed = ", ".join(change_tracking.classifications)
+                return (
+                    f"--change-classification '{self._change_classification}' is not one of the configured "
+                    f"change_tracking.classifications: {allowed}."
+                )
+
+        url = self._change_url
+        if not url and change_tracking and change_tracking.url_template:
+            url = change_tracking.url_template.replace("{id}", self._change_id)
+
+        self._change_reference = ChangeReferenceModel(
+            system=system,
+            id=self._change_id,
+            reason=self._change_reason,
+            classification=self._change_classification,
+            title=self._change_title,
+            url=url,
+            supplied_by=resolve_actor(),
+            supplied_at=datetime.now(timezone.utc).isoformat(),
+        )
+        return None
+
+    def _evaluate_preflight_policies(self, phase: str) -> bool:
+        """Evaluate one-shot, deployment-level policies for *phase* (ADR-0074 Phase 2).
+
+        Shared by ``RunDeployCommand`` (``phase="deploy_before"``) and
+        ``DestroyDeployCommand`` (``phase="destroy_before"``) — one implementation,
+        not a copy per command, per the "Introducing a new convention" rule. Each
+        command calls this once, before any stage executes, guarded by
+        ``if not self._dry_run`` at the call site (nothing is changed on a dry-run,
+        so nothing to require a reference/authorization for).
+
+        Unlike ``RunDeployCommand._evaluate_phase_policies()`` (used for the
+        stage-scoped ``plan``/``deploy`` phases), no stage/deployer/plan context is
+        available or needed here — e.g. ``change_reference_required`` only reads
+        ``PolicyContext.change_reference``. Evaluating a deployment-level check
+        per-stage instead of once would duplicate the same violation once per stage
+        on a multi-stage deployment, which is exactly what this method avoids.
+
+        Returns:
+            ``False`` if any deny-enforcement policy fails, else ``True`` (including
+            when no configuration service is loaded, or no policies target *phase*).
+        """
+        from strata.models.deployment_manifest_model import ManifestPolicyResultModel
+        from strata.validators.policies.base_policy import PolicyContext
+        from strata.validators.policies.policy_engine import PolicyEngine
+
+        if self._configuration_service is None:
+            return True
+
+        spec = self._configuration_service.model.spec if self._configuration_service.model else None
+        policy_models = getattr(spec, "policies", None) or []
+        phase_policies = [p for p in policy_models if p.phase == phase and p.enabled]
+        if not phase_policies:
+            return True
+
+        context = PolicyContext(
+            phase=phase,
+            work_path=self._work_path,
+            deployment_service=self._deployment_service,
+            configuration_service=self._configuration_service,
+            change_reference=self._change_reference,
+        )
+
+        engine = PolicyEngine(phase_policies)
+        results = engine.evaluate(phase, context)
+
+        denied = False
+        for policy_model, result in zip(phase_policies, results, strict=False):
+            self._policy_results.append(
+                ManifestPolicyResultModel(
+                    policy_name=result.policy_name,
+                    policy_type=policy_model.type,
+                    phase=phase,
+                    enforcement=result.enforcement,
+                    passed=result.passed,
+                    violations=result.violations or [],
+                )
+            )
+            if result.passed:
+                if self._is_verbose() and self._is_console_output():
+                    click.echo(f"    \u2713  Policy '{result.policy_name}' passed")
+            else:
+                for v in result.violations:
+                    if result.enforcement == "deny":
+                        click.echo(f"    \u2717  Policy '{result.policy_name}' DENIED: {v}")
+                        self._errors.append(f"Policy '{result.policy_name}': {v}")
+                        denied = True
+                    elif result.enforcement == "warn":
+                        click.echo(f"    \u26a0  Policy '{result.policy_name}' warning: {v}")
+                    elif result.enforcement == "audit" and self._is_verbose():
+                        click.echo(f"    \u00b7  Policy '{result.policy_name}' audit: {v}")
+                self._forward_policy_violation_audit_event(result)
+        return not denied
+
+    # ------------------------------------------------------------------
     # Deployment manifest helpers
     # ------------------------------------------------------------------
 
@@ -868,6 +1053,7 @@ class BaseDeployCommand(BaseCommand):
                     policy_results=self._policy_results if self._policy_results else None,
                     lock=self._lock_ref,
                     audit_log=self._audit_log_path,
+                    change_reference=self._change_reference,
                 ),
             )
 
@@ -1317,6 +1503,7 @@ class BaseDeployCommand(BaseCommand):
                 stages=stages,
                 errors=list(self._errors),
                 messages=list(self._messages),
+                change_reference=self._change_reference,
             )
 
             # Resolve audit config (structure + base path)

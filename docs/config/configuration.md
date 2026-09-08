@@ -750,6 +750,48 @@ Artifact structure:
 
 ---
 
+## Change Tracking
+
+Declares the workspace's default external change/ticket tracker (Jira, Azure DevOps, ServiceNow,
+GitHub, or an internal system), so `strata deploy run`/`deploy destroy` operators only need to
+supply the volatile part — the change id and their justification — on the command line
+(ADR-0074, Phase 1: capture and record only, not enforcement).
+
+```yaml
+spec:
+  change_tracking:
+    system: jira                                        # default for --change-system
+    url_template: "https://jira.example.com/browse/{id}" # {id} substituted; no other placeholders
+    id_pattern: "^[A-Z][A-Z0-9]+-[0-9]+$"                # standard regex the id must match
+    classifications: [emergency, normal, standard]       # allowed values for --change-classification
+```
+
+| Field             | Type        | Default | Description                                                                                                                                                                                         |
+| ----------------- | ----------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `system`          | `str`       | `null`  | Default tracker used when `--change-system` is omitted. Any string — not a fixed enum                                                                                                               |
+| `url_template`    | `str`       | `null`  | Template for resolving a change record's URL from its id (`{id}` only)                                                                                                                              |
+| `id_pattern`      | `str`       | `null`  | Standard regular expression the supplied `--change-id` must match                                                                                                                                   |
+| `classifications` | `List[str]` | `null`  | Allowed values for `--change-classification`. An open list, not a fixed strata enum — each organization defines its own scheme (e.g. ITIL `emergency`/`normal`/`standard`). Unset accepts any value |
+
+All fields are optional and everything here is optional to declare — nothing is required by
+default. When an operator supplies `--change-id`, they must also supply `--reason`; `--change-system`
+must be supplied or resolved from `system` above. `--change-classification` is always optional, even
+when `classifications` is configured — it's only checked against the allowlist when both are present.
+
+```bash
+strata deploy run -f deploy/deploy-prd.yaml \
+  --change-id OPS-1234 \
+  --change-classification emergency \
+  --reason "Restore checkout capacity after connection-pool exhaustion"
+```
+
+`--change-system`, `--change-title`, `--change-url`, and `--change-classification` are also available
+(with `STRATA_CHANGE_*` environment-variable equivalents) to override or supply what configuration
+doesn't. The resolved reference is recorded on the deployment manifest and deploy log — see
+[deployment.md](deployment.md#change-reference).
+
+---
+
 ## Integrations
 
 `spec.integrations` declares external service integrations used by the platform — primarily

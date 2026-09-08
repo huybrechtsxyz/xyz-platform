@@ -48,6 +48,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import Field
 
+from strata.models.change_reference_model import ChangeReferenceModel
 from strata.models.common_models import (
     PlatformBaseModel,
     PlatformKind,
@@ -266,6 +267,9 @@ class DeploymentManifestSpecModel(PlatformBaseModel):
     )
     audit_log: Optional[str] = Field(
         None, description="Relative path to the deploy-log _execution.json for this execution"
+    )
+    change_reference: Optional[ChangeReferenceModel] = Field(
+        None, description="External change/ticket record justifying this deployment, when supplied (ADR-0074)"
     )
 
 

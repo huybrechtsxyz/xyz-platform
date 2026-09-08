@@ -5,6 +5,7 @@ from strata.validators.terraform_input_validator import (
     TerraformVariable,
     _find_closest,
     check_inputs,
+    collect_backend_expr_keys,
     parse_variables_tf,
 )
 
@@ -273,3 +274,47 @@ class TestStrataInjectedKeys:
 
     def test_is_frozen(self):
         assert isinstance(STRATA_INJECTED_KEYS, frozenset)
+
+
+# ---------------------------------------------------------------------------
+# collect_backend_expr_keys
+# ---------------------------------------------------------------------------
+
+
+class TestCollectBackendExprKeys:
+    def test_extracts_var_keys(self):
+        config = {
+            "resource_group_name": "${var:tf_state_resource_group}",
+            "storage_account_name": "${var:tf_state_storage_account}",
+        }
+        result = collect_backend_expr_keys(config)
+        assert result == {"tf_state_resource_group", "tf_state_storage_account"}
+
+    def test_extracts_secret_keys(self):
+        config = {"sas_token": "${secret:tf_state_sas_token}"}
+        result = collect_backend_expr_keys(config)
+        assert result == {"tf_state_sas_token"}
+
+    def test_plain_constant_values_yield_no_keys(self):
+        config = {"key": "terraform.tfstate", "encrypt": True}
+        assert collect_backend_expr_keys(config) == set()
+
+    def test_none_configuration_returns_empty_set(self):
+        assert collect_backend_expr_keys(None) == set()
+
+    def test_empty_configuration_returns_empty_set(self):
+        assert collect_backend_expr_keys({}) == set()
+
+    def test_mixed_constant_and_expression_values(self):
+        config = {
+            "container_name": "${var:tf_state_container_name}",
+            "key": "prd/terraform.tfstate",
+        }
+        assert collect_backend_expr_keys(config) == {"tf_state_container_name"}
+
+    def test_feat_expressions_not_matched(self):
+        """Only var/secret are resolved by TerraformDeployer._resolve_backend_expr();
+        a ${feat:...} expression is intentionally not extracted here either, so the
+        two stay consistent (see BACKEND_EXPR_PATTERN docstring)."""
+        config = {"encrypt": "${feat:enable_encryption}"}
+        assert collect_backend_expr_keys(config) == set()

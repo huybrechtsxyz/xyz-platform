@@ -670,6 +670,75 @@ strata deploy lock history -f deployment.yaml --last 20
 
 ---
 
+## Change Reference
+
+`strata deploy run`/`deploy destroy` optionally accept a reference to an external change/ticket
+record — Jira, Azure DevOps, ServiceNow, GitHub, or an internal system — justifying the deployment
+(ADR-0074). Capturing the reference (below) and **requiring** one (via policy, further down) both
+work identically for `deploy run` and `deploy destroy`.
+
+```bash
+strata deploy run -f deploy/deploy-prd.yaml \
+  --change-id OPS-1234 \
+  --change-system jira \
+  --change-classification emergency \
+  --reason "Restore checkout capacity after connection-pool exhaustion"
+```
+
+| Flag                      | Env var                        | Required                                                                     | Description                                                                                                                                                    |
+| ------------------------- | ------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--change-id`             | `STRATA_CHANGE_ID`             | Only if any other `--change-*`/`--reason` is supplied                        | External change/ticket identifier, e.g. `OPS-1234`                                                                                                             |
+| `--reason`                | `STRATA_CHANGE_REASON`         | Yes, whenever `--change-id` is supplied                                      | Operator-supplied justification for this deployment                                                                                                            |
+| `--change-system`         | `STRATA_CHANGE_SYSTEM`         | Yes, unless a default is set via `configuration.spec.change_tracking.system` | Tracker identifier, e.g. `jira`, `azure_devops`, `servicenow`                                                                                                  |
+| `--change-title`          | `STRATA_CHANGE_TITLE`          | No                                                                           | Snapshot of the change record's title, for offline audit review                                                                                                |
+| `--change-url`            | `STRATA_CHANGE_URL`            | No                                                                           | Link to the change record; resolved from `configuration.spec.change_tracking.url_template` when omitted                                                        |
+| `--change-classification` | `STRATA_CHANGE_CLASSIFICATION` | No — always optional                                                         | Change classification, e.g. `emergency`/`normal`/`standard`; validated against `configuration.spec.change_tracking.classifications` when that allowlist is set |
+
+Nothing here is required by default — omit all six and deploy/destroy behave exactly as before.
+When `configuration.spec.change_tracking.id_pattern` is set, a supplied `--change-id` not matching
+it is rejected with exit code 2 (usage error) before the deployment file is even loaded. Likewise,
+a supplied `--change-classification` not present in a configured `classifications` allowlist is
+rejected the same way — but the flag itself always stays optional, even when the allowlist is
+configured. See [configuration.md](configuration.md#change-tracking) for the configuration side.
+
+When supplied, the resolved reference (`system`, `id`, `reason`, `classification`, `title`, `url`,
+`supplied_by`, `supplied_at`) is written unchanged onto both the deployment manifest
+(`spec.change_reference`) and the deploy-log (`change_reference`) — on success, failure, and
+rejection alike, same as every other manifest/deploy-log field.
+
+> Phase 1 records an assertion made by an identified actor at a known time. It is not proof that
+> the referenced record exists, was approved, or covers this deployment, and Phase 3 (deferred)
+> is what would add that proof — see ADR-0074.
+
+### Requiring a change reference (Phase 2)
+
+Requiring one is a **policy**, `change_reference_required`, evaluated once per invocation before
+any stage runs — not a hard-coded rule, so it can be scoped per environment/configuration file like
+any other policy. `deploy run` and `deploy destroy` are evaluated as **two independent phases**,
+`deploy_before` and `destroy_before` — a policy declared for one has no effect on the other, so a
+workspace can require a reference for one action without the other, or set different enforcement
+levels (e.g. `deny` on destroy, `warn` on deploy):
+
+```yaml
+# configuration.yaml
+spec:
+  policies:
+    - name: production-change-record-deploy
+      type: change_reference_required
+      phase: deploy_before
+      enforcement: deny
+
+    - name: production-change-record-destroy
+      type: change_reference_required
+      phase: destroy_before
+      enforcement: deny
+```
+
+See [policies.md#change_reference_required](../platform/policies.md#change_reference_required) for
+the full policy reference, including `--force` non-bypass and the exit-code caveat.
+
+---
+
 ## Validation
 
 Platform validates:

@@ -63,6 +63,12 @@ class RunDeployCommand(BaseDeployCommand):
         ai: bool = False,
         strict_ai_review: Optional[str] = None,
         resume_id: Optional[str] = None,
+        change_id: Optional[str] = None,
+        change_system: Optional[str] = None,
+        change_title: Optional[str] = None,
+        change_url: Optional[str] = None,
+        change_classification: Optional[str] = None,
+        change_reason: Optional[str] = None,
         output: Optional[str] = None,
         verbose: Optional[bool] = None,
         quiet: Optional[bool] = None,
@@ -73,6 +79,12 @@ class RunDeployCommand(BaseDeployCommand):
             output=output,
             verbose=verbose,
             quiet=quiet,
+            change_id=change_id,
+            change_system=change_system,
+            change_title=change_title,
+            change_url=change_url,
+            change_classification=change_classification,
+            change_reason=change_reason,
         )
         self._stage = stage
         self._scope = scope
@@ -1129,6 +1141,14 @@ class RunDeployCommand(BaseDeployCommand):
                     f"Available namespaces: {sorted(known_namespaces) or ['(none defined)']}"
                 )
                 return False
+
+        # ADR-0074 Phase 2 — 'deploy_before' policies (e.g. change_reference_required)
+        # evaluate once per run, before any stage executes — fails fast, same as the
+        # pre-flight provisioner check below, instead of only being discovered after
+        # an earlier stage has already made real infrastructure changes. Not evaluated
+        # for --dry-run: nothing is changed, so nothing to require a reference for.
+        if not self._dry_run and not self._evaluate_preflight_policies("deploy_before"):
+            return False
 
         if self._is_console_output():
             click.echo(f"\n🚀  Deploying {len(stages_to_run)} stage(s)…")

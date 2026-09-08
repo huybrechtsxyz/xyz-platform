@@ -184,3 +184,12 @@ class TestPolicyEngine:
 
         with pytest.raises(ValueError):
             PolicyEngine([model])
+
+    def test_change_reference_required_type_resolves(self):
+        """PolicyEngine._create() resolves 'change_reference_required' (ADR-0074 Phase 2)."""
+        from strata.validators.policies.change_reference_required_policy import ChangeReferenceRequiredPolicy
+
+        model = _make_policy_model(type="change_reference_required", phase="deploy_before")
+        engine = PolicyEngine([model])
+
+        assert isinstance(engine._policies[0], ChangeReferenceRequiredPolicy)

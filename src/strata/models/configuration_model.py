@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Pydantic model for provider and resource configuration validation."""
 
+import re
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Union
 
@@ -582,6 +583,48 @@ class DriftConfigModel(PlatformBaseModel):
     )
 
 
+class ChangeTrackingConfigModel(PlatformBaseModel):
+    """Top-level change-tracking configuration under spec.change_tracking (ADR-0074).
+
+    Declares the workspace's default external change/ticket tracker once, so an
+    operator only needs to supply the volatile part (the id and reason) on the
+    command line. Phase 1 only — this configures capture, not enforcement.
+    """
+
+    system: Optional[str] = Field(
+        default=None,
+        description="Default tracker identifier used when --change-system is not supplied, e.g. 'jira', 'azure_devops', 'servicenow'.",
+    )
+    url_template: Optional[str] = Field(
+        default=None,
+        description="Template for resolving a change record's URL from its id. The literal '{id}' is substituted; no other placeholders are supported.",
+    )
+    id_pattern: Optional[str] = Field(
+        default=None,
+        description="Standard regular expression the supplied change id must match, e.g. '^[A-Z][A-Z0-9]+-[0-9]+$'.",
+    )
+    classifications: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Allowed values for --change-classification, e.g. ['emergency', 'normal', 'standard']. "
+            "An open list, not a fixed strata enum — each organization defines its own scheme. "
+            "When unset, any classification value is accepted."
+        ),
+    )
+
+    @field_validator("id_pattern")
+    @classmethod
+    def validate_id_pattern_is_valid_regex(cls, value: Optional[str]) -> Optional[str]:
+        """Reject an unparsable regex at load time instead of failing on the first deploy."""
+        if value is None:
+            return value
+        try:
+            re.compile(value)
+        except re.error as exc:
+            raise ValueError(f"change_tracking.id_pattern is not a valid regular expression: {exc}") from exc
+        return value
+
+
 class ConfigurationSpecModel(PlatformBaseModel):
     """Specification for the configuration model."""
 
@@ -646,6 +689,10 @@ class ConfigurationSpecModel(PlatformBaseModel):
     drift: Optional[DriftConfigModel] = Field(
         None,
         description="Drift configuration (currently only history durable storage, ADR-0065 Phase 1)",
+    )
+    change_tracking: Optional[ChangeTrackingConfigModel] = Field(
+        None,
+        description="Default external change/ticket tracker for deploy run/destroy --change-* flags (ADR-0074 Phase 1)",
     )
     promotions: Optional[ConfigurationPromotionsModel] = Field(
         None,

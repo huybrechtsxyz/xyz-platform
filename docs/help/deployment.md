@@ -60,6 +60,11 @@ strata deploy run -f deploy-prd.yaml --dry-run   # dry-run provisioning
 strata deploy run -f deploy-prd.yaml --force     # apply infrastructure
 strata deploy output -f deploy-prd.yaml          # check outputs (cached, or --refresh for live)
 strata deploy status -f deploy-prd.yaml          # check live infra status
+
+# Record an external change/ticket reference justifying the deploy (ADR-0074, optional)
+strata deploy run -f deploy-prd.yaml --force \
+  --change-id OPS-1234 --change-system jira --change-classification emergency \
+  --reason "Restore checkout capacity after connection-pool exhaustion"
 ```
 
 ---
