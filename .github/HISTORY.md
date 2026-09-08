@@ -32,6 +32,21 @@ See [ADR-0074](../docs/decisions/0074-deployment-change-reference.md) for the fu
 
 See [ADR-0075](../docs/decisions/0075-unify-terraform-helm-value-expression-syntax.md) for the full design, including the rejected alternatives (fixing Helm's scoping in place while keeping it untyped; wrapping the expression in ADR-0073's `ExpressionModel`) and the escaping-semantics rationale for the split-by-kind output mechanism.
 
+## [1.9.4] - 2026-09-07
+
+### Fixed
+
+#### **Windows CLI crash — missing `colorama` dependency**
+
+- Every CLI invocation on Windows crashed with `SystemError: ConsoleRenderer with colors=True ... requires colorama`. `colorama` was never declared as a dependency. Added as a Windows-only dependency; the console renderer also now falls back to uncolored output instead of crashing if it's still missing at runtime.
+
+#### **Partial deployments never checked `environments[]` file existence (#279)**
+
+- **Root cause**: `spec.partial: true` deployments intentionally skip full Phase 2 semantic validation (they're base files, not complete deploy targets, and may legitimately omit required leaf-only fields like `workspace`). That skip also meant any `environments[]` entry already present in the partial file — a straightforward file reference, unrelated to leaf-only requirements — was never checked for existence, so a typo'd or moved environment file went undetected until some later leaf deployment extending the partial file was built or deployed.
+- **Fix**: new `DeploymentService.check_environment_refs_exist()` — a lightweight, existence-only check (reusing the existing `_validate_file_refs()` helper) that runs in `PlatformValidator` specifically for the partial-file branch, under `--deep` only (same scope as Phase 2). It does not reject the deployment for being partial and runs no other cross-reference checks, just resolves each `environments[].file` (through the merged config/solution repo map) and reports any missing file as `PARTIAL_ENVIRONMENT_FILE_NOT_FOUND`.
+- **Side fix bundled in the same PR — layer segment/filename ambiguity**: `resolve_layers()`/`LayerAgreementPolicy` derive convention segment *values* from a deployment file's path via `match_pattern()`. When a file sits exactly one directory level shallower than its convention's full segment depth, its own filename lines up with the last placeholder position instead of being an absorbed trailing part, and got silently captured as if it were that segment's real directory value. New `_dir_only()` helper in `path_convention.py` strips the filename before matching for segment-*value* derivation only — Level 1 "which convention applies" matching is untouched, since a file's own name legitimately satisfying a convention's overall shape (e.g. a single-segment convention matching a file at the workspace root) is a structural match, not a segment value.
+- **Testing**: new coverage in `test_services_deployment.py`, `test_services_deployment_environment_only.py`, `test_utils_resolve_layers.py`, `test_layer_agreement_policy.py`, and `test_validators.py`.
+
 ## [1.9.3] - 2026-09-04
 
 ### Fixed
