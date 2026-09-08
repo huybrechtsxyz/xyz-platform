@@ -1569,6 +1569,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../platform/policies.html#path-convention"><code class="docutils literal notranslate"><span class="pre">path_convention</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="../platform/policies.html#layer-agreement"><code class="docutils literal notranslate"><span class="pre">layer_agreement</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="../platform/policies.html#ai-review"><code class="docutils literal notranslate"><span class="pre">ai_review</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../platform/policies.html#change-reference-required"><code class="docutils literal notranslate"><span class="pre">change_reference_required</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../platform/policies.html#enforcement-levels">Enforcement Levels</a></li>
@@ -1690,6 +1691,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#terraform-output-artifact-storage">Terraform Output Artifact Storage</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#change-tracking">Change Tracking</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#integrations">Integrations</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#supported-siem-types">Supported SIEM types</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#splunk-splunk-http-event-collector-hec"><code class="docutils literal notranslate"><span class="pre">splunk</span></code> — Splunk HTTP Event Collector (HEC)</a></li>
@@ -1763,6 +1765,10 @@
 <li class="toctree-l3"><a class="reference internal" href="deployment.html#example-terraform-cloud-lock">Example — Terraform Cloud lock</a></li>
 <li class="toctree-l3"><a class="reference internal" href="deployment.html#example-consul-lock">Example — Consul lock</a></li>
 <li class="toctree-l3"><a class="reference internal" href="deployment.html#managing-locks-manually">Managing locks manually</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="deployment.html#change-reference">Change Reference</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="deployment.html#requiring-a-change-reference-phase-2">Requiring a change reference (Phase 2)</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="deployment.html#validation">Validation</a></li>
@@ -4360,6 +4366,67 @@ Non-sensitive outputs are always stored as-is.
 Write failures are non-fatal and logged as warnings.</p>
 </div></blockquote>
 </section>
+</section>
+<hr class="docutils" />
+<section id="change-tracking">
+<h2>Change Tracking<a class="headerlink" href="#change-tracking" title="Link to this heading"></a></h2>
+<p>Declares the workspace’s default external change/ticket tracker (Jira, Azure DevOps, ServiceNow,
+GitHub, or an internal system), so <code class="docutils literal notranslate"><span class="pre">strata</span> <span class="pre">deploy</span> <span class="pre">run</span></code>/<code class="docutils literal notranslate"><span class="pre">deploy</span> <span class="pre">destroy</span></code> operators only need to
+supply the volatile part — the change id and their justification — on the command line
+(ADR-0074, Phase 1: capture and record only, not enforcement).</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">change_tracking</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">system</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">jira</span><span class="w">                                        </span><span class="c1"># default for --change-system</span>
+<span class="w">    </span><span class="nt">url_template</span><span class="p">:</span><span class="w"> </span><span class="s">"https://jira.example.com/browse/{id}"</span><span class="w"> </span><span class="c1"># {id} substituted; no other placeholders</span>
+<span class="w">    </span><span class="nt">id_pattern</span><span class="p">:</span><span class="w"> </span><span class="s">"^[A-Z][A-Z0-9]+-[0-9]+$"</span><span class="w">                </span><span class="c1"># standard regex the id must match</span>
+<span class="w">    </span><span class="nt">classifications</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">emergency</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">normal</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">standard</span><span class="p p-Indicator">]</span><span class="w">       </span><span class="c1"># allowed values for --change-classification</span>
+</pre></div>
+</div>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">system</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">str</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">null</span></code></p></td>
+<td><p>Default tracker used when <code class="docutils literal notranslate"><span class="pre">--change-system</span></code> is omitted. Any string — not a fixed enum</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">url_template</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">str</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">null</span></code></p></td>
+<td><p>Template for resolving a change record’s URL from its id (<code class="docutils literal notranslate"><span class="pre">{id}</span></code> only)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">id_pattern</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">str</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">null</span></code></p></td>
+<td><p>Standard regular expression the supplied <code class="docutils literal notranslate"><span class="pre">--change-id</span></code> must match</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">classifications</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">List[str]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">null</span></code></p></td>
+<td><p>Allowed values for <code class="docutils literal notranslate"><span class="pre">--change-classification</span></code>. An open list, not a fixed strata enum — each organization defines its own scheme (e.g. ITIL <code class="docutils literal notranslate"><span class="pre">emergency</span></code>/<code class="docutils literal notranslate"><span class="pre">normal</span></code>/<code class="docutils literal notranslate"><span class="pre">standard</span></code>). Unset accepts any value</p></td>
+</tr>
+</tbody>
+</table>
+<p>All fields are optional and everything here is optional to declare — nothing is required by
+default. When an operator supplies <code class="docutils literal notranslate"><span class="pre">--change-id</span></code>, they must also supply <code class="docutils literal notranslate"><span class="pre">--reason</span></code>; <code class="docutils literal notranslate"><span class="pre">--change-system</span></code>
+must be supplied or resolved from <code class="docutils literal notranslate"><span class="pre">system</span></code> above. <code class="docutils literal notranslate"><span class="pre">--change-classification</span></code> is always optional, even
+when <code class="docutils literal notranslate"><span class="pre">classifications</span></code> is configured — it’s only checked against the allowlist when both are present.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>strata<span class="w"> </span>deploy<span class="w"> </span>run<span class="w"> </span>-f<span class="w"> </span>deploy/deploy-prd.yaml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--change-id<span class="w"> </span>OPS-1234<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--change-classification<span class="w"> </span>emergency<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--reason<span class="w"> </span><span class="s2">"Restore checkout capacity after connection-pool exhaustion"</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">--change-system</span></code>, <code class="docutils literal notranslate"><span class="pre">--change-title</span></code>, <code class="docutils literal notranslate"><span class="pre">--change-url</span></code>, and <code class="docutils literal notranslate"><span class="pre">--change-classification</span></code> are also available
+(with <code class="docutils literal notranslate"><span class="pre">STRATA_CHANGE_*</span></code> environment-variable equivalents) to override or supply what configuration
+doesn’t. The resolved reference is recorded on the deployment manifest and deploy log — see
+<a class="reference internal" href="deployment.html#change-reference"><span class="std std-ref">deployment.md</span></a>.</p>
 </section>
 <hr class="docutils" />
 <section id="integrations">

@@ -1569,6 +1569,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#path-convention"><code class="docutils literal notranslate"><span class="pre">path_convention</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#layer-agreement"><code class="docutils literal notranslate"><span class="pre">layer_agreement</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#ai-review"><code class="docutils literal notranslate"><span class="pre">ai_review</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#change-reference-required"><code class="docutils literal notranslate"><span class="pre">change_reference_required</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#enforcement-levels">Enforcement Levels</a></li>
@@ -1690,6 +1691,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../config/configuration.html#terraform-output-artifact-storage">Terraform Output Artifact Storage</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="../config/configuration.html#change-tracking">Change Tracking</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../config/configuration.html#integrations">Integrations</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../config/configuration.html#supported-siem-types">Supported SIEM types</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../config/configuration.html#splunk-splunk-http-event-collector-hec"><code class="docutils literal notranslate"><span class="pre">splunk</span></code> — Splunk HTTP Event Collector (HEC)</a></li>
@@ -1763,6 +1765,10 @@
 <li class="toctree-l3"><a class="reference internal" href="../config/deployment.html#example-terraform-cloud-lock">Example — Terraform Cloud lock</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../config/deployment.html#example-consul-lock">Example — Consul lock</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../config/deployment.html#managing-locks-manually">Managing locks manually</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../config/deployment.html#change-reference">Change Reference</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../config/deployment.html#requiring-a-change-reference-phase-2">Requiring a change reference (Phase 2)</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../config/deployment.html#validation">Validation</a></li>
@@ -3476,7 +3482,7 @@
   <section id="policies">
 <h1>Policies<a class="headerlink" href="#policies" title="Link to this heading"></a></h1>
 <p>Declarative guardrails evaluated at specific lifecycle phases before or after infrastructure changes are applied.</p>
-<p><strong>Built-in types:</strong> <code class="docutils literal notranslate"><span class="pre">tenant_zone</span></code> | <code class="docutils literal notranslate"><span class="pre">resource_type_restrictions</span></code> | <code class="docutils literal notranslate"><span class="pre">required_labels</span></code> | <code class="docutils literal notranslate"><span class="pre">naming_pattern</span></code> | <code class="docutils literal notranslate"><span class="pre">ref_convention</span></code> | <code class="docutils literal notranslate"><span class="pre">script</span></code> | <code class="docutils literal notranslate"><span class="pre">sbom_pinned_versions</span></code> | <code class="docutils literal notranslate"><span class="pre">sbom_allowed_registries</span></code> | <code class="docutils literal notranslate"><span class="pre">sbom_denied_packages</span></code> | <code class="docutils literal notranslate"><span class="pre">sbom_max_components</span></code> | <code class="docutils literal notranslate"><span class="pre">sbom_license</span></code> | <code class="docutils literal notranslate"><span class="pre">cve_max_severity</span></code> | <code class="docutils literal notranslate"><span class="pre">cost_threshold</span></code> | <code class="docutils literal notranslate"><span class="pre">checkov</span></code> | <code class="docutils literal notranslate"><span class="pre">opa</span></code> | <code class="docutils literal notranslate"><span class="pre">path_convention</span></code> | <code class="docutils literal notranslate"><span class="pre">layer_agreement</span></code> | <code class="docutils literal notranslate"><span class="pre">ai_review</span></code> | <strong>Phases:</strong> <code class="docutils literal notranslate"><span class="pre">validate</span></code> / <code class="docutils literal notranslate"><span class="pre">build</span></code> / <code class="docutils literal notranslate"><span class="pre">plan</span></code> / <code class="docutils literal notranslate"><span class="pre">deploy</span></code> | <strong>Enforcement:</strong> <code class="docutils literal notranslate"><span class="pre">deny</span></code> / <code class="docutils literal notranslate"><span class="pre">warn</span></code> / <code class="docutils literal notranslate"><span class="pre">audit</span></code> | <strong>Declared in:</strong> <code class="docutils literal notranslate"><span class="pre">configuration.spec.policies</span></code></p>
+<p><strong>Built-in types:</strong> <code class="docutils literal notranslate"><span class="pre">tenant_zone</span></code> | <code class="docutils literal notranslate"><span class="pre">resource_type_restrictions</span></code> | <code class="docutils literal notranslate"><span class="pre">required_labels</span></code> | <code class="docutils literal notranslate"><span class="pre">naming_pattern</span></code> | <code class="docutils literal notranslate"><span class="pre">ref_convention</span></code> | <code class="docutils literal notranslate"><span class="pre">script</span></code> | <code class="docutils literal notranslate"><span class="pre">sbom_pinned_versions</span></code> | <code class="docutils literal notranslate"><span class="pre">sbom_allowed_registries</span></code> | <code class="docutils literal notranslate"><span class="pre">sbom_denied_packages</span></code> | <code class="docutils literal notranslate"><span class="pre">sbom_max_components</span></code> | <code class="docutils literal notranslate"><span class="pre">sbom_license</span></code> | <code class="docutils literal notranslate"><span class="pre">cve_max_severity</span></code> | <code class="docutils literal notranslate"><span class="pre">cost_threshold</span></code> | <code class="docutils literal notranslate"><span class="pre">checkov</span></code> | <code class="docutils literal notranslate"><span class="pre">opa</span></code> | <code class="docutils literal notranslate"><span class="pre">path_convention</span></code> | <code class="docutils literal notranslate"><span class="pre">layer_agreement</span></code> | <code class="docutils literal notranslate"><span class="pre">ai_review</span></code> | <code class="docutils literal notranslate"><span class="pre">change_reference_required</span></code> | <strong>Phases:</strong> <code class="docutils literal notranslate"><span class="pre">validate</span></code> / <code class="docutils literal notranslate"><span class="pre">build</span></code> / <code class="docutils literal notranslate"><span class="pre">plan</span></code> / <code class="docutils literal notranslate"><span class="pre">deploy</span></code> / <code class="docutils literal notranslate"><span class="pre">deploy_before</span></code> / <code class="docutils literal notranslate"><span class="pre">destroy_before</span></code> | <strong>Enforcement:</strong> <code class="docutils literal notranslate"><span class="pre">deny</span></code> / <code class="docutils literal notranslate"><span class="pre">warn</span></code> / <code class="docutils literal notranslate"><span class="pre">audit</span></code> | <strong>Declared in:</strong> <code class="docutils literal notranslate"><span class="pre">configuration.spec.policies</span></code></p>
 <hr class="docutils" />
 <section id="overview">
 <h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
@@ -3665,6 +3671,10 @@
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ai_review</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">plan</span></code></p></td>
 <td><p>AI-assessed risk of a Terraform plan stays below a configured threshold</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">change_reference_required</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">deploy_before</span></code> / <code class="docutils literal notranslate"><span class="pre">destroy_before</span></code></p></td>
+<td><p>An external change/ticket reference (<code class="docutils literal notranslate"><span class="pre">--change-id</span></code>) was supplied for this deploy/destroy</p></td>
 </tr>
 </tbody>
 </table>
@@ -4435,6 +4445,57 @@ The policy reads the pre-computed cost file — it does not call Infracost itsel
 </pre></div>
 </div>
 </section>
+<section id="change-reference-required">
+<h3><code class="docutils literal notranslate"><span class="pre">change_reference_required</span></code><a class="headerlink" href="#change-reference-required" title="Link to this heading"></a></h3>
+<p>Evaluates once per invocation, before any stage executes, rather than per-stage like
+<code class="docutils literal notranslate"><span class="pre">plan</span></code>/<code class="docutils literal notranslate"><span class="pre">deploy</span></code> phase policies (ADR-0074 Phase 2). Fails when no change/ticket reference was
+supplied via <code class="docutils literal notranslate"><span class="pre">--change-id</span></code> (with <code class="docutils literal notranslate"><span class="pre">--change-system</span></code> and <code class="docutils literal notranslate"><span class="pre">--reason</span></code>, or the corresponding
+<code class="docutils literal notranslate"><span class="pre">STRATA_CHANGE_*</span></code> environment variables) — see
+<a class="reference internal" href="../config/deployment.html#change-reference"><span class="std std-ref">deployment.md#change-reference</span></a>.</p>
+<p><strong>Two distinct phases, evaluated by two different commands — not one shared phase:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Phase</p></th>
+<th class="head"><p>Evaluated by</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">deploy_before</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">strata</span> <span class="pre">deploy</span> <span class="pre">run</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">destroy_before</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">strata</span> <span class="pre">deploy</span> <span class="pre">destroy</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>Declare separate policies for each phase to set independent enforcement — e.g. <code class="docutils literal notranslate"><span class="pre">deny</span></code> on
+<code class="docutils literal notranslate"><span class="pre">destroy_before</span></code> in production while only <code class="docutils literal notranslate"><span class="pre">warn</span></code> on <code class="docutils literal notranslate"><span class="pre">deploy_before</span></code>, since destroying
+infrastructure is arguably the riskier action. A policy declared for one phase has no effect
+on the other; there is no fallback or inheritance between them.</p>
+<p>No <code class="docutils literal notranslate"><span class="pre">configuration</span></code> block — it is a plain existence check against whatever
+<code class="docutils literal notranslate"><span class="pre">BaseDeployCommand._resolve_change_reference()</span></code> resolved for this invocation (shared by both
+commands; Phase 1 capture already works identically for <code class="docutils literal notranslate"><span class="pre">run</span></code> and <code class="docutils literal notranslate"><span class="pre">destroy</span></code>).</p>
+<p><code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> never reaches this policy for either command — nothing is changed, so nothing to
+require a reference for. <code class="docutils literal notranslate"><span class="pre">--force</span></code> does <strong>not</strong> bypass it: <code class="docutils literal notranslate"><span class="pre">--force</span></code> only skips interactive
+confirmation prompts and approval gates, which is a separate mechanism from policy evaluation.</p>
+<p>Skipped gracefully when: no configuration service is loaded (mirrors every other policy type).</p>
+<blockquote>
+<div><p>A <code class="docutils literal notranslate"><span class="pre">deny</span></code> result here behaves like any other <code class="docutils literal notranslate"><span class="pre">deploy_before</span></code>/<code class="docutils literal notranslate"><span class="pre">destroy_before</span></code>/<code class="docutils literal notranslate"><span class="pre">plan</span></code>/<code class="docutils literal notranslate"><span class="pre">deploy</span></code>-phase
+policy denial: it aborts the pipeline with exit code <code class="docutils literal notranslate"><span class="pre">1</span></code> (system/execution error), not <code class="docutils literal notranslate"><span class="pre">3</span></code>.
+Only schema/cross-reference validation failures produce exit code <code class="docutils literal notranslate"><span class="pre">3</span></code> — see ADR-0004.</p>
+</div></blockquote>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production-change-record-deploy</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">change_reference_required</span>
+<span class="w">  </span><span class="nt">phase</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deploy_before</span>
+<span class="w">  </span><span class="nt">enforcement</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deny</span>
+
+<span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production-change-record-destroy</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">change_reference_required</span>
+<span class="w">  </span><span class="nt">phase</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">destroy_before</span>
+<span class="w">  </span><span class="nt">enforcement</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deny</span>
+</pre></div>
+</div>
+</section>
 </section>
 <hr class="docutils" />
 <section id="enforcement-levels">
@@ -4485,6 +4546,14 @@ The policy reads the pre-computed cost file — it does not call Infracost itsel
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">deploy</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">strata</span> <span class="pre">deploy</span> <span class="pre">run</span> <span class="pre">…</span></code></p></td>
 <td><p>After <code class="docutils literal notranslate"><span class="pre">terraform</span> <span class="pre">apply</span></code> completes, before the manifest is persisted</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">deploy_before</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">strata</span> <span class="pre">deploy</span> <span class="pre">run</span> <span class="pre">…</span></code></p></td>
+<td><p>Once per invocation, before any stage executes (not evaluated on <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">destroy_before</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">strata</span> <span class="pre">deploy</span> <span class="pre">destroy</span> <span class="pre">…</span></code></p></td>
+<td><p>Once per invocation, before any stage executes (not evaluated on <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code>)</p></td>
 </tr>
 </tbody>
 </table>

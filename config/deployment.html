@@ -1569,6 +1569,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../platform/policies.html#path-convention"><code class="docutils literal notranslate"><span class="pre">path_convention</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="../platform/policies.html#layer-agreement"><code class="docutils literal notranslate"><span class="pre">layer_agreement</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="../platform/policies.html#ai-review"><code class="docutils literal notranslate"><span class="pre">ai_review</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../platform/policies.html#change-reference-required"><code class="docutils literal notranslate"><span class="pre">change_reference_required</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../platform/policies.html#enforcement-levels">Enforcement Levels</a></li>
@@ -1690,6 +1691,7 @@
 <li class="toctree-l3"><a class="reference internal" href="configuration.html#terraform-output-artifact-storage">Terraform Output Artifact Storage</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="configuration.html#change-tracking">Change Tracking</a></li>
 <li class="toctree-l2"><a class="reference internal" href="configuration.html#integrations">Integrations</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="configuration.html#supported-siem-types">Supported SIEM types</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="configuration.html#splunk-splunk-http-event-collector-hec"><code class="docutils literal notranslate"><span class="pre">splunk</span></code> — Splunk HTTP Event Collector (HEC)</a></li>
@@ -1763,6 +1765,10 @@
 <li class="toctree-l3"><a class="reference internal" href="#example-terraform-cloud-lock">Example — Terraform Cloud lock</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#example-consul-lock">Example — Consul lock</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#managing-locks-manually">Managing locks manually</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#change-reference">Change Reference</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#requiring-a-change-reference-phase-2">Requiring a change reference (Phase 2)</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#validation">Validation</a></li>
@@ -4261,6 +4267,102 @@ strata<span class="w"> </span>deploy<span class="w"> </span>lock<span class="w">
 strata<span class="w"> </span>deploy<span class="w"> </span>lock<span class="w"> </span><span class="nb">history</span><span class="w"> </span>-f<span class="w"> </span>deployment.yaml<span class="w"> </span>--last<span class="w"> </span><span class="m">20</span>
 </pre></div>
 </div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="change-reference">
+<h2>Change Reference<a class="headerlink" href="#change-reference" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">strata</span> <span class="pre">deploy</span> <span class="pre">run</span></code>/<code class="docutils literal notranslate"><span class="pre">deploy</span> <span class="pre">destroy</span></code> optionally accept a reference to an external change/ticket
+record — Jira, Azure DevOps, ServiceNow, GitHub, or an internal system — justifying the deployment
+(ADR-0074). Capturing the reference (below) and <strong>requiring</strong> one (via policy, further down) both
+work identically for <code class="docutils literal notranslate"><span class="pre">deploy</span> <span class="pre">run</span></code> and <code class="docutils literal notranslate"><span class="pre">deploy</span> <span class="pre">destroy</span></code>.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>strata<span class="w"> </span>deploy<span class="w"> </span>run<span class="w"> </span>-f<span class="w"> </span>deploy/deploy-prd.yaml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--change-id<span class="w"> </span>OPS-1234<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--change-system<span class="w"> </span>jira<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--change-classification<span class="w"> </span>emergency<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--reason<span class="w"> </span><span class="s2">"Restore checkout capacity after connection-pool exhaustion"</span>
+</pre></div>
+</div>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Flag</p></th>
+<th class="head"><p>Env var</p></th>
+<th class="head"><p>Required</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--change-id</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">STRATA_CHANGE_ID</span></code></p></td>
+<td><p>Only if any other <code class="docutils literal notranslate"><span class="pre">--change-*</span></code>/<code class="docutils literal notranslate"><span class="pre">--reason</span></code> is supplied</p></td>
+<td><p>External change/ticket identifier, e.g. <code class="docutils literal notranslate"><span class="pre">OPS-1234</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--reason</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">STRATA_CHANGE_REASON</span></code></p></td>
+<td><p>Yes, whenever <code class="docutils literal notranslate"><span class="pre">--change-id</span></code> is supplied</p></td>
+<td><p>Operator-supplied justification for this deployment</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--change-system</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">STRATA_CHANGE_SYSTEM</span></code></p></td>
+<td><p>Yes, unless a default is set via <code class="docutils literal notranslate"><span class="pre">configuration.spec.change_tracking.system</span></code></p></td>
+<td><p>Tracker identifier, e.g. <code class="docutils literal notranslate"><span class="pre">jira</span></code>, <code class="docutils literal notranslate"><span class="pre">azure_devops</span></code>, <code class="docutils literal notranslate"><span class="pre">servicenow</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--change-title</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">STRATA_CHANGE_TITLE</span></code></p></td>
+<td><p>No</p></td>
+<td><p>Snapshot of the change record’s title, for offline audit review</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--change-url</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">STRATA_CHANGE_URL</span></code></p></td>
+<td><p>No</p></td>
+<td><p>Link to the change record; resolved from <code class="docutils literal notranslate"><span class="pre">configuration.spec.change_tracking.url_template</span></code> when omitted</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--change-classification</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">STRATA_CHANGE_CLASSIFICATION</span></code></p></td>
+<td><p>No — always optional</p></td>
+<td><p>Change classification, e.g. <code class="docutils literal notranslate"><span class="pre">emergency</span></code>/<code class="docutils literal notranslate"><span class="pre">normal</span></code>/<code class="docutils literal notranslate"><span class="pre">standard</span></code>; validated against <code class="docutils literal notranslate"><span class="pre">configuration.spec.change_tracking.classifications</span></code> when that allowlist is set</p></td>
+</tr>
+</tbody>
+</table>
+<p>Nothing here is required by default — omit all six and deploy/destroy behave exactly as before.
+When <code class="docutils literal notranslate"><span class="pre">configuration.spec.change_tracking.id_pattern</span></code> is set, a supplied <code class="docutils literal notranslate"><span class="pre">--change-id</span></code> not matching
+it is rejected with exit code 2 (usage error) before the deployment file is even loaded. Likewise,
+a supplied <code class="docutils literal notranslate"><span class="pre">--change-classification</span></code> not present in a configured <code class="docutils literal notranslate"><span class="pre">classifications</span></code> allowlist is
+rejected the same way — but the flag itself always stays optional, even when the allowlist is
+configured. See <a class="reference internal" href="configuration.html#change-tracking"><span class="std std-ref">configuration.md</span></a> for the configuration side.</p>
+<p>When supplied, the resolved reference (<code class="docutils literal notranslate"><span class="pre">system</span></code>, <code class="docutils literal notranslate"><span class="pre">id</span></code>, <code class="docutils literal notranslate"><span class="pre">reason</span></code>, <code class="docutils literal notranslate"><span class="pre">classification</span></code>, <code class="docutils literal notranslate"><span class="pre">title</span></code>, <code class="docutils literal notranslate"><span class="pre">url</span></code>,
+<code class="docutils literal notranslate"><span class="pre">supplied_by</span></code>, <code class="docutils literal notranslate"><span class="pre">supplied_at</span></code>) is written unchanged onto both the deployment manifest
+(<code class="docutils literal notranslate"><span class="pre">spec.change_reference</span></code>) and the deploy-log (<code class="docutils literal notranslate"><span class="pre">change_reference</span></code>) — on success, failure, and
+rejection alike, same as every other manifest/deploy-log field.</p>
+<blockquote>
+<div><p>Phase 1 records an assertion made by an identified actor at a known time. It is not proof that
+the referenced record exists, was approved, or covers this deployment, and Phase 3 (deferred)
+is what would add that proof — see ADR-0074.</p>
+</div></blockquote>
+<section id="requiring-a-change-reference-phase-2">
+<h3>Requiring a change reference (Phase 2)<a class="headerlink" href="#requiring-a-change-reference-phase-2" title="Link to this heading"></a></h3>
+<p>Requiring one is a <strong>policy</strong>, <code class="docutils literal notranslate"><span class="pre">change_reference_required</span></code>, evaluated once per invocation before
+any stage runs — not a hard-coded rule, so it can be scoped per environment/configuration file like
+any other policy. <code class="docutils literal notranslate"><span class="pre">deploy</span> <span class="pre">run</span></code> and <code class="docutils literal notranslate"><span class="pre">deploy</span> <span class="pre">destroy</span></code> are evaluated as <strong>two independent phases</strong>,
+<code class="docutils literal notranslate"><span class="pre">deploy_before</span></code> and <code class="docutils literal notranslate"><span class="pre">destroy_before</span></code> — a policy declared for one has no effect on the other, so a
+workspace can require a reference for one action without the other, or set different enforcement
+levels (e.g. <code class="docutils literal notranslate"><span class="pre">deny</span></code> on destroy, <code class="docutils literal notranslate"><span class="pre">warn</span></code> on deploy):</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># configuration.yaml</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">policies</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production-change-record-deploy</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">change_reference_required</span>
+<span class="w">      </span><span class="nt">phase</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deploy_before</span>
+<span class="w">      </span><span class="nt">enforcement</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deny</span>
+
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production-change-record-destroy</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">change_reference_required</span>
+<span class="w">      </span><span class="nt">phase</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">destroy_before</span>
+<span class="w">      </span><span class="nt">enforcement</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deny</span>
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="../platform/policies.html#change-reference-required"><span class="std std-ref">policies.md#change_reference_required</span></a> for
+the full policy reference, including <code class="docutils literal notranslate"><span class="pre">--force</span></code> non-bypass and the exit-code caveat.</p>
 </section>
 </section>
 <hr class="docutils" />

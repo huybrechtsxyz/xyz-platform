@@ -1569,6 +1569,7 @@
 <li class="toctree-l3"><a class="reference internal" href="policies.html#path-convention"><code class="docutils literal notranslate"><span class="pre">path_convention</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="policies.html#layer-agreement"><code class="docutils literal notranslate"><span class="pre">layer_agreement</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="policies.html#ai-review"><code class="docutils literal notranslate"><span class="pre">ai_review</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="policies.html#change-reference-required"><code class="docutils literal notranslate"><span class="pre">change_reference_required</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="policies.html#enforcement-levels">Enforcement Levels</a></li>
@@ -1690,6 +1691,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../config/configuration.html#terraform-output-artifact-storage">Terraform Output Artifact Storage</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="../config/configuration.html#change-tracking">Change Tracking</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../config/configuration.html#integrations">Integrations</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../config/configuration.html#supported-siem-types">Supported SIEM types</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../config/configuration.html#splunk-splunk-http-event-collector-hec"><code class="docutils literal notranslate"><span class="pre">splunk</span></code> — Splunk HTTP Event Collector (HEC)</a></li>
@@ -1763,6 +1765,10 @@
 <li class="toctree-l3"><a class="reference internal" href="../config/deployment.html#example-terraform-cloud-lock">Example — Terraform Cloud lock</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../config/deployment.html#example-consul-lock">Example — Consul lock</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../config/deployment.html#managing-locks-manually">Managing locks manually</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../config/deployment.html#change-reference">Change Reference</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../config/deployment.html#requiring-a-change-reference-phase-2">Requiring a change reference (Phase 2)</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../config/deployment.html#validation">Validation</a></li>
@@ -4157,7 +4163,7 @@
 <h2>HelmBuilder<a class="headerlink" href="#helmbuilder" title="Link to this heading"></a></h2>
 <p>Generates <code class="docutils literal notranslate"><span class="pre">values.yaml</span></code> and <code class="docutils literal notranslate"><span class="pre">meta.yaml</span></code> artifacts for each module with <code class="docutils literal notranslate"><span class="pre">spec.type:</span> <span class="pre">helm</span></code>, ready for use with <code class="docutils literal notranslate"><span class="pre">helm</span> <span class="pre">install</span> <span class="pre">--values</span></code>.</p>
 <blockquote>
-<div><p><strong>Security note:</strong> <code class="docutils literal notranslate"><span class="pre">HelmBuilder</span></code> NEVER writes resolved variable, secret, or feature values. References are emitted as <code class="docutils literal notranslate"><span class="pre">${KEY}</span></code> substitution tokens and injected by the deployer via <code class="docutils literal notranslate"><span class="pre">helm</span> <span class="pre">install</span> <span class="pre">--set</span></code> flags or a secrets values file at deploy time.</p>
+<div><p><strong>Security note:</strong> <code class="docutils literal notranslate"><span class="pre">HelmBuilder</span></code> NEVER writes resolved variable, secret, or feature values. References are emitted as typed <code class="docutils literal notranslate"><span class="pre">${var:KEY}</span></code> / <code class="docutils literal notranslate"><span class="pre">${secret:KEY}</span></code> / <code class="docutils literal notranslate"><span class="pre">${feature:KEY}</span></code> substitution expressions (ADR-0075) — the same syntax <code class="docutils literal notranslate"><span class="pre">TerraformDeployer</span></code> uses for backend config. The deployer resolves them at deploy time: secret-shaped values via <code class="docutils literal notranslate"><span class="pre">helm</span> <span class="pre">upgrade</span> <span class="pre">--set-string</span></code> (never written to disk), var/feature-only values via a rewritten values file passed with <code class="docutils literal notranslate"><span class="pre">-f</span></code>.</p>
 </div></blockquote>
 <section id="id9">
 <h3>Output Location<a class="headerlink" href="#id9" title="Link to this heading"></a></h3>
@@ -4199,16 +4205,17 @@
 <td><p><code class="docutils literal notranslate"><span class="pre">KEY:</span> <span class="pre">foo</span></code> (literal string)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">var:</span> <span class="pre">MY_VAR</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">KEY:</span> <span class="pre">${MY_VAR}</span></code> (injected at deploy)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">KEY:</span> <span class="pre">${var:MY_VAR}</span></code> (resolved at deploy time)</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">secret:</span> <span class="pre">MY_SEC</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">KEY:</span> <span class="pre">${MY_SEC}</span></code> (injected at deploy)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">KEY:</span> <span class="pre">${secret:MY_SEC}</span></code> (resolved at deploy time)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">feature:</span> <span class="pre">MY_FLG</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">KEY:</span> <span class="pre">${MY_FLG}</span></code> (injected at deploy)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">KEY:</span> <span class="pre">${feature:MY_FLG}</span></code> (resolved at deploy time)</p></td>
 </tr>
 </tbody>
 </table>
+<p>These typed references may appear anywhere in the rendered values document — not just under an <code class="docutils literal notranslate"><span class="pre">env:</span></code> key — and are cross-checked at build time against declared variables/secrets/features (an undeclared name blocks the build). An unresolved reference also fails loud at deploy time; see ADR-0075.</p>
 </section>
 <section id="pvc-persistence">
 <h3>PVC Persistence<a class="headerlink" href="#pvc-persistence" title="Link to this heading"></a></h3>
