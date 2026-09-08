@@ -54,7 +54,7 @@ class StatusAuditCommand(SchemaBaseCommand):
         from strata.utils.system import resolve_path
 
         audit_config: Optional[AuditConfigModel] = None
-        integration_names: set = set()
+        integration_types_by_name: Dict[str, str] = {}
         try:
             config_service = ConfigurationService.load(str(get_configuration_path(self._work_path)), validate=False)
             if config_service.model and config_service.model.spec:
@@ -62,7 +62,7 @@ class StatusAuditCommand(SchemaBaseCommand):
                 if spec.audit:
                     audit_config = spec.audit
                 if spec.integrations:
-                    integration_names = {str(i.name) for i in spec.integrations}
+                    integration_types_by_name = {str(i.name): str(i.type) for i in spec.integrations}
         except Exception as e:
             self.logger.debug(f"Failed to load configuration for audit status (non-fatal): {e}")
 
@@ -109,17 +109,31 @@ class StatusAuditCommand(SchemaBaseCommand):
         # --- Policy gate: every closed-set event type and whether it is admitted. ---
         self._gate = {event_type: audit_config.policy.is_enabled(event_type) for event_type in AUDIT_EVENT_DEFAULTS}
 
-        # --- Sinks: declared routing plus whether the referenced integration exists. ---
-        self._sinks = [
-            {
-                "name": str(sink.name),
-                "integration": str(sink.integration),
-                "enabled": sink.enabled,
-                "events": sink.events,
-                "integration_declared": str(sink.integration) in integration_names,
-            }
-            for sink in audit_config.sinks
-        ]
+        # --- Sinks: declared routing plus whether the referenced integration exists
+        # AND resolves to a real, registered integration type. A sink whose
+        # `integration:` name matches a `spec.integrations[]` entry but whose `type`
+        # is misspelled/nonexistent (IntegrationModel.type is a free-form string, not
+        # an enum, so this passes Pydantic validation) would otherwise be silently
+        # reported as fully declared even though it can never actually forward an
+        # event (IntegrationFactory.create() would raise "Unknown integration type").
+        from strata.integrations.factory import IntegrationFactory
+
+        self._sinks = []
+        for sink in audit_config.sinks:
+            sink_integration = str(sink.integration)
+            integration_type = integration_types_by_name.get(sink_integration)
+            name_declared = sink_integration in integration_types_by_name
+            type_known = integration_type is not None and IntegrationFactory.is_known_type(integration_type)
+            self._sinks.append(
+                {
+                    "name": str(sink.name),
+                    "integration": sink_integration,
+                    "integration_type": integration_type,
+                    "enabled": sink.enabled,
+                    "events": sink.events,
+                    "integration_declared": name_declared and type_known,
+                }
+            )
 
         self._output_data = {
             "journal": self._journal,
@@ -155,7 +169,10 @@ class StatusAuditCommand(SchemaBaseCommand):
                 if not sink["enabled"]:
                     flags.append("disabled")
                 if not sink["integration_declared"]:
-                    flags.append("integration not found")
+                    if sink["integration_type"] is None:
+                        flags.append("integration not found")
+                    else:
+                        flags.append(f"integration type '{sink['integration_type']}' not registered")
                 suffix = f"  [{', '.join(flags)}]" if flags else ""
                 events = ", ".join(sink["events"]) if sink["events"] else "all enabled events"
                 click.echo(f"  {sink['name']} -> {sink['integration']} ({events}){suffix}")

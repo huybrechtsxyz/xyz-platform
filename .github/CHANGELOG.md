@@ -10,6 +10,7 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ### Fixed
 
+- **`strata audit status` reported `integration_declared: true` even when a sink's integration had a nonexistent/misspelled `type`** — the check only verified the sink's `integration:` name matched *some* `spec.integrations[]` entry, never that its `type` actually resolves to a registered integration (`IntegrationModel.type` is a free-form string, not an enum, so a typo passed validation silently). Now also checks `IntegrationFactory.is_known_type()`; a new `integration_type` field on each reported sink shows the resolved type (or `null` if the name wasn't found) for diagnosis.
 - **`strata versions lock`/`strata versions refresh` silently deleted any comments in the version-manifest file** — both rewrote the file via plain `yaml.safe_load()`/`yaml.dump()`, which don't preserve comments. Both now use a comment-preserving round-trip YAML reader/writer (new `ruamel.yaml` dependency), so hand-authored comments survive.
 
 ## [1.9.6] - 2026-09-08

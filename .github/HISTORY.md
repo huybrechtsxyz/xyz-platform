@@ -9,6 +9,12 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ### Fixed
 
+#### **`strata audit status` reported `integration_declared: true` for a sink whose integration has a nonexistent type**
+
+- **Root cause**: `StatusAuditCommand._execute()` built `integration_names` from `spec.integrations[].name` only, then checked `str(sink.integration) in integration_names` — never inspecting the matched integration's `type` at all. `IntegrationModel.type` is a free-form `str` field, not an enum, so a misspelled/nonexistent type (e.g. `type: totally_bogus_type`) passes Pydantic validation silently and the sink was reported fully declared even though `IntegrationFactory.create()` would raise `"Unknown integration type"` the moment it actually tried to forward an event.
+- **Fix**: now builds `integration_types_by_name` (name → type) and requires both the name to match *and* `IntegrationFactory.is_known_type(type)` to be true. Each reported sink gained a new `integration_type` field (the resolved type string, or `null` if the name wasn't found at all) so JSON consumers can tell the two failure modes apart. Console output distinguishes `"integration not found"` (bad name) from `"integration type '<type>' not registered"` (name found, bad type).
+- **Testing**: new `test_flags_sink_whose_integration_has_a_nonexistent_type` regression test; existing sink-reporting tests updated to carry real type strings through the mock (previously left as unconfigured `MagicMock` attributes, which is exactly how this bug went undetected).
+
 #### **`strata versions lock`/`strata versions refresh` silently deleted comments in the version-manifest file**
 
 - **Root cause**: `VersionController.lock_manifest()` and `.refresh_manifest()` both rewrite an *existing*, potentially hand-authored version-manifest file in place — `lock_manifest()` to add `spec.hash`, `refresh_manifest()` to add/remove pins discovered by scanning. Both read the file with plain `yaml.safe_load()` and wrote it back with `yaml.dump()` (via the shared `_write_yaml()` helper) — neither preserves comments, so every `strata versions lock`/`refresh` silently deleted any comments the file had, even though nothing else about the file's content changed.
