@@ -1255,6 +1255,11 @@ class DeploymentService(BaseService["DeploymentModel"]):
             # Step 1: Load workspace service
             if not self.model or not self.model.spec.workspace:
                 self.logger.error("Workspace not found in deployment")
+                self._validation_errors.append(
+                    "Workspace not found in deployment (spec.workspace is not set). If this "
+                    "deployment uses spec.extends, the field should have been inherited from "
+                    "the base file — confirm the extends chain was resolved before loading."
+                )
                 return False
 
             workspace_ref = self.model.spec.workspace

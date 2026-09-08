@@ -279,3 +279,77 @@ class TestForwardPolicyViolationAuditEvent:
         ):
             # Should not raise
             cmd._forward_policy_violation_audit_event(result)
+
+
+class TestLoadDeploymentService:
+    """Shared spec.extends resolution + Phase-1 load (ADR 0039), used by both
+    BaseBuildCommand and BaseDeployCommand so a file that passes
+    `strata validate --deep` (which resolves extends) is buildable/deployable too."""
+
+    def _write(self, path, spec, meta=None):
+        import yaml
+
+        doc = {
+            "apiVersion": "strata.huybrechts.xyz/v1",
+            "kind": "deployment",
+            "meta": {"name": "test", **(meta or {})},
+            "spec": spec,
+        }
+        path.write_text(yaml.dump(doc, default_flow_style=False), encoding="utf-8")
+        return path
+
+    def test_loads_plain_deployment_without_extends(self, tmp_path):
+        f = self._write(tmp_path / "leaf.yaml", {"workspace": {"name": "ws", "file": "workspace.yaml"}})
+        cmd = _make_command(tmp_path)
+
+        result = cmd._load_deployment_service_with_extends(f, {})
+
+        assert result is not None
+        assert cmd._errors == []
+
+    def test_resolves_extends_before_loading(self, tmp_path):
+        self._write(
+            tmp_path / "base.yaml",
+            {
+                "partial": True,
+                "workspace": {"name": "ws", "file": "workspace.yaml"},
+                "stages": [{"name": "core", "provisioner": "core"}],
+            },
+        )
+        child = self._write(
+            tmp_path / "child.yaml",
+            {"extends": "base.yaml", "environments": [{"file": "env.yaml"}]},
+        )
+        cmd = _make_command(tmp_path)
+
+        result = cmd._load_deployment_service_with_extends(child, {})
+
+        assert result is not None
+        assert cmd._errors == []
+        assert result.model is not None
+        assert result.model.spec.workspace is not None
+        assert result.model.spec.workspace.name == "ws"
+        assert result.model.spec.partial is not True
+
+    def test_reports_error_on_broken_extends_reference(self, tmp_path):
+        child = self._write(tmp_path / "child.yaml", {"extends": "missing-base.yaml"})
+        cmd = _make_command(tmp_path)
+
+        result = cmd._load_deployment_service_with_extends(child, {})
+
+        assert result is None
+        assert len(cmd._errors) == 1
+        assert "extends" in cmd._errors[0].lower()
+
+    def test_reports_pydantic_validation_errors(self, tmp_path):
+        f = tmp_path / "bad.yaml"
+        f.write_text(
+            "apiVersion: strata.huybrechts.xyz/v1\nkind: deployment\nmeta:\n  name: x\nspec:\n  unknown_field: true\n",
+            encoding="utf-8",
+        )
+        cmd = _make_command(tmp_path)
+
+        result = cmd._load_deployment_service_with_extends(f, {})
+
+        assert result is None
+        assert cmd._errors

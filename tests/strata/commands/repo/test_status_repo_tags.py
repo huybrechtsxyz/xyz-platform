@@ -24,6 +24,7 @@ def _make_remote(release_pattern=None, quality_pattern=None, repository="https:/
         repository=repository,
         reference="main",
         source_path=".",
+        deploy_path="repos/my-service",
         conventions=conventions,
     )
 

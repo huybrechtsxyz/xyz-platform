@@ -67,7 +67,13 @@ class RemoteModel(PlatformBaseModel):
         - repository: Git repository URL (e.g., GitHub, GitLab)
         - reference: Branch, tag, or commit hash
         - source_path: Path to the module within the repository
-        - deploy_path: Optional path to deployment artifacts
+        - deploy_path: Required — local path (relative to work_path) the remote is
+          checked out to. RepositoryController._resolve_target_path() falls back to
+          `name`/`repository` when unset, which frequently does not match where
+          `strata repo add` actually cloned the repo (solution.json's own
+          `repos/<name>` convention) — a silent misconfiguration that surfaced as
+          "has not been fetched yet" even though the repo IS fetched, just at a
+          different path. Required so this fails loud at config-validation time.
 
     CONTAINER:
         - Module deployed via container image
@@ -231,6 +237,16 @@ class RemoteModel(PlatformBaseModel):
         if self.type in [RemoteType.BUNDLED, RemoteType.GITOPS]:
             if not self.source_path:
                 raise ValueError(f"source_path is required for {self.type.value} source type")
+
+        # GITOPS also requires deploy_path — the remote's local checkout path must be
+        # explicit (see class docstring): a missing value silently drops the remote
+        # from ConfigurationService.get_remote_map() and falls back to a path that
+        # usually does not match where the repo was actually cloned.
+        if self.type == RemoteType.GITOPS and not self.deploy_path:
+            raise ValueError(
+                "deploy_path is required for gitops source type — it must name the local "
+                "path (relative to work_path) this remote is checked out to."
+            )
 
         # CONTAINER type should not use source_path
         if self.type == RemoteType.CONTAINER:

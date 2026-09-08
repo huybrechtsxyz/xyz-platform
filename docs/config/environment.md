@@ -217,6 +217,7 @@ spec:
       repository: https://github.com/org/tf-landscape.git
       reference: main          # ← base/default for all environments
       source_path: terraform
+      deploy_path: repos/tf_landscape
 ```
 
 ```yaml

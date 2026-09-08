@@ -456,23 +456,8 @@ class BaseDeployCommand(BaseCommand):
 
         # Phase 1: load + Pydantic-validate the deployment file
         # ADR 0039: resolve spec.extends before loading into DeploymentService.
-        from strata.services.deployment_extension_resolver import DeploymentExtensionResolver
-
-        resolver = DeploymentExtensionResolver(work_path=Path(self._work_path), repo_map=repo_map)
-        if resolver.needs_resolution(self._file_path):
-            try:
-                merged_data = resolver.resolve(self._file_path)
-            except (ValueError, FileNotFoundError) as exc:
-                self._errors.append(f"Deployment extends resolution failed: {exc}")
-                self._validation_failed = True
-                return False
-            deployment_service = DeploymentService(path=str(self._file_path), data=merged_data)
-            deployment_service.validate()
-        else:
-            deployment_service = DeploymentService.load(str(self._file_path), validate=True)
-
-        if not deployment_service.is_validated():
-            self._errors.extend(deployment_service.get_validation_errors())
+        deployment_service = self._load_deployment_service_with_extends(self._file_path, repo_map)
+        if deployment_service is None:
             self._validation_failed = True
             return False
 

@@ -136,6 +136,7 @@ spec:
       repository: https://github.com/example/platform-modules.git
       reference: main
       source_path: modules
+      deploy_path: repos/platform-modules
       description: "Platform application modules"
 
     - name: docker-registry
