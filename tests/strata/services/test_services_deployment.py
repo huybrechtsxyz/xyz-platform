@@ -290,6 +290,33 @@ class TestDeploymentService:
         assert any("customers" in e and "acme" in e for e in errors)
 
 
+class TestLoadDeployServicesMissingWorkspace:
+    """`spec.workspace` absent (e.g. a partial base file loaded directly, without its
+    spec.extends chain resolved first) must surface as a validation error an
+    automated JSON-output consumer can see — not just a structlog line on stderr."""
+
+    def test_reports_validation_error_when_workspace_missing(self, tmp_path, monkeypatch):
+        from strata.services.configuration_service import ConfigurationService
+
+        monkeypatch.setattr(ConfigurationService, "get_remote_map", lambda self: {})
+
+        data = {
+            "apiVersion": "strata.huybrechts.xyz/v1",
+            "kind": "deployment",
+            "meta": {"name": "test_deploy"},
+            "spec": {"environments": ["env.yaml"]},
+        }
+        svc = DeploymentService(data=data)
+        svc.validate()  # Phase 1 — spec.workspace is Optional, so this passes
+
+        ok = svc.load_deploy_services(str(tmp_path))
+
+        assert ok is False
+        errors = svc.get_validation_errors()
+        assert errors
+        assert any("workspace" in e.lower() for e in errors)
+
+
 class TestValidateLayers:
     """Tests for DeploymentService.validate_layers() — public wrapper around
     _validate_deployment_layers() (ADR-0072), used by PromoteController so a

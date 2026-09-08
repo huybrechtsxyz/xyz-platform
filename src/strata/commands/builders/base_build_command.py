@@ -107,9 +107,21 @@ class BaseBuildCommand(BaseCommand):
         self._build_path = self._get_build_path()
 
         # Phase 1: load + Pydantic-validate the deployment file
-        deployment_service = DeploymentService.load(str(self._file_path), validate=True)
-        if not deployment_service.is_validated():
-            self._errors.extend(deployment_service.get_validation_errors())
+        # ADR 0039: resolve spec.extends before loading into DeploymentService — a
+        # deployment file that passes `strata validate --deep` (which resolves
+        # extends) must be buildable too, not just validatable.
+        deployment_service = self._load_deployment_service_with_extends(self._file_path, repo_map)
+        if deployment_service is None:
+            return False
+
+        # Pre-flight: reject partial deployments before any build operation — a
+        # partial base file (spec.partial: true) has no complete workspace/stages
+        # target to build against. Mirrors BaseDeployCommand's identical check.
+        if deployment_service.model and deployment_service.model.spec.partial:
+            self._errors.append(
+                f"'{self._file_path.name}' is a partial deployment (spec.partial: true) "
+                "and cannot be built. A leaf deployment file that extends this base is required."
+            )
             return False
 
         # Phase 2: cross-validate against configuration

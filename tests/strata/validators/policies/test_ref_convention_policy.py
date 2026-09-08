@@ -31,6 +31,7 @@ def _make_remote(name: str, release_pattern=None, quality_pattern=None) -> Remot
         repository="https://example.com/acme/repo.git",
         reference="main",
         source_path=".",
+        deploy_path=f"repos/{name}",
         conventions=conventions,
     )
 

@@ -277,6 +277,50 @@ class BaseCommand:
             self._integration_controller = IntegrationController()
         return self._integration_controller
 
+    def _load_deployment_service_with_extends(
+        self,
+        file_path: Path,
+        repo_map: Optional[Dict[str, str]] = None,
+    ) -> Optional[Any]:
+        """Load and Pydantic-validate a deployment file, resolving ``spec.extends``
+        (ADR-0039) first when present.
+
+        Shared by build and deploy commands so both see the exact same merged
+        model that ``validate --deep`` already checks — a deployment file that
+        passes ``strata validate --deep`` (which resolves ``extends``) must be
+        buildable/deployable too, not just validatable.
+
+        Returns:
+            The loaded, validated ``DeploymentService`` on success. On failure,
+            error(s) are appended to ``self._errors`` and ``None`` is returned.
+        """
+        from strata.services.deployment_extension_resolver import DeploymentExtensionResolver
+        from strata.services.deployment_service import DeploymentService
+
+        resolver = DeploymentExtensionResolver(work_path=Path(self._work_path), repo_map=repo_map or {})
+        if resolver.needs_resolution(file_path):
+            try:
+                merged_data = resolver.resolve(file_path)
+            except (ValueError, FileNotFoundError) as exc:
+                self._errors.append(f"Deployment extends resolution failed: {exc}")
+                return None
+            deployment_service = DeploymentService(path=str(file_path), data=merged_data)
+            is_valid, errors = deployment_service.validate()
+            if not is_valid:
+                # Unlike DeploymentService.load(), constructing directly with `data=`
+                # bypasses the classmethod that extends self._errors from validate()'s
+                # return value — do it here so get_validation_errors() below actually
+                # reports the failure instead of silently returning an empty list.
+                deployment_service._errors.extend(errors)
+        else:
+            deployment_service = DeploymentService.load(str(file_path), validate=True)
+
+        if not deployment_service.is_validated():
+            self._errors.extend(deployment_service.get_validation_errors())
+            return None
+
+        return deployment_service
+
     # Lifecycle methods
 
     def _initialize(self, show_header: bool = True) -> bool:
