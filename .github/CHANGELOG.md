@@ -8,6 +8,10 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+### Fixed
+
+- **`strata versions lock`/`strata versions refresh` silently deleted any comments in the version-manifest file** — both rewrote the file via plain `yaml.safe_load()`/`yaml.dump()`, which don't preserve comments. Both now use a comment-preserving round-trip YAML reader/writer (new `ruamel.yaml` dependency), so hand-authored comments survive.
+
 ## [1.9.6] - 2026-09-08
 
 ### Fixed
