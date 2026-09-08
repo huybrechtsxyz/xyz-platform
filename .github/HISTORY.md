@@ -7,6 +7,27 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+## [1.9.6] - 2026-09-08
+
+### Fixed
+
+#### **`strata build run` never resolved `spec.extends` (ADR-0039)**
+
+- **Root cause**: `DeploymentExtensionResolver` was only wired into `BaseDeployCommand._before_execute()` and `PlatformValidator` (`validate --deep`) — `BaseBuildCommand._before_execute()` called `DeploymentService.load(...)` directly on the raw leaf file, with no equivalent resolution step. Any field only present on a base file reached via `spec.extends` (`workspace`, `stages`, `locking`, ...) was simply absent, so the build aborted downstream in `DeploymentService.load_deploy_services()` with `"Workspace not found in deployment"` — even though the exact same file passed `strata validate --deep` (which does resolve `extends`) moments earlier.
+- **Fix**: new shared `BaseCommand._load_deployment_service_with_extends(file_path, repo_map)` — resolves `spec.extends` when present (`DeploymentExtensionResolver.needs_resolution()`/`.resolve()`), loads and Pydantic-validates the merged result, and returns the validated `DeploymentService` (or `None`, with error(s) appended to `self._errors`). `BaseDeployCommand` and `BaseBuildCommand` both call this now instead of each maintaining their own copy of the resolver block. `BaseBuildCommand` also gained the partial-deployment pre-flight rejection `BaseDeployCommand` already had — a partial base file has no complete workspace/stages target to build against either.
+- **Two related swallowed-error bugs found and fixed in the same pass**:
+  - Constructing `DeploymentService(path=..., data=merged_extends_data)` directly and calling `.validate()` does not auto-populate `self._errors` the way the `.load()` classmethod does (`service._errors.extend(errors)` after `validate()`) — so a broken `extends` chain's Pydantic errors were silently discarded rather than surfaced. Fixed to match `platform_validator.py`'s already-correct pattern.
+  - `DeploymentService.load_deploy_services()`'s `"Workspace not found in deployment"` branch only called `self.logger.error(...)` — never appended to `self._validation_errors` — so `get_validation_errors()` returned `[]` and JSON output showed `{"success": false, "errors": []}` with the real cause visible only on stderr. Fixed to append a real error message.
+- **Testing**: new `TestLoadDeploymentService` in `test_commands_base.py` (plain load, extends resolution, broken-chain error, Pydantic-error surfacing) and `TestLoadDeployServicesMissingWorkspace` in `test_services_deployment.py`.
+
+#### **`RemoteModel.deploy_path` was optional but effectively mandatory for gitops remotes**
+
+- **Root cause**: `RepositoryController._resolve_target_path()` falls back to `remote.name`/`remote.repository` when `deploy_path` is unset, and `ConfigurationService.get_remote_map()` silently drops the remote from the map entirely — neither matches where `strata repo add` actually clones the repo (`solution.json`'s own `repos/<name>` convention), producing a `"has not been fetched yet"` error even when the repo genuinely is fetched, just at a different path.
+- **Fix**: `RemoteModel`'s `model_validator(mode="after")` now requires `deploy_path` whenever `type == gitops` — fails loud at config-validation time instead of silently misresolving at deploy time. `bundled`/`container` remotes are unaffected (they don't need a stable local checkout path).
+- **Verified non-breaking**: every shipped `config/*/config/*.yaml` gitops example (6 configs + 2 scaffold templates) already declared `deploy_path` explicitly. Only test fixtures needed updates (`tests/data/configurations/configuration-standard.yaml`, `test_status_repo_tags.py`, `test_ref_convention_policy.py`) plus one doc example (`docs/config/environment.md`).
+- **Deliberately not implemented** (see follow-up issues filed instead): auto-defaulting `deploy_path` from `solution.json` by URL-matching — needs a git-URL normalization utility that doesn't exist yet and is a new cross-registry convention deserving its own ADR; scoping `RepositoryController.ensure_remote_refs()` to only the remotes a deployment actually references, instead of every declared gitops remote — needs dependency-tracking that doesn't exist anywhere in the codebase today.
+- **Testing**: new `tests/strata/models/test_models_repository.py`.
+
 ## [1.9.5] - 2026-09-08
 
 ### Added
