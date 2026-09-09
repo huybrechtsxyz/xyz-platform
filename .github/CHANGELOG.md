@@ -8,6 +8,10 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+### Added
+
+- **CI now builds and publishes the `strata-server` Docker image (ADR-0065)** — `Dockerfile.server` previously had no automation at all. It now gets the same `edge`/PR-preview/release publishing as the CLI and docs images: an `edge` tag pushed to GHCR (and Docker Hub, if configured) on every merge to `main`, a `pr-<N>` preview image on GHCR for pull requests (cleaned up on close), and versioned tags pushed to GHCR + Docker Hub on release.
+
 ### Fixed
 
 - **`strata audit status` reported `integration_declared: true` even when a sink's integration had a nonexistent/misspelled `type`** — the check only verified the sink's `integration:` name matched *some* `spec.integrations[]` entry, never that its `type` actually resolves to a registered integration (`IntegrationModel.type` is a free-form string, not an enum, so a typo passed validation silently). Now also checks `IntegrationFactory.is_known_type()`; a new `integration_type` field on each reported sink shows the resolved type (or `null` if the name wasn't found) for diagnosis.

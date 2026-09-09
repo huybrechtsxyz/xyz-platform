@@ -7,6 +7,18 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+### Added
+
+#### **CI now builds and publishes the `strata-server` Docker image (ADR-0065)**
+
+- **Root cause / gap**: `Dockerfile.server` (and `Dockerfile.server.dockerignore`) were added for the state-service API server, but no workflow ever referenced them — `ci-build.yml`, `ci-pr-images.yml`, and `ci-release.yml` all had matching job pairs for the CLI (`strata`) and docs (`strata-docs`) images, but nothing for `strata-server`. The image could only ever be built manually with `docker build -f Dockerfile.server`.
+- **Fix**: added a third, symmetrical set of jobs to each workflow, matching the CLI/docs jobs exactly (same action versions, same tagging conventions, same conditionals) but targeting `Dockerfile.server` and the `strata-server` image name:
+  - `ci-build.yml`: `edge-ghcr-server` (GHCR, `edge`/`sha-<short>` tags, pushed on every merge to `main`) and `edge-hub-server` (Docker Hub, same tags, only runs if `vars.REGISTRY_URL` is set).
+  - `ci-pr-images.yml`: `pr-ghcr-server` (GHCR, `pr-<N>`/`sha-<short>` tags, built on PR open/sync) and `cleanup-ghcr-server` (deletes the PR preview package versions on PR close).
+  - `ci-release.yml`: `publish-server` (GHCR, semver + `latest` tags, `needs: release`) and `publish-hub-server` (Docker Hub equivalent, conditional on `vars.REGISTRY_URL`).
+  - All `Dockerfile.server` build steps pass `VERSION` as a build-arg (`edge`, `pr-<N>`, or the release tag) matching the `ARG VERSION=dev` / `APP_VERSION` label already defined in the Dockerfile.
+- **Testing**: workflow YAML validated with `yaml.safe_load()` for all three files; no other automated coverage exists for GitHub Actions workflow files in this repo.
+
 ### Fixed
 
 #### **`strata audit status` reported `integration_declared: true` for a sink whose integration has a nonexistent type**
