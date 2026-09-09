@@ -15,15 +15,19 @@ def _make_command(tmp_path) -> StatusAuditCommand:
     return cmd
 
 
-def _mock_config_service(audit_config=None, integration_names=None):
+def _mock_config_service(audit_config=None, integrations=None):
+    """*integrations* is a list of (name, type) tuples — real type strings so
+    IntegrationFactory.is_known_type() checks behave as they would in production.
+    """
     mock_service = MagicMock()
     mock_service.model.spec.audit = audit_config
-    integrations = []
-    for n in integration_names or []:
+    declared = []
+    for name, type_str in integrations or []:
         integration = MagicMock()
-        integration.name = n
-        integrations.append(integration)
-    mock_service.model.spec.integrations = integrations
+        integration.name = name
+        integration.type = type_str
+        declared.append(integration)
+    mock_service.model.spec.integrations = declared
     return mock_service
 
 
@@ -94,13 +98,14 @@ class TestSinkReporting:
         audit_config = AuditConfigModel(sinks=[AuditSinkModel(name="s1", integration="my-webhook")])
         with patch(
             "strata.services.configuration_service.ConfigurationService.load",
-            return_value=_mock_config_service(audit_config, integration_names=["my-webhook"]),
+            return_value=_mock_config_service(audit_config, integrations=[("my-webhook", "webhook")]),
         ):
             cmd._execute()
         assert cmd._sinks == [
             {
                 "name": "s1",
                 "integration": "my-webhook",
+                "integration_type": "webhook",
                 "enabled": True,
                 "events": None,
                 "integration_declared": True,
@@ -112,10 +117,27 @@ class TestSinkReporting:
         audit_config = AuditConfigModel(sinks=[AuditSinkModel(name="s1", integration="ghost")])
         with patch(
             "strata.services.configuration_service.ConfigurationService.load",
-            return_value=_mock_config_service(audit_config, integration_names=[]),
+            return_value=_mock_config_service(audit_config, integrations=[]),
         ):
             cmd._execute()
         assert cmd._sinks[0]["integration_declared"] is False
+        assert cmd._sinks[0]["integration_type"] is None
+
+    def test_flags_sink_whose_integration_has_a_nonexistent_type(self, tmp_path):
+        """Regression test: the sink's `integration:` name matched a real
+        spec.integrations[] entry, but that entry's `type` doesn't map to any
+        registered integration class (IntegrationModel.type is a free-form string,
+        not an enum, so a typo like this passes Pydantic validation) — this used to
+        be silently reported as integration_declared: true."""
+        cmd = _make_command(tmp_path)
+        audit_config = AuditConfigModel(sinks=[AuditSinkModel(name="s1", integration="my-sink")])
+        with patch(
+            "strata.services.configuration_service.ConfigurationService.load",
+            return_value=_mock_config_service(audit_config, integrations=[("my-sink", "totally_bogus_type")]),
+        ):
+            cmd._execute()
+        assert cmd._sinks[0]["integration_declared"] is False
+        assert cmd._sinks[0]["integration_type"] == "totally_bogus_type"
 
     def test_no_sinks_configured(self, tmp_path):
         cmd = _make_command(tmp_path)
