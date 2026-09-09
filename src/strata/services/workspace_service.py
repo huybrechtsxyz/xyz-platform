@@ -12,6 +12,7 @@ from strata.services.dns_service import DnsService
 from strata.services.firewall_service import FirewallService
 from strata.services.module_service import ModuleService
 from strata.services.namespace_service import NamespaceService
+from strata.services.network_service import NetworkService
 from strata.services.provider_service import ProviderService
 from strata.services.resource_service import ResourceService
 
@@ -260,6 +261,9 @@ class WorkspaceService(BaseService["WorkspaceModel"]):
             if self.model.spec.dns_zones:
                 for dz in self.model.spec.dns_zones:
                     file_refs.append((f"DNS zone '{dz.name}'", dz.file))
+            if self.model.spec.networks:
+                for net in self.model.spec.networks:
+                    file_refs.append((f"Network '{net.name}'", net.file))
             errors.extend(self._validate_file_refs(work_path, repo_map, file_refs))
 
         return len(errors) == 0, errors
@@ -466,6 +470,7 @@ class WorkspaceService(BaseService["WorkspaceModel"]):
             "namespaces": {},
             "firewalls": {},
             "dns_zones": {},
+            "networks": {},
             "modules": {},
         }
         if self.model is None:
@@ -530,6 +535,7 @@ class WorkspaceService(BaseService["WorkspaceModel"]):
         _load_simple_services(workspace.spec.firewalls, FirewallService, "firewalls", "firewalls")
         _load_simple_services(workspace.spec.providers, ProviderService, "providers", "providers")
         _load_simple_services(workspace.spec.namespaces, NamespaceService, "namespaces", "namespaces")
+        _load_simple_services(workspace.spec.networks, NetworkService, "networks", "networks")
 
         # Load resource services from workspace resources section
         # Resources are defined in workspace.spec.resources with file references
@@ -741,6 +747,7 @@ class WorkspaceService(BaseService["WorkspaceModel"]):
                 namespaces=len(services["namespaces"]),
                 firewalls=len(services["firewalls"]),
                 dns_zones=len(services["dns_zones"]),
+                networks=len(services["networks"]),
             )
         else:
             self.logger.warning(
@@ -779,6 +786,21 @@ class WorkspaceService(BaseService["WorkspaceModel"]):
         value = self._get_workspace_related_services("firewalls", firewall_name)
         if value is not None and isinstance(value, FirewallService):
             return cast(FirewallService, value)
+        return None
+
+    def get_network_services(self) -> Optional[Dict[str, NetworkService]]:
+        """Get all network topology services keyed by name."""
+        value = self._get_workspace_related_services("networks", None)
+        if value is not None and isinstance(value, dict):
+            casted = {k: cast(NetworkService, v) for k, v in value.items() if isinstance(v, NetworkService)}
+            return casted
+        return None
+
+    def get_network_service(self, network_name: str) -> Optional[NetworkService]:
+        """Get a specific network topology service by name."""
+        value = self._get_workspace_related_services("networks", network_name)
+        if value is not None and isinstance(value, NetworkService):
+            return cast(NetworkService, value)
         return None
 
     def get_module_services(self) -> Optional[Dict[str, ModuleService]]:
