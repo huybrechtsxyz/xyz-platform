@@ -40,7 +40,7 @@ Commands follow a flat `strata <group> <command>` pattern:
 | `config` | `set` `unset` `list` | Manage workspace defaults (`.strata/cli.yaml`) |
 | `validate` | — | Validate a YAML file against schema |
 | `build` | `run` `plan` `clean` `sbom` | Build platform & Terraform artifacts; generate SBOM |
-| `deploy` | `run` `destroy` `status` `history` `health` | Deploy infrastructure |
+| `deploy` | `run` `destroy` `status` `history` `health` `lock` `drift` | Deploy infrastructure; manage state locks and drift |
 | `repo` | `add` `remove` `list` `sync` `status` | Manage solution repositories |
 | `profile` | `create` `remove` `list` `activate` `show` | Manage environment profiles |
 | `ref` | `env` `config` `data` `secret` | Manage file references in profiles |
@@ -48,9 +48,22 @@ Commands follow a flat `strata <group> <command>` pattern:
 | `guide` | `show` | Step-by-step workspace readiness checklist |
 | `schema` | `list` `get` | Inspect YAML schemas |
 | `tools` | `status` `check` | Verify external tool availability |
-| `diff` | `show` | Show changes since last build |
 | `vars` | — | Variable resolution |
 | `new` | `<kind>` | Scaffold a new YAML file from templates |
+| `versions` | `add` `init` `lock` `export` `apply` `refresh` | Version-manifest/version-lock pinning (ADR-0011) |
+| `workitem` | `list` `show` `approve` `reject` `cancel` `expire` `complete` | Approval-gate hand-off (ADR-0057) |
+| `audit` | `list` `changes` `diff` `export` `resend` `status` | Deployment audit trail, journal status, SIEM forwarding |
+| `promote` | `start` `rollback` `status` `matrix` `history` `log` | Version promotion across rings |
+| `policy` | — | Inspect and evaluate deployment policies |
+| `cost` | — | Cost estimation and visibility |
+| `secret` | — | Generate and manage secret values |
+| `manifest` | — | Query and export deployment manifests |
+| `service` | — | Deploy/manage individual services (namespace/module) |
+| `rollout` | — | Fleet-wide, multi-deployment rollouts |
+| `cache` | — | Manage the resolved-model cache (ADR-0026) |
+| `clean` | — | Clean solution-level artifacts |
+| `serve` | — | Run/check the strata state-service server (ADR-0065) |
+| `mcp` | — | Model Context Protocol server for AI tool integration |
 | `version` | — | Show CLI version |
 | `help` | — | Show help text |
 
@@ -79,6 +92,8 @@ Every command accepts these:
 | `1` | System/execution failure | Read `messages` in JSON output for crash reason |
 | `2` | Usage error (bad arguments) | Fix command syntax |
 | `3` | Validation failure | Read `errors` array in JSON output for specifics |
+| `4` | Deployment lock conflict | Another process holds the lock — check `strata deploy lock status -f <file>`; never force-remove a lock if a deploy may be running elsewhere |
+| `5` | Hand-off required (approval gate) | A gate paused the deploy and created a `WorkItem` — use `strata workitem list`/`show <id>`, then `strata deploy run -f <file> --resume` once approved |
 
 **Always check exit code first.** Exit 3 means the file was processed but is invalid — inspect the errors array.
 
@@ -187,6 +202,31 @@ strata build sbom --scan /path/to/repo --output json
 
 ---
 
+## Version Pinning & Locks
+
+`strata versions` manages version-manifest (`kind: version`) and version-lock (`kind: version-lock`) files that pin image/chart/remote versions per ring (ADR-0011):
+
+```bash
+# Scaffold a starter version-manifest for a ring
+strata versions init --ring prd --output json
+
+# Sync a manifest against module/workspace targets discovered in the workspace
+strata versions refresh -f versions/prd.yaml --output json
+
+# Compute and write spec.hash (tamper-evident) — always do this after editing pins
+strata versions lock -f versions/prd.yaml --output json
+
+# Print the resolved flat pin state
+strata versions export -f versions/prd.yaml --output json
+
+# Convert a version-manifest into a version-lock file
+strata versions apply -f versions/prd.yaml --output json
+```
+
+**Always run `strata versions lock` after editing pins** — a version file with no (or a stale) `spec.hash` fails an integrity check when deployed.
+
+---
+
 ## Deploy Workflow
 
 ```bash
@@ -195,6 +235,9 @@ strata deploy run -f deploy/deploy-prd.yaml --dry-run --output json
 
 # Execute deploy (--force skips confirmation prompts)
 strata deploy run -f deploy/deploy-prd.yaml --force --output json
+
+# Supply a change reference (required if a change_reference_required policy is active — ADR-0074)
+strata deploy run -f deploy/deploy-prd.yaml --change-id JIRA-1234 --reason "Scheduled release" --force --output json
 
 # Limit to a specific stage
 strata deploy run -f deploy/deploy-prd.yaml --stage networking --force --output json
@@ -213,6 +256,27 @@ strata deploy destroy -f deploy/deploy-prd.yaml --force --output json
 ```
 
 **Caution:** `deploy run` and `deploy destroy` are long-running operations. They may take minutes and produce no output until completion.
+
+---
+
+## Approval Gates & Work Items (ADR-0057)
+
+A deployment with `spec.gates` in `enforce` mode pauses at the gate instead of failing outright — `deploy run` exits with code `5` ("hand-off required") and creates a `WorkItem` for a human to approve.
+
+```bash
+# See what's pending
+strata workitem list --status pending --output json
+
+# Inspect one work item
+strata workitem show <item_id> --output json
+
+# Approve, then resume the paused deploy
+strata workitem approve <item_id> --note "Reviewed, looks good" --output json
+strata deploy run -f deploy/deploy-prd.yaml --resume --force --output json
+
+# Or reject it
+strata workitem reject <item_id> --reason "Needs more testing" --output json
+```
 
 ---
 
@@ -384,6 +448,9 @@ These are available in lifecycle scripts during build/deploy:
 9. **Long operations produce no streaming output** — `deploy run` and `build run` may take minutes. Set appropriate timeouts.
 10. **Profile must be active for deep validation** — activate with `strata profile activate <name>` before `validate --deep`.
 11. **Never put SSH private keys in YAML** — use `configuration.ssh_private_key_secret` to reference a key stored in the secret store. strata handles the temp file lifecycle.
+12. **Exit code 4 means a lock conflict, not a real failure** — check `strata deploy lock status -f <file>` before retrying; never force-remove a lock if another deploy may genuinely be running.
+13. **Exit code 5 means a gate is waiting on a human** — don't treat it as an error. Use `strata workitem list --status pending` to see what's blocking, then `--resume` after approval.
+14. **Always `strata versions lock` after editing a version-manifest's pins** — an unlocked or stale-hash version file fails integrity checks at deploy time.
 
 ---
 
@@ -413,6 +480,21 @@ strata deploy run -f deploy/deploy-prd.yaml --stage infrastructure --force --out
 # Stage 2: configure servers with Ansible
 # SSH key resolved from secret store; no key file on disk before/after
 strata deploy run -f deploy/deploy-prd.yaml --stage configuration --force --output json
+```
+
+### Version Pinning Before a Release
+```bash
+strata versions refresh -f versions/prd.yaml --output json   # discover new/stale targets
+strata versions lock -f versions/prd.yaml --output json      # write spec.hash
+strata deploy run -f deploy/deploy-prd.yaml --dry-run --output json
+```
+
+### Approval Gate Hand-Off
+```bash
+strata deploy run -f deploy/deploy-prd.yaml --force --output json   # exits 5, creates a WorkItem
+strata workitem list --status pending --output json
+strata workitem approve <item_id> --output json
+strata deploy run -f deploy/deploy-prd.yaml --resume --force --output json
 ```
 
 ### Generate SBOM / Platform Inventory
