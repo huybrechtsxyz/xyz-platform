@@ -28,20 +28,33 @@ strata guide show                  # interactive checklist of what's ready vs mi
 
 Before working in this workspace, familiarize yourself with these domain skills (available in `.github/skills/`):
 
-1. **strata-cli-workflows** — Command groups, exit codes (0/1/2/3), JSON output parsing, dry-run patterns
+1. **strata-onboarding** — The dependency chain (configuration → environments → workspaces → resources/namespaces/modules → deployments), envelope rules, first commands to run
+   - When: A brand-new or unfamiliar workspace — start here before anything else
+
+2. **strata-cli-workflows** — Command groups, exit codes (0–5), JSON output parsing, dry-run patterns
    - When: Every CLI operation — understand what each command does and how to parse responses
    
-2. **strata-yaml-schema-and-kinds** — Document structure, valid kinds, name constraints, schema validation
+3. **strata-yaml-schema-and-kinds** — Document structure, valid kinds, name constraints, schema validation
    - When: Writing or modifying YAML files — what fields are valid, naming rules, cross-references
 
-3. **strata-deployment-lifecycle** — Validate → Build → Deploy → Audit phases, stages, provisioners, health checks
+4. **strata-deployment-lifecycle** — Validate → Build → Deploy → Audit phases, stages, provisioners, health checks, locks, approval gates
    - When: Orchestrating deployments — understand the full lifecycle from authoring to verification
 
-4. **strata-secret-resolution-patterns** — Secret store integration, SSH key lifecycle, secure practices
+5. **strata-secret-resolution-patterns** — Secret store integration, SSH key lifecycle, secure practices
    - When: Handling credentials — never commit secrets, always use references
 
-5. **strata-terraform-ansible-provisioning** — Terraform IaC + Ansible post-provisioning, stage orchestration
+6. **strata-terraform-ansible-provisioning** — Terraform IaC + Ansible post-provisioning, stage orchestration
    - When: Working with infrastructure provisioning — how stages execute, provisioner integration
+
+### Supporting context skills
+
+These aren't strata-specific, but explain the reasoning behind strata's own conventions:
+
+7. **infrastructure-as-code-best-practices** — IaC principles (state management, modularity, versioning, testing, drift detection)
+   - When: Explaining *why* a strata pattern exists
+
+8. **devops-ci-cd-workflows** — GitHub Actions patterns, approval gates, testing pipelines, deployment automation
+   - When: Wiring strata commands into a CI/CD pipeline
 
 ---
 
@@ -170,7 +183,9 @@ strata deploy run -f deploy/<deployment.yaml>
 | Validate one file | `strata validate <path>` |
 | Validate all | `strata validate --all` |
 | Build dry-run | `strata build run -f <deploy.yaml> --dry-run` |
-| Show diff since last build | `strata diff show` |
+| Preview changes since last build | `strata build plan -f <deploy.yaml>` |
+| Lock a version-manifest | `strata versions lock -f <versions.yaml>` |
+| List pending approval gates | `strata workitem list --status pending` |
 | List available tools | `strata tools status` |
 
 ## Error handling
@@ -179,6 +194,8 @@ strata deploy run -f deploy/<deployment.yaml>
 - **Exit 1**: system/runtime failure — check stderr
 - **Exit 2**: bad CLI arguments — fix the command
 - **Exit 3**: validation failure — the file was parsed but is semantically invalid; read the error list
+- **Exit 4**: deployment lock conflict — another process holds the lock; check `strata deploy lock status -f <file>` before retrying, never force-remove a lock someone else may be using
+- **Exit 5**: hand-off required — an approval gate paused the deploy and created a `WorkItem`; use `strata workitem list`/`show`, then `strata deploy run -f <file> --resume` after approval
 
 When a command fails, run it again with `--verbose` to get more detail. For validation errors, show the user the exact error messages and which fields need fixing.
 
