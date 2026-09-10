@@ -2,7 +2,7 @@
   "name": "xyz-strata",
   "displayName": "Strata",
   "description": "Strata infrastructure workspace integration — validate YAML, explore workspace, build and deploy.",
-  "version": "1.9.6",
+  "version": "1.9.7",
   "publisher": "huybrechts-xyz",
   "icon": "resources/icon.png",
   "license": "AGPL-3.0-or-later",
