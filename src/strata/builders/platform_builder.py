@@ -342,20 +342,25 @@ class PlatformBuilder(BaseBuilder):
         resources = None
         resource_firewall_map: dict = {}  # {resource_name: merged_fw_name}
 
+        # Map resource names → their workspace firewall/role/count declarations.
+        # Populated unconditionally from spec.resources (not gated on
+        # resource_services) so managed_by: provisioner resources — which have
+        # no backing service model — still contribute role/count for topology
+        # enrichment below, and so the maps are always defined even when there
+        # are no resource services at all.
+        resource_to_firewalls: dict = {}
+        resource_to_role: dict = {}
+        resource_to_count: dict = {}
+        if workspace_model.spec.resources:
+            for res_ref in workspace_model.spec.resources:
+                if res_ref.firewalls:
+                    resource_to_firewalls[res_ref.name] = res_ref.firewalls
+                if res_ref.role:
+                    resource_to_role[str(res_ref.name)] = str(res_ref.role)
+                resource_to_count[str(res_ref.name)] = res_ref.count
+
         resource_services = workspace_service.get_resource_services()
         if resource_services:
-            # Map resource names → their workspace firewall reference lists
-            resource_to_firewalls: dict = {}
-            resource_to_role: dict = {}
-            resource_to_count: dict = {}
-            if workspace_model.spec.resources:
-                for res_ref in workspace_model.spec.resources:
-                    if res_ref.firewalls:
-                        resource_to_firewalls[res_ref.name] = res_ref.firewalls
-                    if res_ref.role:
-                        resource_to_role[str(res_ref.name)] = str(res_ref.role)
-                    resource_to_count[str(res_ref.name)] = res_ref.count
-
             resources = [
                 PlatformResourceModel.from_resource_model(
                     svc.model,
