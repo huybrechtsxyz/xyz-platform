@@ -8,6 +8,8 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+## [1.9.9] - 2026-09-10
+
 ### Fixed
 
 - **`strata build run` silently dropped `properties.auto.tfvars.json`/`variables.auto.tfvars.json`/`flags.auto.tfvars.json` for any Terraform provisioner without an explicit `output:` block** — despite `OutputProfileModel`'s own docs saying it "defaults to format: strata when absent", an absent profile (`None`) was treated as "emit nothing beyond workspace/providers/topologies" instead of the documented default (emit everything). A deployment could pass `validate --deep` and `build run` with no errors while `environment_info`/flat variables/feature flags silently never reached Terraform at all. Fixed so an absent `output:` block now behaves exactly like `format: strata`, matching the documented default.

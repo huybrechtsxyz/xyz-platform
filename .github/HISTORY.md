@@ -7,6 +7,8 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+## [1.9.9] - 2026-09-10
+
 ### Fixed
 
 #### **Absent `output:` block on a Terraform provisioner silently suppressed `properties`/`variables`/`flags` tfvars emission**
