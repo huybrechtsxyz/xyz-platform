@@ -8,6 +8,12 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+### Fixed
+
+- **`strata build run` silently dropped `properties.auto.tfvars.json`/`variables.auto.tfvars.json`/`flags.auto.tfvars.json` for any Terraform provisioner without an explicit `output:` block** — despite `OutputProfileModel`'s own docs saying it "defaults to format: strata when absent", an absent profile (`None`) was treated as "emit nothing beyond workspace/providers/topologies" instead of the documented default (emit everything). A deployment could pass `validate --deep` and `build run` with no errors while `environment_info`/flat variables/feature flags silently never reached Terraform at all. Fixed so an absent `output:` block now behaves exactly like `format: strata`, matching the documented default.
+- **`strata build run` wrote a spurious `ansible/` build folder (with `strata_workspace.yml`/`strata_providers.yml`/`strata_topologies.yml`) for workspaces with zero `ansible` provisioners** — e.g. a Terraform-only workspace. `AnsibleBuilder` never checked whether the workspace actually declared an `ansible` provisioner before generating and writing its variable files; it now skips Ansible artifact generation entirely when none is declared.
+- **Same bug as above, in `TerraformBuilder`**: a workspace with zero `terraform` provisioners (e.g. Bicep/Compose/Helm-only) got a spurious `terraform/` build folder with tfvars output. Audited every builder (`Bicep`, `Compose`, `Helm`, `Sync`) for the same "generate output regardless of whether the matching provisioner/module exists" pattern — only `Terraform` and `Ansible` were affected; both now skip entirely when the workspace declares none of their respective provisioner type.
+
 ## [1.9.8] - 2026-09-10
 
 ### Fixed

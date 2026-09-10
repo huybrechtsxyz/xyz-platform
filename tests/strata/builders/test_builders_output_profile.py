@@ -16,11 +16,11 @@ from strata.utils.resolved_values import ResolvedValues
 
 def _make_deployment_service(work_path: Path, provisioner_output: OutputProfileModel | None = None):
     """Build a minimal mocked DeploymentService with one Terraform provisioner."""
+    from strata.models.workspace_model import ProvisionerType
 
     prov = MagicMock()
     prov.name = "terraform"
-    prov.provisioner = MagicMock()
-    prov.provisioner.value = "terraform"
+    prov.provisioner = ProvisionerType.TERRAFORM
     prov.output = provisioner_output
     prov.source = MagicMock()
     prov.source.repository = None
@@ -105,6 +105,57 @@ class TestPlannedFilesWithProfile:
         files = builder._planned_files(_minimal_vars(), profile=profile)
         names = [f for f, _ in files]
         assert "workspace.auto.tfvars.json" in names
+
+
+# ---------------------------------------------------------------------------
+# TerraformBuilder._save_terraform_vars — default (no output:) profile
+# regression: absent output: must behave like format=strata (ADR docstring),
+# not silently skip features/variables/properties/custom emission.
+# ---------------------------------------------------------------------------
+
+
+class TestSaveTerraformVarsNoProfile:
+    def test_absent_output_profile_emits_properties_variables_features(self, tmp_path: Path):
+        builder = TerraformBuilder()
+        deployment_service = _make_deployment_service(tmp_path, provisioner_output=None)
+
+        ws_service = deployment_service.get_workspace_service()
+        ws_service.model.spec.properties = {"environment_info": {"region": "westeurope"}}
+
+        from strata.models.store_models import FeatureStoreType, VariableStoreType
+
+        var = MagicMock()
+        var.store = VariableStoreType.CONSTANT
+        var.key = "ARM_TENANT_ID"
+        var.value = "abc"
+        var.type = None
+
+        feat = MagicMock()
+        feat.store = FeatureStoreType.CONSTANT
+        feat.key = "enable_vnet"
+        feat.value = True
+
+        env_service = deployment_service.get_environment_service()
+        env_service.model = MagicMock()
+        env_service.model.spec.properties = {}
+        env_service.model.spec.overrides = None
+        env_service.get_variables.return_value = [var]
+        env_service.get_features.return_value = [feat]
+
+        messages = builder._save_terraform_vars(
+            terraform_vars=_minimal_vars(),
+            deployment_service=deployment_service,
+            build_path=tmp_path,
+        )
+
+        terraform_path = deployment_service.get_build_path(tmp_path) / "terraform"
+        assert (terraform_path / "properties.auto.tfvars.json").exists()
+        assert (terraform_path / "variables.auto.tfvars.json").exists()
+        assert (terraform_path / "flags.auto.tfvars.json").exists()
+
+        props = json.loads((terraform_path / "properties.auto.tfvars.json").read_text())
+        assert props["environment_info"]["region"] == "westeurope"
+        assert messages
 
 
 # ---------------------------------------------------------------------------
