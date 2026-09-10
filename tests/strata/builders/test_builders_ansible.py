@@ -10,11 +10,21 @@ from strata.models.common_models import ProvisionerType, SourceModel
 from strata.models.workspace_model import WorkspaceIacModel
 
 
-def _mock_svc(validated=True, build_path=None):
+def _mock_svc(validated=True, build_path=None, has_ansible_provisioner=True):
     svc = MagicMock()
     svc.is_validated.return_value = validated
     if build_path:
         svc.get_build_path.return_value = build_path
+
+    ws_service = MagicMock()
+    if has_ansible_provisioner:
+        prov = MagicMock()
+        prov.provisioner = ProvisionerType.ANSIBLE
+        ws_service.model.spec.provisioners = [prov]
+    else:
+        ws_service.model.spec.provisioners = []
+    svc.get_workspace_service.return_value = ws_service
+
     return svc
 
 
@@ -166,7 +176,8 @@ class TestAnsibleBuilderBuild:
 
         with patch.object(builder, "_build_ansible_vars", return_value=vars_dict):
             with patch.object(builder, "_resolve_ansible_paths", return_value=[ansible_dir]):
-                result = builder.build(svc, tmp_path, tmp_path, dry_run=False, platform_model=platform_model)
+                with patch.object(builder, "_copy_provisioner_source", return_value=True):
+                    result = builder.build(svc, tmp_path, tmp_path, dry_run=False, platform_model=platform_model)
 
         assert result is True
         assert (ansible_dir / "strata_workspace.yml").exists()
@@ -190,7 +201,8 @@ class TestAnsibleBuilderBuild:
 
         with patch.object(builder, "_build_ansible_vars", return_value=vars_dict):
             with patch.object(builder, "_resolve_ansible_paths", return_value=[ansible_dir]):
-                result = builder.build(svc, tmp_path, tmp_path, dry_run=False, platform_model=platform_model)
+                with patch.object(builder, "_copy_provisioner_source", return_value=True):
+                    result = builder.build(svc, tmp_path, tmp_path, dry_run=False, platform_model=platform_model)
 
         assert result is True
         assert (ansible_dir / "strata_workspace.yml").exists()
@@ -222,6 +234,38 @@ class TestAnsibleBuilderBuild:
         parsed = yaml.safe_load(content)
         assert "strata_workspace" in parsed
         assert parsed["strata_workspace"]["name"] == "ws"
+
+    def test_no_ansible_provisioner_skips_generation_entirely(self, tmp_path):
+        """Regression test: a workspace with zero ANSIBLE provisioners (e.g.
+
+        Terraform-only) must not get a spurious ``ansible/`` build folder at
+        all — previously ``_save_ansible_vars()``'s "no provisioners resolved"
+        fallback wrote a default ``ansible/`` directory unconditionally.
+        """
+        builder = AnsibleBuilder()
+        ansible_dir = tmp_path / "ansible"
+        svc = _mock_svc(build_path=tmp_path, has_ansible_provisioner=False)
+        platform_model = MagicMock()
+        vars_dict = _full_vars_dict(resource_types=["objectstorage"])
+
+        with patch.object(builder, "_build_ansible_vars", return_value=vars_dict):
+            result = builder.build(svc, tmp_path, tmp_path, dry_run=False, platform_model=platform_model)
+
+        assert result is True
+        assert not builder.has_errors()
+        assert not ansible_dir.exists()
+
+    def test_no_ansible_provisioner_skips_generation_in_dry_run(self, tmp_path):
+        builder = AnsibleBuilder()
+        svc = _mock_svc(build_path=tmp_path, has_ansible_provisioner=False)
+        platform_model = MagicMock()
+
+        with patch.object(builder, "_build_ansible_vars", return_value=_minimal_vars_dict()) as mocked:
+            result = builder.build(svc, tmp_path, tmp_path, dry_run=True, platform_model=platform_model)
+
+        assert result is True
+        assert not builder.has_errors()
+        mocked.assert_not_called()
 
 
 class TestAnsibleBuilderAfterBuild:

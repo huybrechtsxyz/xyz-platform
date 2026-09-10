@@ -8,11 +8,21 @@ from strata.models.common_models import ProvisionerType, SourceModel
 from strata.models.workspace_model import WorkspaceIacBackendModel, WorkspaceIacModel
 
 
-def _mock_svc(validated=True, build_path=None):
+def _mock_svc(validated=True, build_path=None, has_terraform_provisioner=True):
     svc = MagicMock()
     svc.is_validated.return_value = validated
     if build_path:
         svc.get_build_path.return_value = build_path
+
+    ws_service = MagicMock()
+    if has_terraform_provisioner:
+        prov = MagicMock()
+        prov.provisioner = ProvisionerType.TERRAFORM
+        ws_service.model.spec.provisioners = [prov]
+    else:
+        ws_service.model.spec.provisioners = []
+    svc.get_workspace_service.return_value = ws_service
+
     return svc
 
 
@@ -168,6 +178,38 @@ class TestTerraformBuilderBuild:
             builder.build(svc, tmp_path, tmp_path, dry_run=True, platform_model=platform_model)
 
         assert builder.variable_refs == {}
+
+    def test_no_terraform_provisioner_skips_generation_entirely(self, tmp_path):
+        """Regression test: a workspace with zero TERRAFORM provisioners (e.g.
+
+        Bicep/Compose/Helm-only) must not get a spurious ``terraform/`` build
+        folder at all — previously ``_save_terraform_vars()``'s "no
+        provisioners resolved" fallback wrote a default ``terraform/``
+        directory unconditionally.
+        """
+        builder = TerraformBuilder()
+        terraform_dir = tmp_path / "terraform"
+        svc = _mock_svc(build_path=tmp_path, has_terraform_provisioner=False)
+        platform_model = MagicMock()
+
+        with patch.object(builder, "_build_terraform_vars", return_value=_minimal_vars_dict()):
+            result = builder.build(svc, tmp_path, tmp_path, dry_run=False, platform_model=platform_model)
+
+        assert result is True
+        assert not builder.has_errors()
+        assert not terraform_dir.exists()
+
+    def test_no_terraform_provisioner_skips_generation_in_dry_run(self, tmp_path):
+        builder = TerraformBuilder()
+        svc = _mock_svc(build_path=tmp_path, has_terraform_provisioner=False)
+        platform_model = MagicMock()
+
+        with patch.object(builder, "_build_terraform_vars", return_value=_minimal_vars_dict()) as mocked:
+            result = builder.build(svc, tmp_path, tmp_path, dry_run=True, platform_model=platform_model)
+
+        assert result is True
+        assert not builder.has_errors()
+        mocked.assert_not_called()
 
 
 class TestTerraformBuilderAfterBuild:

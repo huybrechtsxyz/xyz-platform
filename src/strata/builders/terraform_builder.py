@@ -40,6 +40,24 @@ class TerraformBuilder(BaseBuilder):
         # Used by after_build() to verify only the files that were actually written.
         self._written_file_names: List[str] = []
 
+    def _has_terraform_provisioner(self, deployment_service: DeploymentService) -> bool:
+        """Return True when the workspace declares at least one TERRAFORM provisioner.
+
+        Used to skip Terraform artifact generation entirely for workspaces that
+        don't use Terraform at all (e.g. Bicep/Compose/Helm-only workspaces) —
+        mirrors the equivalent ``AnsibleBuilder`` fix. Previously
+        ``_save_terraform_vars()``'s "no provisioners resolved" fallback wrote a
+        default ``terraform/`` folder unconditionally, producing spurious
+        tfvars output for workspaces with zero Terraform configuration.
+        """
+        workspace_service = deployment_service.get_workspace_service()
+        if workspace_service is None or workspace_service.model is None:
+            # Can't determine — err on the side of generating (preserves prior
+            # behaviour when the workspace service isn't loaded for some reason).
+            return True
+        provisioners = workspace_service.model.spec.provisioners or []
+        return any(p.provisioner == ProvisionerType.TERRAFORM for p in provisioners)
+
     def build(
         self,
         deployment_service: DeploymentService,
@@ -107,6 +125,13 @@ class TerraformBuilder(BaseBuilder):
                 self.logger.error("Platform model is None after loading")
                 self._errors.append(error_msg)
                 return False
+
+            if not self._has_terraform_provisioner(deployment_service):
+                if self.verbose:
+                    self._messages.append(
+                        "No Terraform provisioners declared in this workspace — skipping Terraform artifact generation."
+                    )
+                return True
 
             terraform_vars = self._build_terraform_vars(platform_model, deployment_service, [])
 
@@ -1291,28 +1316,28 @@ class TerraformBuilder(BaseBuilder):
                     self._write_json(terraform_path / filename, payload)
 
                 # Emit features (build-time: constant/env stores only)
-                if profile is not None and profile.should_emit("features"):
+                if profile is None or profile.should_emit("features"):
                     flags = self._build_feature_flags_vars(deployment_service)
                     if flags:
                         self._write_json(terraform_path / "flags.auto.tfvars.json", flags)
                         written.append("flags.auto.tfvars.json")
 
                 # Emit variables (build-time: constant/env stores only)
-                if profile is not None and profile.should_emit("variables"):
+                if profile is None or profile.should_emit("variables"):
                     flat_vars = self._build_flat_variables(deployment_service)
                     if flat_vars:
                         self._write_json(terraform_path / "variables.auto.tfvars.json", flat_vars)
                         written.append("variables.auto.tfvars.json")
 
                 # Emit properties flat dump
-                if profile is not None and profile.should_emit("properties"):
+                if profile is None or profile.should_emit("properties"):
                     merged_props = self._resolve_merged_properties(deployment_service, "properties")
                     if merged_props:
                         self._write_json(terraform_path / "properties.auto.tfvars.json", merged_props)
                         written.append("properties.auto.tfvars.json")
 
                 # Emit custom flat dump
-                if profile is not None and profile.should_emit("custom"):
+                if profile is None or profile.should_emit("custom"):
                     merged_custom = self._resolve_merged_properties(deployment_service, "custom")
                     if merged_custom:
                         self._write_json(terraform_path / "custom.auto.tfvars.json", merged_custom)

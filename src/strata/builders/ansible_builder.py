@@ -61,6 +61,24 @@ class AnsibleBuilder(BaseBuilder):
         # TerraformBuilder.variable_refs.
         self.variable_refs: Dict[str, Dict[str, Any]] = {}
 
+    def _has_ansible_provisioner(self, deployment_service: DeploymentService) -> bool:
+        """Return True when the workspace declares at least one ANSIBLE provisioner.
+
+        Used to skip Ansible artifact generation entirely for workspaces that
+        don't use Ansible at all (e.g. Terraform-only workspaces) — previously
+        ``_save_ansible_vars()``'s "no provisioners resolved" fallback wrote a
+        default ``ansible/`` folder unconditionally, producing spurious
+        ``strata_workspace.yml``/``strata_providers.yml``/``strata_topologies.yml``
+        output for workspaces with zero Ansible configuration.
+        """
+        workspace_service = deployment_service.get_workspace_service()
+        if workspace_service is None or workspace_service.model is None:
+            # Can't determine — err on the side of generating (preserves prior
+            # behaviour when the workspace service isn't loaded for some reason).
+            return True
+        provisioners = workspace_service.model.spec.provisioners or []
+        return any(p.provisioner == ProvisionerType.ANSIBLE for p in provisioners)
+
     # ------------------------------------------------------------------
     # BaseBuilder interface
     # ------------------------------------------------------------------
@@ -148,6 +166,13 @@ class AnsibleBuilder(BaseBuilder):
             if platform_model is None:
                 self._errors.append("Platform model is None after loading")
                 return False
+
+            if not self._has_ansible_provisioner(deployment_service):
+                if self.verbose:
+                    self._messages.append(
+                        "No Ansible provisioners declared in this workspace — skipping Ansible artifact generation."
+                    )
+                return True
 
             ansible_vars = self._build_ansible_vars(platform_model, deployment_service, [])
 
