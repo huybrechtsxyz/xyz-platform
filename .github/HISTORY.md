@@ -7,6 +7,16 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+## [1.9.8] - 2026-09-10
+
+### Fixed
+
+#### **`PlatformBuilder` dropped `role`/`count` for topology components backed by a `managed_by: provisioner` resource**
+
+- **Root cause**: `_build_resources_and_topologies()` (`platform_builder.py`) built its `resource_to_firewalls`/`resource_to_role`/`resource_to_count` lookup maps from `workspace_model.spec.resources` *inside* the `if resource_services:` branch — so when a workspace had no full resource **service** backing a given resource (e.g. a `managed_by: provisioner` resource, which by design has no resource service model), the maps were either never built at all (no resource services in the workspace) or simply missing that resource's entry. Topology component enrichment (`topology.components[].role`/`.count`) reads from these same maps, so any topology referencing a provisioner-managed resource silently got `role: null`/`count: 1` defaults in the generated `platform.json`, even though the resource's `role`/`count` were correctly declared in `spec.resources`.
+- **Fix**: moved the map-building loop out of the `if resource_services:` branch so it always runs whenever `workspace_model.spec.resources` is set, regardless of whether any resource services exist. `resources` (the `PlatformResourceModel` list) is unaffected — it's still only populated from `resource_services`, since `managed_by: provisioner` resources have no service model to build one from; only the role/count/firewall lookup maps used for topology enrichment needed to be resource-service-independent.
+- **Testing**: no test changes accompanied this fix upstream; recommend adding a regression test asserting a topology component's `role`/`count` are preserved when its resource has `managed_by: provisioner` and no corresponding resource service exists.
+
 ## [1.9.7] - 2026-09-10
 
 ### Added
