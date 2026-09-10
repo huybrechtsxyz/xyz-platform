@@ -8,6 +8,12 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+## [1.9.8] - 2026-09-10
+
+### Fixed
+
+- **`strata build run` dropped `role`/`count` for topology components backed by a `managed_by: provisioner` resource** — `PlatformBuilder` only built its resource → role/count lookup maps when at least one full resource *service* existed in the workspace, so a topology component referencing a provisioner-managed resource (no backing resource service) silently fell back to `role: null`/`count: 1` in the generated platform artifact. The maps are now built unconditionally from `spec.resources`, independent of whether any resource services exist.
+
 ## [1.9.7] - 2026-09-10
 
 ### Added
