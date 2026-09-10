@@ -8,6 +8,8 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+## [1.9.7] - 2026-09-10
+
 ### Added
 
 - **CI now builds and publishes the `strata-server` Docker image (ADR-0065)** — `Dockerfile.server` previously had no automation at all. It now gets the same `edge`/PR-preview/release publishing as the CLI and docs images: an `edge` tag pushed to GHCR (and Docker Hub, if configured) on every merge to `main`, a `pr-<N>` preview image on GHCR for pull requests (cleaned up on close), and versioned tags pushed to GHCR + Docker Hub on release.

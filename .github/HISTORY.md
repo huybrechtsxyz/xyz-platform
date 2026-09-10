@@ -7,6 +7,8 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+## [1.9.7] - 2026-09-10
+
 ### Added
 
 #### **CI now builds and publishes the `strata-server` Docker image (ADR-0065)**
