@@ -21,6 +21,12 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ### Fixed
 
+#### **`Dockerfile.server` CI build failed with `apt-get install ... did not complete successfully: exit code: 100`**
+
+- **Root cause**: both build stages used the floating `python:3.13-slim` tag rather than a pinned Debian codename. Stage 2's runtime dependency install is hardcoded to Microsoft's **Debian 12 (bookworm)** apt repo (`curl -sSL -O https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb`) to install `unixodbc`/`msodbcsql18`. Once the floating `:slim` tag's underlying Debian release moved past bookworm, `apt-get update && apt-get install unixodbc msodbcsql18` tried to resolve a bookworm-built package's dependencies (specific `libssl`/`libc6` versions) against a newer codename's package set — `msodbcsql18` does not yet publish packages for that newer release, so dependency resolution failed with exit code 100.
+- **Fix**: pinned both `FROM` lines to `python:3.13-slim-bookworm` instead of the floating `python:3.13-slim` tag, so the base OS codename always matches the hardcoded `/debian/12/` Microsoft repo path regardless of upstream base-image updates. Builder and runtime stages are kept on the same codename so the builder's `unixodbc-dev` (used to compile `pyodbc` if no prebuilt wheel matches) stays ABI-compatible with the runtime's `unixodbc`.
+- **Testing**: no automated test covers Docker image builds in this repo; verified by re-reading the Dockerfile — recommend confirming via a manual `docker build -f Dockerfile.server .` or the next `pr-ghcr-server` CI run.
+
 #### **`strata audit status` reported `integration_declared: true` for a sink whose integration has a nonexistent type**
 
 - **Root cause**: `StatusAuditCommand._execute()` built `integration_names` from `spec.integrations[].name` only, then checked `str(sink.integration) in integration_names` — never inspecting the matched integration's `type` at all. `IntegrationModel.type` is a free-form `str` field, not an enum, so a misspelled/nonexistent type (e.g. `type: totally_bogus_type`) passes Pydantic validation silently and the sink was reported fully declared even though `IntegrationFactory.create()` would raise `"Unknown integration type"` the moment it actually tried to forward an event.
