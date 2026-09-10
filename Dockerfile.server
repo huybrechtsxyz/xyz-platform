@@ -21,7 +21,13 @@
 # ============================================================
 # Stage 1 – builder: install dependencies with uv
 # ============================================================
-FROM python:3.13-slim AS builder
+# Pinned to -bookworm (Debian 12), not the floating `python:3.13-slim` tag:
+# Stage 2 hardcodes Microsoft's Debian 12 apt repo for msodbcsql18 (which does
+# not yet publish packages for newer Debian releases). If the floating tag
+# ever moves to a newer Debian codename, `apt-get install msodbcsql18` fails
+# with unmet dependencies (exit code 100). Keep both stages on the same
+# codename so the builder's glibc/libodbc ABI matches the runtime image.
+FROM python:3.13-slim-bookworm AS builder
 
 # unixodbc-dev is needed to build/link pyodbc (server-mssql extra) from source
 # if no prebuilt wheel matches this Python/arch; not needed at runtime.
@@ -45,7 +51,10 @@ RUN uv sync --no-dev --no-editable --extra server --extra server-postgres --extr
 # ============================================================
 # Stage 2 – runtime: lean image with only the installed venv
 # ============================================================
-FROM python:3.13-slim
+# Pinned to -bookworm (Debian 12) — see the note in Stage 1 above. The
+# packages-microsoft-prod.deb URL below is explicitly `/debian/12/...`; it
+# must stay in sync with this base image's codename.
+FROM python:3.13-slim-bookworm
 
 ARG VERSION=dev
 

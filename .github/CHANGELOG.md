@@ -8,8 +8,13 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/) and foll
 
 ## [Unreleased]
 
+### Added
+
+- **CI now builds and publishes the `strata-server` Docker image (ADR-0065)** — `Dockerfile.server` previously had no automation at all. It now gets the same `edge`/PR-preview/release publishing as the CLI and docs images: an `edge` tag pushed to GHCR (and Docker Hub, if configured) on every merge to `main`, a `pr-<N>` preview image on GHCR for pull requests (cleaned up on close), and versioned tags pushed to GHCR + Docker Hub on release.
+
 ### Fixed
 
+- **`Dockerfile.server` failed to build in CI with `apt-get install ... exit code: 100`** — both build stages used the floating `python:3.13-slim` tag, which drifted to a newer Debian codename than the hardcoded `packages-microsoft-prod.deb` Debian-12 (bookworm) repo used to install `msodbcsql18`, breaking dependency resolution. Both stages now pin `python:3.13-slim-bookworm` explicitly.
 - **`strata audit status` reported `integration_declared: true` even when a sink's integration had a nonexistent/misspelled `type`** — the check only verified the sink's `integration:` name matched *some* `spec.integrations[]` entry, never that its `type` actually resolves to a registered integration (`IntegrationModel.type` is a free-form string, not an enum, so a typo passed validation silently). Now also checks `IntegrationFactory.is_known_type()`; a new `integration_type` field on each reported sink shows the resolved type (or `null` if the name wasn't found) for diagnosis.
 - **`strata versions lock`/`strata versions refresh` silently deleted any comments in the version-manifest file** — both rewrote the file via plain `yaml.safe_load()`/`yaml.dump()`, which don't preserve comments. Both now use a comment-preserving round-trip YAML reader/writer (new `ruamel.yaml` dependency), so hand-authored comments survive.
 

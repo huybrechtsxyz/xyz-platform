@@ -12,14 +12,15 @@ Description   : WorkspaceService test fixtures and utilities for strata CLI test
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from typing import Any, Dict
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from strata.models.workspace_model import WorkspaceModel
 from strata.services.workspace_service import WorkspaceService
 
-_MINIMAL_SINGLE_REPO_WORKSPACE = {
+_MINIMAL_SINGLE_REPO_WORKSPACE: Dict[str, Any] = {
     "apiVersion": "strata.huybrechts.xyz/v1",
     "kind": "workspace",
     "meta": {"name": "single_repo_ws"},
@@ -99,3 +100,52 @@ class TestWorkspaceServiceSingleRepo:
         is_valid, errors = service._validate_dynamic(configuration_model=config_model)
         assert is_valid, f"Phase 2 errors: {errors}"
         assert errors == []
+
+
+class TestWorkspaceServiceNetworks:
+    """ADR-0076: kind:network file references must load and merge like DNS/firewalls."""
+
+    def _repo_root(self) -> Path:
+        return Path(__file__).parent.parent.parent.parent
+
+    def _workspace_with_network(self, network_file: str) -> dict:
+        spec: dict = {**_MINIMAL_SINGLE_REPO_WORKSPACE["spec"]}
+        spec["networks"] = [{"name": "net1", "file": network_file}]
+        return {**_MINIMAL_SINGLE_REPO_WORKSPACE, "spec": spec}
+
+    def test_get_network_services_after_load(self):
+        service = WorkspaceService(data=self._workspace_with_network("tests/data/network/network-haven.yaml"))
+        is_valid, errors = service.validate()
+        assert is_valid, f"Validation failed: {errors}"
+
+        mock_config_service = MagicMock()
+        mock_config_service.get_remote_map.return_value = {}
+        with patch(
+            "strata.services.configuration_service.ConfigurationService.get_instance",
+            return_value=mock_config_service,
+        ):
+            related_services, success = service.load_workspace_services(objects_path=str(self._repo_root()))
+        assert success, "load_workspace_services should succeed"
+        assert "networks" in related_services
+        assert "net1" in related_services["networks"]
+
+        network_services = service.get_network_services()
+        assert network_services is not None
+        assert set(network_services.keys()) == {"net1"}
+
+        net_service = network_services["net1"]
+        assert net_service.model is not None
+        assert len(net_service.model.spec.networks) >= 1
+
+        # Named-lookup accessor mirrors get_dns_service()/get_firewall_service()
+        assert service.get_network_service("net1") is net_service
+        assert service.get_network_service("does_not_exist") is None
+
+    def test_missing_network_file_fails_dynamic_validation(self):
+        service = WorkspaceService(data=self._workspace_with_network("tests/data/network/does-not-exist.yaml"))
+        service.validate()
+        config_model = MagicMock()
+        config_model.get_remote_map.return_value = {}
+        is_valid, errors = service._validate_dynamic(configuration_model=config_model, work_path=str(self._repo_root()))
+        assert is_valid is False
+        assert any("net1" in e for e in errors)

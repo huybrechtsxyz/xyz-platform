@@ -22,6 +22,7 @@ from strata.models.platform_artifact_model import (
     PlatformMetaModel,
     PlatformModuleModel,
     PlatformNamespaceModel,
+    PlatformNetworkModel,
     PlatformProviderModel,
     PlatformProvisionerModel,
     PlatformResourceModel,
@@ -453,6 +454,19 @@ class PlatformBuilder(BaseBuilder):
             self.logger.debug(f"Built {len(dns_zones)} DNS zone(s)")
 
         # ------------------------------------------------------------------
+        # Networks
+        # ------------------------------------------------------------------
+        networks = None
+        network_services = workspace_service.get_network_services()
+        if network_services:
+            networks = [
+                PlatformNetworkModel.from_network_model(svc.model)
+                for svc in network_services.values()
+                if svc.model is not None
+            ]
+            self.logger.debug(f"Built {len(networks)} network(s)")
+
+        # ------------------------------------------------------------------
         # Variables / Secrets / Features  (optional — service may not exist yet)
         # ------------------------------------------------------------------
         environment_service = deployment_service.get_environment_service()
@@ -581,6 +595,7 @@ class PlatformBuilder(BaseBuilder):
             modules=modules,
             firewalls=firewalls,
             dns_zones=dns_zones,
+            networks=networks,
             deployment=resolved_layers,
             artifact_path=artifact_path,
             stages=deployment_model.spec.stages,

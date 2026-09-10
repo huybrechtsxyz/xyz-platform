@@ -1,5 +1,6 @@
 """Unit tests for PlatformBuilder."""
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from strata.builders.platform_builder import PlatformBuilder
@@ -268,3 +269,105 @@ class TestTenantPropertiesMerge:
         pt = PlatformTenantModel.from_tenant_model(model)
         assert pt.properties == {"tier": "enterprise"}
         assert pt.custom == {"feature_x": True}
+
+
+class TestPlatformBuilderNetworks:
+    """ADR-0076: kind:network wiring must reach PlatformSpecModel.spec.networks."""
+
+    _WORKSPACE_WITH_NETWORK = {
+        "apiVersion": "strata.huybrechts.xyz/v1",
+        "kind": "workspace",
+        "meta": {"name": "net_ws"},
+        "spec": {
+            "providers": [
+                {"name": "azure", "file": "tests/data/providers/provider-standard.yaml"},
+            ],
+            "provisioners": [
+                {
+                    "name": "platform_iac",
+                    "provisioner": "terraform",
+                    "source": {"source_path": "terraform"},
+                }
+            ],
+            "resources": [
+                {"name": "node", "file": "tests/data/resources/resource-standard.yaml"},
+            ],
+            "topology": [
+                {
+                    "name": "platform_cluster",
+                    "provider": "azure",
+                    "provisioner": "platform_iac",
+                    "type": "kubernetes",
+                    "components": [{"resource": "node"}],
+                }
+            ],
+            "networks": [
+                {"name": "net1", "file": "tests/data/network/network-haven.yaml"},
+            ],
+        },
+    }
+
+    def _repo_root(self) -> Path:
+        return Path(__file__).parent.parent.parent.parent
+
+    def _load_workspace_service(self, workspace_dict):
+        from strata.services.workspace_service import WorkspaceService
+
+        service = WorkspaceService(data=workspace_dict)
+        is_valid, errors = service.validate()
+        assert is_valid, f"Validation failed: {errors}"
+
+        mock_config_service = MagicMock()
+        mock_config_service.get_remote_map.return_value = {}
+        with patch(
+            "strata.services.configuration_service.ConfigurationService.get_instance",
+            return_value=mock_config_service,
+        ):
+            _, success = service.load_workspace_services(objects_path=str(self._repo_root()))
+        assert success, "load_workspace_services should succeed"
+        return service
+
+    def _mock_deployment_service(self, workspace_service):
+        deployment_model = MagicMock()
+        deployment_model.meta.name = "net_deployment"
+        deployment_model.meta.labels = None
+        deployment_model.meta.annotations = None
+        deployment_model.spec.lifecycle = None
+        deployment_model.spec.tenant = None
+        deployment_model.spec.stages = None
+        deployment_model.spec.gates = None
+        deployment_model.spec.properties = None
+        deployment_model.spec.custom = None
+
+        deployment_service = MagicMock()
+        deployment_service.model = deployment_model
+        deployment_service.get_workspace_service.return_value = workspace_service
+        deployment_service.get_environment_service.return_value = None
+        return deployment_service
+
+    def test_build_spec_populates_networks(self):
+        """A workspace referencing a kind:network file must reach platform.spec.networks."""
+        workspace_service = self._load_workspace_service(self._WORKSPACE_WITH_NETWORK)
+        deployment_service = self._mock_deployment_service(workspace_service)
+
+        builder = PlatformBuilder()
+        spec = builder._build_spec(deployment_service, configuration_model=None, work_path=self._repo_root())
+
+        assert spec.networks is not None
+        assert len(spec.networks) == 1
+        assert spec.networks[0].name == "haven_network"  # network file's own meta.name (like DNS/firewall)
+        assert len(spec.networks[0].networks) >= 1
+
+    def test_build_spec_networks_none_when_not_referenced(self):
+        """Workspaces without a networks: section must leave platform.spec.networks unset."""
+        workspace_dict = {
+            **self._WORKSPACE_WITH_NETWORK,
+            "spec": {k: v for k, v in self._WORKSPACE_WITH_NETWORK["spec"].items() if k != "networks"},
+        }
+        workspace_service = self._load_workspace_service(workspace_dict)
+        deployment_service = self._mock_deployment_service(workspace_service)
+
+        builder = PlatformBuilder()
+        spec = builder._build_spec(deployment_service, configuration_model=None, work_path=self._repo_root())
+
+        assert spec.networks is None
